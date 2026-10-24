@@ -117,3 +117,29 @@ stateDiagram-v2
 - Prevents invalid moves (e.g., cannot air-dash or jump when already in the air).
 - Controls animation synchronization.
 - Enforces the **Red Zone penalty**: when in `Exhausted` state, attack inputs are ignored, and horizontal velocity is clamped to $35\%$ of normal move speed.
+
+---
+
+## 4. Combat Hitbox & Hurtbox Resolution Architecture
+
+### Attack Phase Lifecycle
+In competitive fighting games, attacks are divided into 3 distinct chronological phases:
+1. **Startup (Windup):** The animation begins playing, but the hitbox is **inactive**. If hit during startup, the attack is counter-hit interrupted.
+2. **Active (Strike Window):** The `HitboxController` activates its trigger `BoxCollider2D`. Overlaps with the opponent's `HurtboxController` resolve damage, apply physics knockback, and award Ki.
+3. **Recovery (Cooldown):** The hitbox deactivates. The fighter finishes the follow-through animation before returning to `Idle`.
+
+```
+[ Attack Started ]
+       │
+       ▼
+[ 1. Startup Phase ]    (Hitbox OFF, player committed)
+       │
+       ▼
+[ 2. Active Window ]    (Hitbox ON, damage + knockback + Ki resolved)
+       │
+       ▼
+[ 3. Recovery Phase ]   (Hitbox OFF, cooldown before returning to Idle)
+```
+
+### Multi-Hit Prevention
+To avoid a single attack dealing multiple hits over consecutive physics frames, `HitboxController` maintains a `HashSet<Transform> hitTargetsThisSwing`. Once a target is hit during an attack swing, subsequent overlap events for that same target are suppressed until the next attack begins.

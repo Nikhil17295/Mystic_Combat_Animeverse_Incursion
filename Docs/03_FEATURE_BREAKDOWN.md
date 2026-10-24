@@ -173,3 +173,60 @@ Normally in Unity, testing a game requires:
 - Wire cross-references between the fighters for auto-facing.
 
 **Result:** Any teammate can open any blank scene in Unity, press Play, and instantly test the game without any setup friction!
+
+---
+
+## 8. Visual Hitbox & Hurtbox Scene Gizmos (The Feel Factor)
+
+### Why Fighting Games Require Visual Hitbox Tuning
+A punch that misses by 2 pixels feels unfair; a punch that hits from 3 feet away feels cheap. Combat tuning is about visual reach and player expectations.
+
+### How It Is Implemented
+- **Hurtbox (Green Box):** Managed by [`HurtboxController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/HurtboxController.cs). Draws a translucent green volume over the fighter's body.
+- **Hitbox (Red Box):** Managed by [`HitboxController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/HitboxController.cs). Draws a bright red volume representing attack reach.
+- **Auto-Mirroring:** When the fighter turns left (`spriteRenderer.flipX = true`), the Hitbox's local scale is automatically mirrored:
+  ```csharp
+  attackHitbox.transform.localScale = new Vector3(faceLeft ? -1f : 1f, 1f, 1f);
+  ```
+- **Inspector Adjustment:** Designers can adjust `Hitbox Offset` and `Hitbox Size` directly in the Unity Inspector and watch the red box expand or retract in real-time in the Scene view without touching code.
+
+---
+
+## 9. Arena Containment & Invisible Boundary Walls
+
+### The Problem
+In 2D fighting games, fighters must never run off-screen or escape the camera's field of view.
+
+### How It Is Implemented
+- The Main Camera uses an Orthographic Size of `3.2` at position `(0, -1.2, -10)`. At a 16:9 aspect ratio, the camera viewport spans from $x = -5.69$ to $x = 5.69$.
+- We placed solid invisible `BoxCollider2D` boundary walls directly at the camera borders:
+  - **Left Wall:** `x = -5.7`, size `(1, 14)`
+  - **Right Wall:** `x = 5.7`, size `(1, 14)`
+  - **Floor:** `y = -3.5`, size `(24, 1)` (top surface at $y = -3.0$)
+  - **Ceiling:** `y = 3.2`, size `(16, 1)`
+- **Result:** Fighters are cleanly contained within the camera frame with zero off-screen escaping.
+
+---
+
+## 10. Character Visual Proportions & Scale Normalization
+
+### The Visual Scale Challenge
+In Jump Ultimate Stars, Goku's sprite is wide and muscular (large hair and broad dogi), while Saitama's sprite is slender. Rendered at identical scale, Goku inadvertently dwarfed Saitama.
+
+### The Scale Multiplication Fix
+To give Saitama heroic, towering anime presence while keeping Goku stocky and athletic:
+- **Goku Root Scale:** `(0.88, 0.88, 1.0)`
+- **Saitama Root Scale:** `(1.12, 1.12, 1.0)`
+- **Proportional Inheritance:** Scaling the root GameObject automatically multiplies the child `SpriteRenderer`, `BoxCollider2D`, `Hurtbox`, and `Hitbox` proportionally, ensuring visual reach matches physical collisions without manual re-tuning.
+
+---
+
+## 11. Godot-Style 2D WYSIWYG Scene Baking (`SceneSetupTool.cs`)
+
+### Transitioning from Procedural Code to Live 2D Editing
+Rather than generating the game world dynamically in code on Play (`PrototypeBootstrap.cs`), [`SceneSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/SceneSetupTool.cs) bakes the entire visual game directly into `SampleScene.unity`:
+1. The anime tournament backdrop is placed at sorting order `-10`.
+2. The floor and invisible walls are visible in the scene hierarchy.
+3. Goku and Saitama are placed in their starting positions with their real idle sprites rendered in the editor via `[ExecuteAlways]`.
+4. The Scene View automatically locks to 2D Mode (`in2DMode = true`).
+5. **Result:** Developers experience the exact same live WYSIWYG visual editing as Godot's 2D workspace!

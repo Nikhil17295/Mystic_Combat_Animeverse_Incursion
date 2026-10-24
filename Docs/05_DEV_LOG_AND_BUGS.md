@@ -53,6 +53,15 @@
 
 ---
 
+### Trap 7: The "Play Mode Revert" Trap (Godot vs. Unity Inspector)
+- **The Trap:** Modifying serialized variables in the Unity Inspector while Play Mode is active.
+- **The Bug:** Unity silently discards every change made during Play Mode the exact second you press Stop (`Ctrl + P`), frustrating developers coming from Godot.
+- **Our Fix:** 
+  1. We built standalone **Prefabs** (`Goku.prefab`, `Saitama.prefab`) in `Assets/Prefabs/Fighters/`. Double-clicking a Prefab opens **Prefab Mode** (the direct equivalent of a Godot `.tscn` scene), where all Inspector changes are permanently saved.
+  2. If you do test balance changes during Play Mode, right-click the component header $\rightarrow$ **Copy Component**, stop Play mode, right-click $\rightarrow$ **Paste Component Values**.
+
+---
+
 ## 2. Bug Postmortems & Solutions
 
 ### Postmortem: JSON Schema Alignment

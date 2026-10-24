@@ -104,6 +104,24 @@
 
 ---
 
+### Q11: How do your hitboxes work, and how did you balance game feel vs physics accuracy?
+**Answer:**
+> *"In fighting games, realistic physics colliders fail because player expectation is all about 'feel'. If a fist misses by 1 pixel, the player feels cheated.
+> We implemented separate trigger volumes:
+> 1. **Hurtbox (Green):** Encapsulates the vulnerable body.
+> 2. **Hitbox (Red):** Encapsulates attack reach and only turns active during the attack's strike window.
+> 3. **Multi-hit suppression:** We track targets hit during each swing to prevent multi-hit bugs on single strikes.
+> 4. **Visual Scene Gizmos:** Designers can click the fighter in the Scene view and visually drag the red hitbox handles over the punch animation frame to dial in the reach without recompiling code."*
+
+---
+
+### Q12: How do you prevent fighters from running off-screen, and how did you balance relative visual proportions?
+**Answer:**
+> *"1. **Invisible Boundary Walls:** We placed vertical `BoxCollider2D` barriers at $x = \pm 5.7$, exactly aligned with the 16:9 camera boundaries (Orthographic size 3.2). Fighters physically cannot leave the camera frame.
+> 2. **Proportional Visual Scaling:** Jump Ultimate Stars sprites have varied widths—Goku's spiky hair and martial arts gi made him look wider than Saitama. By tuning root local scale ($0.88\times$ for Goku, $1.12\times$ for Saitama), Saitama has a taller, heroic presence while Goku stays athletic and stocky, automatically scaling their hitboxes and hurtboxes proportionally."*
+
+---
+
 ## 3. Live Demo Checklist for Judges
 
 When demonstrating the game to evaluators:

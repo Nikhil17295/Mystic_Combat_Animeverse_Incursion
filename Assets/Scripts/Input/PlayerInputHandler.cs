@@ -73,14 +73,14 @@ namespace MysticCombat.Input
 
             MoveInput = new Vector2(horizontal, vertical);
 
-            // Action Buttons (Custom Ergonomic Layout: F = Light, C = Heavy, E = Skill, Q = Ultimate, G = Meditate)
+            // Action Buttons (Custom Ergonomic Layout: F = Light, C = Heavy, E = Skill, Q = Ultimate, X = Meditate)
             JumpPressed = kb.wKey.wasPressedThisFrame || (kb.spaceKey != null && kb.spaceKey.wasPressedThisFrame);
             CrouchHeld = kb.sKey.isPressed;
             LightAttackPressed = kb.fKey.wasPressedThisFrame;
             HeavyAttackPressed = kb.cKey.wasPressedThisFrame;
             SkillPressed = kb.eKey.wasPressedThisFrame;
             UltimatePressed = kb.qKey.wasPressedThisFrame;
-            MeditateHeld = kb.gKey.isPressed;
+            MeditateHeld = kb.xKey.isPressed;
         }
 
         private void ReadP2Input(Keyboard kb)

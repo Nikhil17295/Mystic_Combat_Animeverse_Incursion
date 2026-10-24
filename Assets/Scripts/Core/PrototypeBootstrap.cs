@@ -3,6 +3,7 @@ using MysticCombat.Fighter;
 using MysticCombat.Input;
 using MysticCombat.Systems;
 using MysticCombat.Data;
+using MysticCombat.Combat;
 
 namespace MysticCombat.Core
 {
@@ -57,9 +58,18 @@ namespace MysticCombat.Core
             SetupLayers();
             EnsureArena();
 
-            // Create Fighters: Goku (P1) and Saitama (P2)
-            GameObject fighter1 = CreateFighter("Fighter_P1_Goku", p1SpawnPosition, PlayerInputHandler.PlayerIndex.P1, "goku");
-            GameObject fighter2 = CreateFighter("Fighter_P2_Saitama", p2SpawnPosition, PlayerInputHandler.PlayerIndex.P2, "saitama");
+            // Find or Create Fighters: Goku (P1) and Saitama (P2)
+            GameObject fighter1 = GameObject.Find("Fighter_P1_Goku");
+            GameObject fighter2 = GameObject.Find("Fighter_P2_Saitama");
+
+            if (fighter1 == null)
+            {
+                fighter1 = CreateFighter("Fighter_P1_Goku", p1SpawnPosition, PlayerInputHandler.PlayerIndex.P1, "goku");
+            }
+            if (fighter2 == null)
+            {
+                fighter2 = CreateFighter("Fighter_P2_Saitama", p2SpawnPosition, PlayerInputHandler.PlayerIndex.P2, "saitama");
+            }
 
             // Wire cross-references (each fighter auto-faces the other)
             FighterController fc1 = fighter1.GetComponent<FighterController>();
@@ -86,7 +96,7 @@ namespace MysticCombat.Core
             Debug.Log("[PrototypeBootstrap] >>> FIGHTING GAME PROTOTYPE READY <<<");
             Debug.Log("=================================================================");
             Debug.Log("P1 (Goku):    [A/D] Move | [W / Space] Jump | [S] Crouch");
-            Debug.Log("              [F] Light | [C] Heavy | [E] Skill | [Q] Ult | [G] Meditate");
+            Debug.Log("              [F] Light | [C] Heavy | [E] Skill | [Q] Ult | [X] Meditate");
             Debug.Log("P2 (Saitama): [J/L] Move | [I] Jump | [K] Crouch");
             Debug.Log("              [H] Light | [N] Heavy | [U] Skill | [O] Ult | [M] Meditate");
             Debug.Log("=================================================================");
@@ -136,6 +146,29 @@ namespace MysticCombat.Core
             string folderName = characterId == "goku" ? "Goku" : "Saitama";
             animator.LoadCharacterFrames(folderName);
 
+            // Hurtbox Child GameObject (vulnerable area - green gizmo)
+            GameObject hurtboxObj = new GameObject("Hurtbox");
+            hurtboxObj.transform.SetParent(fighter.transform);
+            hurtboxObj.transform.localPosition = Vector3.zero;
+            BoxCollider2D hurtboxCol = hurtboxObj.AddComponent<BoxCollider2D>();
+            hurtboxCol.isTrigger = true;
+            hurtboxCol.size = new Vector2(0.9f, 1.8f);
+            hurtboxCol.offset = new Vector2(0f, 0.95f);
+            HurtboxController hurtbox = hurtboxObj.AddComponent<HurtboxController>();
+            hurtbox.SetOwner(fighter.transform);
+
+            // Hitbox Child GameObject (attack reach - red gizmo)
+            GameObject hitboxObj = new GameObject("Hitbox");
+            hitboxObj.transform.SetParent(fighter.transform);
+            hitboxObj.transform.localPosition = Vector3.zero;
+            BoxCollider2D hitboxCol = hitboxObj.AddComponent<BoxCollider2D>();
+            hitboxCol.isTrigger = true;
+            hitboxCol.size = new Vector2(0.9f, 0.7f);
+            hitboxCol.offset = new Vector2(0.8f, 0.9f);
+            HitboxController hitbox = hitboxObj.AddComponent<HitboxController>();
+            hitbox.Setup(fighter.transform, 10, 5f, 6f);
+            fc.SetHitbox(hitbox);
+
             // Systems
             HealthSystem health = fighter.AddComponent<HealthSystem>();
             EnergySystem energy = fighter.AddComponent<EnergySystem>();
@@ -172,6 +205,8 @@ namespace MysticCombat.Core
 
         private void EnsureArena()
         {
+            if (GameObject.Find("Arena") != null) return;
+
             ArenaSetup existingArena = FindAnyObjectByType<ArenaSetup>();
             if (existingArena == null)
             {

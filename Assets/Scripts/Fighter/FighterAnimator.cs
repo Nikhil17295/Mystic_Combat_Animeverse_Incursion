@@ -8,6 +8,7 @@ namespace MysticCombat.Fighter
     /// Animates a fighter by dynamically playing real multi-frame pixel art sprites based on FighterState.
     /// Supports Idle loops, Walk cycles, Jump curves, Crouch, Light/Heavy Attacks, Skills, Ultimates, and Meditation.
     /// </summary>
+    [ExecuteAlways]
     [RequireComponent(typeof(SpriteRenderer))]
     [RequireComponent(typeof(FighterController))]
     [RequireComponent(typeof(Rigidbody2D))]
@@ -17,25 +18,25 @@ namespace MysticCombat.Fighter
 
         [Header("Animation Speeds (Frames Per Second)")]
         [Tooltip("Breathing idle loop speed.")]
-        [SerializeField] private float idleFps = 6f;
+        [SerializeField] private float idleFps = 5f;
 
         [Tooltip("Walk cycle speed.")]
-        [SerializeField] private float walkFps = 10f;
+        [SerializeField] private float walkFps = 8f;
 
-        [Tooltip("Light punch speed (snappy).")]
-        [SerializeField] private float lightAttackFps = 14f;
+        [Tooltip("Light punch speed (comfortable read).")]
+        [SerializeField] private float lightAttackFps = 9f;
 
         [Tooltip("Heavy attack windup & strike speed.")]
-        [SerializeField] private float heavyAttackFps = 11f;
+        [SerializeField] private float heavyAttackFps = 8f;
 
         [Tooltip("Skill flurry speed (e.g. Saitama Consecutive Normal Punches).")]
-        [SerializeField] private float skillFps = 18f;
+        [SerializeField] private float skillFps = 14f;
 
         [Tooltip("Ultimate speed (Spirit Bomb / Serious Punch).")]
-        [SerializeField] private float ultimateFps = 10f;
+        [SerializeField] private float ultimateFps = 9f;
 
         [Tooltip("Ki meditation channel loop speed.")]
-        [SerializeField] private float meditateFps = 8f;
+        [SerializeField] private float meditateFps = 7f;
 
         [Header("Sprite Scaling")]
         [Tooltip("Pixels per unit for crisp pixel scaling. Lower = bigger on screen.")]
@@ -73,14 +74,31 @@ namespace MysticCombat.Fighter
 
         private void Awake()
         {
-            spriteRenderer = GetComponent<SpriteRenderer>();
-            controller = GetComponent<FighterController>();
-            rb = GetComponent<Rigidbody2D>();
+            if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+            if (controller == null) controller = GetComponent<FighterController>();
+            if (rb == null) rb = GetComponent<Rigidbody2D>();
+
+            // Auto-load idle sprite in Edit Mode so fighter is visible on the 2D scene canvas
+            if (idleFrames.Count == 0)
+            {
+                string charName = gameObject.name.ToLower().Contains("saitama") ? "Saitama" : "Goku";
+                LoadCharacterFrames(charName);
+            }
         }
 
         private void Update()
         {
             if (idleFrames.Count == 0) return;
+
+            // In Edit Mode, keep the initial idle pose visible
+            if (!Application.isPlaying)
+            {
+                if (spriteRenderer != null && idleFrames.Count > 0 && spriteRenderer.sprite == null)
+                {
+                    spriteRenderer.sprite = idleFrames[0];
+                }
+                return;
+            }
 
             UpdateAnimation();
         }
@@ -126,7 +144,8 @@ namespace MysticCombat.Fighter
             crouchSprite = LoadSingleOrFirst(framesDir, "crouch");
 
             // Set initial sprite
-            if (idleFrames.Count > 0)
+            if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer != null && idleFrames.Count > 0)
             {
                 spriteRenderer.sprite = idleFrames[0];
             }

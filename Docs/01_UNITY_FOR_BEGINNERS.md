@@ -155,3 +155,88 @@ Here is the exact journey of what happens when Player 1 presses `W`:
 
 5. **Landing:**
    When Goku's feet touch the floor again, `IsGrounded` becomes `true`, and state returns to `Idle`.
+
+---
+
+## 7. Why Does C# Look More Complicated Than GDScript? (The Honest Truth)
+
+If you feel C# looks much heavier than Godot's GDScript, **you are 100% right**. 
+
+Here is why:
+
+### 1. In Godot, You Usually Write "Monolithic" Scripts
+In Godot, a typical character has a single `player.gd` file that handles movement, input, health, and animations all in one place:
+```
+Godot:  [ Player Node ] ──── Attached to ───► player.gd (All logic in 1 file)
+```
+In commercial Unity games, we follow the **Component Architecture** (Single Responsibility Principle). We split logic into modular components:
+```
+Unity:  [ Fighter GameObject ]
+             ├── PlayerInputHandler.cs   (Only reads keys)
+             ├── FighterController.cs    (Only handles states & physics)
+             ├── FighterAnimator.cs      (Only handles sprites & FPS)
+             ├── HealthSystem.cs         (Only tracks HP)
+             └── EnergySystem.cs         (Only tracks Ki & Red Zone)
+```
+* **Why did we do this?** Because if you change how input works, you can never accidentally break the health system! It is modular and jury-friendly. But it does mean you see 6 files instead of 1.
+
+### 2. C# "Ceremony" (Boilerplate)
+GDScript cuts away all ceremony. C# requires strict definitions:
+* **Brackets `{ }` and Semicolons `;`:** GDScript uses indentation (like Python); C# uses explicit brackets and semicolons.
+* **Access Modifiers (`public` / `private`):** In C#, you must declare whether other scripts are allowed to see a variable.
+* **Type Declarations (`int`, `float`, `string`, `Vector2`):** In GDScript you write `var speed = 5.0`. In C# you write `float speed = 5f;`.
+
+---
+
+## 8. The GDScript to C# "Cheat Sheet": Side-by-Side Comparison
+
+Look at how identical the logic really is once you strip away the syntax brackets:
+
+### A. Creating an Inspector Variable
+| Godot (GDScript) | Unity (C#) | What it Means |
+| :--- | :--- | :--- |
+| `@export var move_speed: float = 5.0` | `[SerializeField] private float moveSpeed = 5f;` | Shows up as an editable slider in the Inspector panel. |
+
+### B. Finding a Child or Sibling Component
+| Godot (GDScript) | Unity (C#) | What it Means |
+| :--- | :--- | :--- |
+| `$Sprite2D` or `get_node("Sprite2D")` | `GetComponent<SpriteRenderer>()` | Grabs the visual sprite component on this object. |
+| `$CollisionShape2D` | `GetComponent<BoxCollider2D>()` | Grabs the collider component on this object. |
+
+### C. The Lifecycle Functions
+| Godot (GDScript) | Unity (C#) | What it Means |
+| :--- | :--- | :--- |
+| `func _ready():` | `private void Start()` | Runs once when game starts. |
+| `func _process(delta):` | `private void Update()` | Runs every frame (for input & animations). |
+| `func _physics_process(delta):` | `private void FixedUpdate()` | Runs 50x/sec (for physics & movement). |
+
+### D. Reading Movement Input
+| Godot (GDScript) | Unity (C#) | What it Means |
+| :--- | :--- | :--- |
+| `Input.is_action_pressed("move_right")` | `kb.dKey.isPressed` | True as long as key is held down. |
+| `Input.is_action_just_pressed("jump")` | `kb.wKey.wasPressedThisFrame` | True ONLY for the single frame the key was tapped. |
+
+### E. Moving the Character
+| Godot (GDScript) | Unity (C#) | What it Means |
+| :--- | :--- | :--- |
+| `velocity.x = input * speed`<br/>`move_and_slide()` | `rb.linearVelocity = new Vector2(input * speed, rb.linearVelocity.y);` | Sets horizontal physics speed, letting gravity handle Y. |
+
+### F. Signals vs Events
+| Godot (GDScript) | Unity (C#) | What it Means |
+| :--- | :--- | :--- |
+| `signal health_changed(new_hp)` | `public event Action<int> OnHealthChanged;` | Declares a radio broadcast. |
+| `health_changed.emit(current_hp)` | `OnHealthChanged?.Invoke(currentHp);` | Broadcasts the message to all listeners (HUD, UI). |
+
+---
+
+## 9. How to View Scripts Easily Beside the Editor in Unity
+
+In Godot, the script editor is embedded right in the center window. In Unity, you have two great options:
+
+1. **The Inspector Quick-Preview (Built-in!):**
+   * In Unity's **Project** panel (`Assets/Scripts/...`), single-click any `.cs` file.
+   * Look at the **Inspector on the right side**: Unity displays a **full, color-coded preview of the script** right there beside your scene! You don't even have to open VS Code just to read it.
+2. **Side-by-Side Windows (The Pro Setup):**
+   * Snap Unity to the right half of your monitor (`Windows Key + Right Arrow`).
+   * Snap VS Code / Visual Studio to the left half (`Windows Key + Left Arrow`).
+   * Now your code is sitting right beside your 2D scene, exactly like Godot!
