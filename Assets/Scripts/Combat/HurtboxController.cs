@@ -4,26 +4,33 @@ using MysticCombat.Fighter;
 namespace MysticCombat.Combat
 {
     /// <summary>
-    /// Represents the hurtbox (vulnerable area) of a fighter.
-    /// Day 1 stub — provides owner reference so hitboxes can identify the target.
-    /// The GameObject this is attached to should be tagged "Hurtbox".
+    /// Represents the hurtbox (vulnerable body area) of a fighter.
+    /// Draws visual green Scene Gizmos so designers can align the body vulnerable zone.
     /// </summary>
     [RequireComponent(typeof(BoxCollider2D))]
     public class HurtboxController : MonoBehaviour
     {
         #region Serialized Fields
 
+        [Header("Owner")]
         [Tooltip("The root transform of the fighter this hurtbox belongs to.")]
         [SerializeField] private Transform owner;
+
+        [Header("Gizmo Visualization")]
+        [Tooltip("Whether to draw the green hurtbox gizmo in the Scene view.")]
+        [SerializeField] private bool showGizmo = true;
 
         #endregion
 
         #region Properties
 
-        /// <summary>
-        /// The root transform of the fighter that owns this hurtbox.
-        /// </summary>
         public Transform Owner => owner;
+
+        #endregion
+
+        #region Cached Components
+
+        private BoxCollider2D hurtboxCollider;
 
         #endregion
 
@@ -31,38 +38,46 @@ namespace MysticCombat.Combat
 
         private void Awake()
         {
-            BoxCollider2D col = GetComponent<BoxCollider2D>();
-            col.isTrigger = true;
+            hurtboxCollider = GetComponent<BoxCollider2D>();
+            hurtboxCollider.isTrigger = true;
 
-            // Ensure the tag is set (will only work if "Hurtbox" tag exists in the project)
             try
             {
                 gameObject.tag = "Hurtbox";
             }
             catch (UnityException)
             {
-                Debug.LogWarning($"[HurtboxController] 'Hurtbox' tag not found in project. " +
-                                 $"Please add it via Edit > Project Settings > Tags and Layers.");
+                Debug.LogWarning("[HurtboxController] 'Hurtbox' tag not found in TagManager. Please ensure Tag 'Hurtbox' is registered.");
             }
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (!showGizmo) return;
+            if (hurtboxCollider == null) hurtboxCollider = GetComponent<BoxCollider2D>();
+            if (hurtboxCollider == null) return;
+
+            Vector3 center = transform.position + (Vector3)hurtboxCollider.offset;
+            Vector3 size = new Vector3(hurtboxCollider.size.x, hurtboxCollider.size.y, 0.1f);
+
+            // Translucent green fill
+            Gizmos.color = new Color(0f, 1f, 0.2f, 0.22f);
+            Gizmos.DrawCube(center, size);
+
+            // Bright green outline
+            Gizmos.color = new Color(0f, 1f, 0.3f, 0.85f);
+            Gizmos.DrawWireCube(center, size);
         }
 
         #endregion
 
         #region Public Methods
 
-        /// <summary>
-        /// Sets the owner of this hurtbox.
-        /// </summary>
-        /// <param name="ownerTransform">The root transform of the fighter.</param>
         public void SetOwner(Transform ownerTransform)
         {
             owner = ownerTransform;
         }
 
-        /// <summary>
-        /// Returns the FighterController on the owner, if present.
-        /// </summary>
-        /// <returns>The FighterController component, or null.</returns>
         public FighterController GetFighter()
         {
             if (owner == null) return null;

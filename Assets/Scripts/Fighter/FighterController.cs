@@ -1,12 +1,13 @@
 using UnityEngine;
 using MysticCombat.Input;
 using MysticCombat.Systems;
+using MysticCombat.Combat;
 
 namespace MysticCombat.Fighter
 {
     /// <summary>
     /// Main fighter controller handling movement, jumping, crouching, auto-facing,
-    /// meditation, and Red Zone exhaustion speed penalty.
+    /// meditation, attacks, and Red Zone exhaustion speed penalty.
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
     [RequireComponent(typeof(BoxCollider2D))]
@@ -21,6 +22,9 @@ namespace MysticCombat.Fighter
 
         [Tooltip("The opposing fighter's transform for auto-facing.")]
         public Transform opponent;
+
+        [Tooltip("Attack hitbox controller attached to this fighter.")]
+        [SerializeField] private HitboxController attackHitbox;
 
         [Header("Ground Check")]
         [Tooltip("Transform positioned at the fighter's feet for ground detection.")]
@@ -49,6 +53,9 @@ namespace MysticCombat.Fighter
         private SpriteRenderer spriteRenderer;
         private BoxCollider2D bodyCollider;
         private EnergySystem energySystem;
+        private float attackTimer;
+        private float attackStartupTimer;
+        private float attackActiveTimer;
 
         #endregion
 
@@ -122,6 +129,14 @@ namespace MysticCombat.Fighter
         public void SetGroundLayer(LayerMask mask)
         {
             groundLayer = mask;
+        }
+
+        /// <summary>
+        /// Assigns the attack hitbox controller for this fighter.
+        /// </summary>
+        public void SetHitbox(HitboxController hitbox)
+        {
+            attackHitbox = hitbox;
         }
 
         /// <summary>
@@ -199,6 +214,38 @@ namespace MysticCombat.Fighter
                         TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
                     }
                     break;
+
+                case FighterState.LightAttack:
+                case FighterState.HeavyAttack:
+                case FighterState.Skill:
+                case FighterState.Ultimate:
+                    attackTimer -= Time.deltaTime;
+
+                    // Startup phase countdown
+                    if (attackStartupTimer > 0f)
+                    {
+                        attackStartupTimer -= Time.deltaTime;
+                        if (attackStartupTimer <= 0f && attackHitbox != null)
+                        {
+                            attackHitbox.Activate();
+                        }
+                    }
+                    // Active hitbox window countdown
+                    else if (attackActiveTimer > 0f)
+                    {
+                        attackActiveTimer -= Time.deltaTime;
+                        if (attackActiveTimer <= 0f && attackHitbox != null)
+                        {
+                            attackHitbox.Deactivate();
+                        }
+                    }
+
+                    if (attackTimer <= 0f)
+                    {
+                        if (attackHitbox != null) attackHitbox.Deactivate();
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
+                    }
+                    break;
             }
         }
 
@@ -218,6 +265,76 @@ namespace MysticCombat.Fighter
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, effectiveJump);
                 TransitionTo(FighterState.Jumping);
                 return;
+            }
+
+            // Attacks (allowed only when NOT exhausted)
+            if (!isExhausted && IsGrounded)
+            {
+                // Ultimate Attack (Q / O)
+                if (inputHandler.UltimatePressed)
+                {
+                    float ultCost = 80f;
+                    if (energySystem == null || energySystem.CanAfford(ultCost))
+                    {
+                        if (energySystem != null) energySystem.SpendKi(ultCost);
+                        attackTimer = 1.45f;
+                        attackStartupTimer = 0.45f;
+                        attackActiveTimer = 0.50f;
+                        if (attackHitbox != null)
+                        {
+                            attackHitbox.ConfigureAttack(45, 14f, 15f, new Vector2(1.1f, 1.0f), new Vector2(1.5f, 1.2f));
+                        }
+                        TransitionTo(FighterState.Ultimate);
+                        return;
+                    }
+                }
+
+                // Skill Attack (E / U)
+                if (inputHandler.SkillPressed)
+                {
+                    float skillCost = 20f;
+                    if (energySystem == null || energySystem.CanAfford(skillCost))
+                    {
+                        if (energySystem != null) energySystem.SpendKi(skillCost);
+                        attackTimer = 0.85f;
+                        attackStartupTimer = 0.10f;
+                        attackActiveTimer = 0.60f;
+                        if (attackHitbox != null)
+                        {
+                            attackHitbox.ConfigureAttack(20, 6f, 8f, new Vector2(1.0f, 0.9f), new Vector2(1.3f, 0.9f));
+                        }
+                        TransitionTo(FighterState.Skill);
+                        return;
+                    }
+                }
+
+                // Heavy Attack (C / N)
+                if (inputHandler.HeavyAttackPressed)
+                {
+                    attackTimer = 0.88f;
+                    attackStartupTimer = 0.18f;
+                    attackActiveTimer = 0.35f;
+                    if (attackHitbox != null)
+                    {
+                        attackHitbox.ConfigureAttack(16, 8f, 10f, new Vector2(0.95f, 0.85f), new Vector2(1.1f, 0.75f));
+                    }
+                    TransitionTo(FighterState.HeavyAttack);
+                    return;
+                }
+
+                // Light Attack (F / H)
+                if (inputHandler.LightAttackPressed)
+                {
+                    attackTimer = 0.44f;
+                    attackStartupTimer = 0.08f;
+                    attackActiveTimer = 0.24f;
+                    if (attackHitbox != null)
+                    {
+                        attackHitbox.ConfigureAttack(10, 4.5f, 6f, new Vector2(0.8f, 0.85f), new Vector2(0.85f, 0.65f));
+                    }
+                    TransitionTo(FighterState.LightAttack);
+                    return;
+                }
             }
 
             // Crouch
@@ -298,7 +415,11 @@ namespace MysticCombat.Fighter
 
                 case FighterState.Crouching:
                 case FighterState.Meditating:
-                    // Cannot move horizontally while crouching or meditating
+                case FighterState.LightAttack:
+                case FighterState.HeavyAttack:
+                case FighterState.Skill:
+                case FighterState.Ultimate:
+                    // Cannot move horizontally while crouching, meditating, or attacking
                     rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
                     break;
             }
@@ -312,13 +433,14 @@ namespace MysticCombat.Fighter
         {
             if (opponent == null || spriteRenderer == null) return;
 
-            if (opponent.position.x > transform.position.x)
+            bool faceLeft = opponent.position.x < transform.position.x;
+            spriteRenderer.flipX = faceLeft;
+
+            // Mirror Hitbox X scale so attack reach always extends toward opponent
+            if (attackHitbox != null)
             {
-                spriteRenderer.flipX = false; // Opponent is to the right — face right
-            }
-            else if (opponent.position.x < transform.position.x)
-            {
-                spriteRenderer.flipX = true; // Opponent is to the left — face left
+                Vector3 currentScale = attackHitbox.transform.localScale;
+                attackHitbox.transform.localScale = new Vector3(faceLeft ? -Mathf.Abs(currentScale.x) : Mathf.Abs(currentScale.x), currentScale.y, currentScale.z);
             }
         }
 
