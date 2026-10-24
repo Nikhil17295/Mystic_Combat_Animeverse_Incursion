@@ -1,0 +1,80 @@
+# This .gitignore file should be placed at the root of your Unity project directory
+#
+# Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
+#
+
+# =============== #
+# Unity generated #
+# =============== #
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]serSettings/
+
+# ============= #
+# Memory & Logs  #
+# ============= #
+MemoryCaptures/
+Recordings/
+
+# ======================== #
+# Visual Studio / Rider    #
+# ======================== #
+.vs/
+.idea/
+
+# Note: .vscode/ is intentionally NOT ignored (keep it tracked)
+
+# ======================== #
+# IDE Solution/Project     #
+# ======================== #
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# ======================== #
+# Unity meta files for IDE #
+# ======================== #
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# ======================== #
+# JetBrains Rider Plugin   #
+# ======================== #
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# ============ #
+# Crashlytics  #
+# ============ #
+sysinfo.txt
+crashlytics-build.properties
+
+# ======================== #
+# Builds / Packages        #
+# ======================== #
+*.apk
+*.aab
+*.unitypackage
+*.app
+ExportedObj/
+
+# ======================== #
+# Misc                     #
+# ======================== #
+.consulo/
+*.unityproj
