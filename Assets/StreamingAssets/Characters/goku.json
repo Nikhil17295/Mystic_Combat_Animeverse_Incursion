@@ -1,0 +1,57 @@
+{
+  "characterId": "goku",
+  "displayName": "Goku",
+  "maxHealth": 100,
+  "moveSpeed": 5.0,
+  "jumpForce": 12.0,
+  "gravityScale": 3.0,
+  "lightAttack": {
+    "damage": 8,
+    "knockback": 2.0,
+    "startupFrames": 3,
+    "activeFrames": 4,
+    "recoveryFrames": 6,
+    "hitboxOffset": { "x": 0.8, "y": 0.1 },
+    "hitboxSize": { "x": 0.6, "y": 0.5 },
+    "kiGainOnHit": 5
+  },
+  "heavyAttack": {
+    "damage": 15,
+    "knockback": 4.0,
+    "startupFrames": 6,
+    "activeFrames": 5,
+    "recoveryFrames": 10,
+    "hitboxOffset": { "x": 1.0, "y": 0.0 },
+    "hitboxSize": { "x": 0.8, "y": 0.7 },
+    "kiGainOnHit": 8
+  },
+  "skill": {
+    "name": "Kamehameha",
+    "type": "projectile",
+    "kiCost": 20,
+    "damage": 20,
+    "speed": 10.0,
+    "lifetime": 2.0,
+    "startupFrames": 10,
+    "recoveryFrames": 15
+  },
+  "ultimate": {
+    "name": "Spirit Bomb",
+    "kiCost": 80,
+    "damage": 45,
+    "hitboxSize": { "x": 3.0, "y": 3.0 },
+    "startupFrames": 30,
+    "activeFrames": 15,
+    "recoveryFrames": 25,
+    "drawback": "Leaves Goku at 0 Ki after use"
+  },
+  "meditateKiPerSecond": 15.0,
+  "kiGainOnDamageTaken": 3,
+  "redZone": {
+    "threshold": 10,
+    "duration": 5.0,
+    "moveSpeedMultiplier": 0.3,
+    "recoveryKi": 20,
+    "hitTimerReduction": 0.1
+  }
+}

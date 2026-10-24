@@ -1,11 +1,12 @@
 using UnityEngine;
 using MysticCombat.Input;
+using MysticCombat.Systems;
 
 namespace MysticCombat.Fighter
 {
     /// <summary>
-    /// Main fighter controller handling movement, jumping, crouching, and auto-facing.
-    /// Day 1 prototype — movement only; combat actions will be added later.
+    /// Main fighter controller handling movement, jumping, crouching, auto-facing,
+    /// meditation, and Red Zone exhaustion speed penalty.
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
     [RequireComponent(typeof(BoxCollider2D))]
@@ -36,6 +37,10 @@ namespace MysticCombat.Fighter
         [SerializeField] private float jumpForce = 12f;
         [SerializeField] private float gravityScale = 3f;
 
+        [Header("Ki & Red Zone Tuning")]
+        [SerializeField] private float meditateKiPerSecond = 15f;
+        [SerializeField] private float redZoneSpeedMultiplier = 0.35f;
+
         #endregion
 
         #region Cached Components
@@ -43,6 +48,7 @@ namespace MysticCombat.Fighter
         private Rigidbody2D rb;
         private SpriteRenderer spriteRenderer;
         private BoxCollider2D bodyCollider;
+        private EnergySystem energySystem;
 
         #endregion
 
@@ -67,6 +73,7 @@ namespace MysticCombat.Fighter
             rb = GetComponent<Rigidbody2D>();
             spriteRenderer = GetComponent<SpriteRenderer>();
             bodyCollider = GetComponent<BoxCollider2D>();
+            energySystem = GetComponent<EnergySystem>();
 
             rb.gravityScale = gravityScale;
             rb.freezeRotation = true;
@@ -76,6 +83,7 @@ namespace MysticCombat.Fighter
         {
             CheckGround();
             HandleStateTransitions();
+            HandleKiGeneration();
         }
 
         private void FixedUpdate()
@@ -95,7 +103,6 @@ namespace MysticCombat.Fighter
         /// <summary>
         /// Assigns the input handler for this fighter.
         /// </summary>
-        /// <param name="handler">The PlayerInputHandler to read input from.</param>
         public void SetInputHandler(PlayerInputHandler handler)
         {
             inputHandler = handler;
@@ -104,7 +111,6 @@ namespace MysticCombat.Fighter
         /// <summary>
         /// Assigns the ground check transform used for ground detection.
         /// </summary>
-        /// <param name="point">A transform positioned at the fighter's feet.</param>
         public void SetGroundCheckPoint(Transform point)
         {
             groundCheckPoint = point;
@@ -113,23 +119,22 @@ namespace MysticCombat.Fighter
         /// <summary>
         /// Sets the ground layer mask for ground detection.
         /// </summary>
-        /// <param name="mask">The LayerMask representing ground surfaces.</param>
         public void SetGroundLayer(LayerMask mask)
         {
             groundLayer = mask;
         }
 
         /// <summary>
-        /// Applies movement tuning values (e.g., from character JSON data).
+        /// Applies movement and Ki tuning values (from character JSON data).
         /// </summary>
-        /// <param name="speed">Horizontal move speed.</param>
-        /// <param name="jump">Vertical jump force.</param>
-        /// <param name="gravity">Rigidbody gravity scale.</param>
-        public void ApplyStats(float speed, float jump, float gravity)
+        public void ApplyStats(float speed, float jump, float gravity, float meditateRate = 15f, float redZoneSpeedMult = 0.35f)
         {
             moveSpeed = speed;
             jumpForce = jump;
             gravityScale = gravity;
+            meditateKiPerSecond = meditateRate;
+            redZoneSpeedMultiplier = redZoneSpeedMult;
+
             if (rb != null) rb.gravityScale = gravityScale;
         }
 
@@ -156,11 +161,22 @@ namespace MysticCombat.Fighter
         {
             if (inputHandler == null) return;
 
+            // Check if fighter is in Red Zone (Exhausted)
+            bool isExhausted = energySystem != null && energySystem.IsInRedZone;
+
             switch (CurrentState)
             {
                 case FighterState.Idle:
                 case FighterState.Walking:
-                    HandleGroundedTransitions();
+                case FighterState.Exhausted:
+                    HandleGroundedTransitions(isExhausted);
+                    break;
+
+                case FighterState.Meditating:
+                    if (!inputHandler.MeditateHeld || !IsGrounded)
+                    {
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
+                    }
                     break;
 
                 case FighterState.Jumping:
@@ -173,25 +189,33 @@ namespace MysticCombat.Fighter
                 case FighterState.Falling:
                     if (IsGrounded)
                     {
-                        TransitionTo(FighterState.Idle);
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
                     }
                     break;
 
                 case FighterState.Crouching:
                     if (!inputHandler.CrouchHeld || !IsGrounded)
                     {
-                        TransitionTo(FighterState.Idle);
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
                     }
                     break;
             }
         }
 
-        private void HandleGroundedTransitions()
+        private void HandleGroundedTransitions(bool isExhausted)
         {
-            // Jump takes priority
+            // Meditate can be channeled at any time when grounded (even in Red Zone)
+            if (inputHandler.MeditateHeld && IsGrounded)
+            {
+                TransitionTo(FighterState.Meditating);
+                return;
+            }
+
+            // Jump takes priority (exhausted fighters have weaker jump or regular)
             if (inputHandler.JumpPressed && IsGrounded)
             {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+                float effectiveJump = isExhausted ? jumpForce * 0.75f : jumpForce;
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, effectiveJump);
                 TransitionTo(FighterState.Jumping);
                 return;
             }
@@ -210,8 +234,12 @@ namespace MysticCombat.Fighter
                 return;
             }
 
-            // Walk or idle
-            if (Mathf.Abs(inputHandler.MoveInput.x) > 0.01f)
+            // Ground movement / idle / exhaustion
+            if (isExhausted)
+            {
+                TransitionTo(FighterState.Exhausted);
+            }
+            else if (Mathf.Abs(inputHandler.MoveInput.x) > 0.01f)
             {
                 TransitionTo(FighterState.Walking);
             }
@@ -229,25 +257,48 @@ namespace MysticCombat.Fighter
 
         #endregion
 
+        #region Ki Generation & Meditation
+
+        private void HandleKiGeneration()
+        {
+            if (CurrentState == FighterState.Meditating && energySystem != null)
+            {
+                // Charge Ki while meditating
+                energySystem.AddKi(meditateKiPerSecond * Time.deltaTime);
+
+                // If in Red Zone, meditating accelerates exhaustion recovery
+                if (energySystem.IsInRedZone)
+                {
+                    energySystem.ReduceRedZoneTimer(Time.deltaTime * 1.5f);
+                }
+            }
+        }
+
+        #endregion
+
         #region Movement
 
         private void ApplyMovement()
         {
             if (inputHandler == null) return;
 
-            // Only allow horizontal movement in Idle, Walking, Jumping, Falling states
+            bool isExhausted = energySystem != null && energySystem.IsInRedZone;
+            float currentSpeed = moveSpeed * (isExhausted ? redZoneSpeedMultiplier : 1f);
+
             switch (CurrentState)
             {
                 case FighterState.Idle:
                 case FighterState.Walking:
+                case FighterState.Exhausted:
                 case FighterState.Jumping:
                 case FighterState.Falling:
-                    float horizontalVelocity = inputHandler.MoveInput.x * moveSpeed;
+                    float horizontalVelocity = inputHandler.MoveInput.x * currentSpeed;
                     rb.linearVelocity = new Vector2(horizontalVelocity, rb.linearVelocity.y);
                     break;
 
                 case FighterState.Crouching:
-                    // No horizontal movement while crouching
+                case FighterState.Meditating:
+                    // Cannot move horizontally while crouching or meditating
                     rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
                     break;
             }
@@ -259,7 +310,7 @@ namespace MysticCombat.Fighter
 
         private void AutoFaceOpponent()
         {
-            if (opponent == null) return;
+            if (opponent == null || spriteRenderer == null) return;
 
             if (opponent.position.x > transform.position.x)
             {

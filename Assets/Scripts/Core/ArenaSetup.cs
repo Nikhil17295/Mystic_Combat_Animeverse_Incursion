@@ -115,18 +115,17 @@ namespace MysticCombat.Core
             GameObject block = new GameObject(blockName);
             block.transform.SetParent(transform);
             block.transform.localPosition = position;
+            block.transform.localScale = new Vector3(size.x, size.y, 1f);
 
-            // Sprite renderer (uses the built-in white square sprite)
+            // Sprite renderer
             SpriteRenderer sr = block.AddComponent<SpriteRenderer>();
             sr.sprite = CreatePlaceholderSprite();
             sr.color = color;
-            sr.drawMode = SpriteDrawMode.Sliced;
-            sr.size = size;
             sr.sortingOrder = -10; // Behind fighters
 
             // Collider
             BoxCollider2D col = block.AddComponent<BoxCollider2D>();
-            col.size = size;
+            col.size = Vector2.one;
 
             return block;
         }

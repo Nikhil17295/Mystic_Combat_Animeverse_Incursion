@@ -1,29 +1,28 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace MysticCombat.Data
 {
     /// <summary>
     /// Plain C# data class that mirrors the character JSON structure.
-    /// Deserialized via JsonUtility.
+    /// Deserialized via JsonUtility. Field names must match JSON keys exactly.
     /// </summary>
     [Serializable]
     public class CharacterData
     {
         #region Identity
 
-        public string id;
+        public string characterId;
         public string displayName;
-        public string title;
-        public string franchise;
-        public string archetype;
 
         #endregion
 
         #region Base Stats
 
-        public BaseStats baseStats;
+        public int maxHealth = 100;
+        public float moveSpeed = 5f;
+        public float jumpForce = 12f;
+        public float gravityScale = 3f;
 
         #endregion
 
@@ -41,32 +40,18 @@ namespace MysticCombat.Data
 
         #endregion
 
+        #region Ki & Meditation
+
+        public float meditateKiPerSecond = 15f;
+        public float kiGainOnDamageTaken = 3f;
+
+        #endregion
+
         #region Red Zone
 
         public RedZoneData redZone;
 
         #endregion
-
-        #region Visuals
-
-        public VisualData visuals;
-
-        #endregion
-    }
-
-    /// <summary>
-    /// Base stat block for a character (HP, speed, etc.).
-    /// </summary>
-    [Serializable]
-    public class BaseStats
-    {
-        public int maxHealth = 100;
-        public float moveSpeed = 5f;
-        public float jumpForce = 12f;
-        public float gravityScale = 3f;
-        public float maxKi = 100f;
-        public float kiGainPerHit = 8f;
-        public float kiGainPerMeditate = 2f;
     }
 
     /// <summary>
@@ -75,15 +60,14 @@ namespace MysticCombat.Data
     [Serializable]
     public class AttackData
     {
-        public string name;
         public int damage;
         public float knockback;
-        public float startupFrames;
-        public float activeFrames;
-        public float recoveryFrames;
-        public float kiGain;
+        public int startupFrames;
+        public int activeFrames;
+        public int recoveryFrames;
         public Vector2Data hitboxOffset;
         public Vector2Data hitboxSize;
+        public float kiGainOnHit;
     }
 
     /// <summary>
@@ -93,18 +77,15 @@ namespace MysticCombat.Data
     public class SkillData
     {
         public string name;
-        public string description;
-        public int damage;
-        public float knockback;
+        public string type;        // "projectile", "instant", "toggle"
         public float kiCost;
-        public float cooldown;
-        public float startupFrames;
-        public float activeFrames;
-        public float recoveryFrames;
-        public string skillType; // e.g. "projectile", "melee", "buff"
-        public Vector2Data hitboxOffset;
-        public Vector2Data hitboxSize;
-        public ProjectileData projectile;
+        public int damage;
+        public float speed;         // projectile speed (if applicable)
+        public float lifetime;      // projectile lifetime (if applicable)
+        public int hits;            // number of hits (for multi-hit skills)
+        public int startupFrames;
+        public int activeFrames;
+        public int recoveryFrames;
     }
 
     /// <summary>
@@ -114,16 +95,13 @@ namespace MysticCombat.Data
     public class UltimateData
     {
         public string name;
-        public string description;
-        public int damage;
-        public float knockback;
         public float kiCost;
-        public float startupFrames;
-        public float activeFrames;
-        public float recoveryFrames;
-        public string ultimateType; // e.g. "cinematic", "area", "beam"
-        public Vector2Data hitboxOffset;
+        public int damage;
         public Vector2Data hitboxSize;
+        public int startupFrames;
+        public int activeFrames;
+        public int recoveryFrames;
+        public string drawback;
     }
 
     /// <summary>
@@ -134,13 +112,15 @@ namespace MysticCombat.Data
     {
         public float threshold = 10f;
         public float duration = 5f;
+        public float moveSpeedMultiplier = 0.3f;
         public float recoveryKi = 20f;
-        public float damageMultiplier = 1.5f;
-        public string specialAbility;
+        public float hitTimerReduction = 0.1f;
     }
 
     /// <summary>
     /// Serializable 2D vector for JSON x/y pairs.
+    /// JsonUtility cannot deserialize Unity's Vector2 from { "x": ..., "y": ... },
+    /// so we use this plain class instead.
     /// </summary>
     [Serializable]
     public class Vector2Data
@@ -155,28 +135,5 @@ namespace MysticCombat.Data
         {
             return new Vector2(x, y);
         }
-    }
-
-    /// <summary>
-    /// Optional projectile data embedded in a skill.
-    /// </summary>
-    [Serializable]
-    public class ProjectileData
-    {
-        public float speed;
-        public float lifetime;
-        public Vector2Data size;
-    }
-
-    /// <summary>
-    /// Visual/sprite metadata for a character.
-    /// </summary>
-    [Serializable]
-    public class VisualData
-    {
-        public string spriteSheet;
-        public string portraitSprite;
-        public string primaryColor;
-        public string secondaryColor;
     }
 }
