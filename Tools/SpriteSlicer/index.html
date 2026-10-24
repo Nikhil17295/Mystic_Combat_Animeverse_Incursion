@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mystic Combat — Interactive Sprite Slicer & Animator</title>
+    <style>
+        :root {
+            --bg-dark: #12131a;
+            --panel-bg: #1c1e29;
+            --panel-border: #2e3247;
+            --accent: #ff7700;
+            --accent-glow: rgba(255, 119, 0, 0.4);
+            --text-main: #f0f2f5;
+            --text-dim: #9aa0b4;
+            --success: #00e676;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Header */
+        header {
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--panel-border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 10;
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 1.15rem;
+            letter-spacing: 0.5px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .logo span { color: var(--accent); }
+
+        .char-selector {
+            display: flex;
+            gap: 8px;
+            background: #101118;
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--panel-border);
+        }
+        .char-btn {
+            background: transparent;
+            color: var(--text-dim);
+            border: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+        }
+        .char-btn.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        /* Main Workspace */
+        .workspace {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Canvas Viewport */
+        .viewport {
+            flex: 1;
+            position: relative;
+            background: #090a0f;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        canvas {
+            image-rendering: pixelated;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Floating Tool Bar above Canvas */
+        .canvas-toolbar {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            background: rgba(28, 30, 41, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            z-index: 5;
+        }
+        .coord-badge {
+            font-family: monospace;
+            color: var(--accent);
+            background: #101118;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        /* Right Sidebar Panel */
+        .sidebar {
+            width: 380px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--panel-border);
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+        }
+
+        .panel-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+
+        /* Live Preview */
+        .preview-box {
+            background: #090a0f;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        #previewCanvas {
+            image-rendering: pixelated;
+        }
+        .preview-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        /* Animation Categories */
+        .anim-tabs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .anim-tab-btn {
+            background: #141620;
+            border: 1px solid var(--panel-border);
+            color: var(--text-dim);
+            padding: 8px 4px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .anim-tab-btn:hover { color: #fff; border-color: #4a5073; }
+        .anim-tab-btn.active {
+            background: #ff770022;
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Frame Action Tools */
+        .action-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            background: #101118;
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 2px 8px;
+            flex: 1;
+            font-size: 0.8rem;
+        }
+        .input-group input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            width: 40px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 0.85rem;
+            outline: none;
+        }
+        .btn {
+            background: #2b3047;
+            color: #fff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn:hover { background: #3b4263; }
+        .btn-primary {
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+        .btn-primary:hover { background: #ff8c1a; }
+        .btn-success {
+            background: var(--success);
+            color: #000;
+            font-weight: 700;
+            font-size: 0.95rem;
+            padding: 14px;
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3);
+        }
+        .btn-success:hover { background: #26f08b; }
+
+        /* Frame List */
+        .frame-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .frame-item {
+            background: #141620;
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+        }
+        .frame-item-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .frame-thumb {
+            width: 32px;
+            height: 32px;
+            border: 1px solid #333;
+            background: #000;
+            image-rendering: pixelated;
+        }
+        .delete-btn {
+            background: transparent;
+            border: none;
+            color: #ff5252;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 1rem;
+            padding: 4px;
+        }
+
+        /* Instructions Bar */
+        .instructions {
+            background: #101118;
+            padding: 10px 16px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            line-height: 1.4;
+            border-top: 1px solid var(--panel-border);
+        }
+        .instructions kbd {
+            background: #232738;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <span>⚡ MYSTIC COMBAT</span> &bull; Sprite Slicer & Live Animator
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <div class="char-selector">
+                <button class="char-btn active" id="btnCharGoku" onclick="selectCharacter('goku')">Goku</button>
+                <button class="char-btn" id="btnCharSaitama" onclick="selectCharacter('saitama')">Saitama</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; background:#101118; padding:4px 8px; border-radius:8px; border:1px solid var(--panel-border);">
+                <label for="sheetDropdown" style="font-size:0.75rem; color:var(--text-dim); font-weight:600;">SHEET:</label>
+                <select id="sheetDropdown" onchange="onSheetDropdownChange()" style="background:#1c1e29; color:#fff; border:1px solid #444; border-radius:4px; padding:4px 8px; font-size:0.8rem; outline:none; cursor:pointer;">
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- Workspace -->
+    <div class="workspace">
+        <!-- Viewport -->
+        <div class="viewport" id="viewport">
+            <div class="canvas-toolbar">
+                <span>Selection:</span>
+                <span class="coord-badge" id="coordBadge">None</span>
+                <span>Zoom: <strong id="zoomLevel">1.5x</strong></span>
+                <span style="color:#666;">|</span>
+                <span id="imageInfoBadge" style="font-size: 0.75rem; color: #88c0d0; font-family: monospace;">Loading...</span>
+                <span style="color:#666;">|</span>
+                <span style="font-size: 0.75rem; color:#888;">Pan: <kbd>Right-Click Drag</kbd> or <kbd>Space + Drag</kbd></span>
+            </div>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- Live Animation Preview -->
+            <div class="panel-section">
+                <div class="section-title">Live Animation Preview</div>
+                <div class="preview-box">
+                    <canvas id="previewCanvas" width="128" height="128"></canvas>
+                </div>
+                <div class="preview-controls">
+                    <span>Speed: <strong id="fpsVal">8</strong> FPS</span>
+                    <input type="range" id="fpsSlider" min="2" max="24" value="8" style="width: 140px;">
+                </div>
+            </div>
+
+            <!-- Category Selector -->
+            <div class="panel-section">
+                <div class="section-title">Current Animation Category</div>
+                <div class="anim-tabs" id="animTabs">
+                    <button class="anim-tab-btn active" onclick="setCategory('idle')">Idle</button>
+                    <button class="anim-tab-btn" onclick="setCategory('walk')">Walk</button>
+                    <button class="anim-tab-btn" onclick="setCategory('jump')">Jump</button>
+                    <button class="anim-tab-btn" onclick="setCategory('crouch')">Crouch</button>
+                    <button class="anim-tab-btn" onclick="setCategory('punch')">Light Punch</button>
+                    <button class="anim-tab-btn" onclick="setCategory('heavy')">Heavy Attack</button>
+                    <button class="anim-tab-btn" onclick="setCategory('skill')">Skill</button>
+                    <button class="anim-tab-btn" onclick="setCategory('ultimate')">Ultimate</button>
+                    <button class="anim-tab-btn" onclick="setCategory('meditate')">Meditate</button>
+                </div>
+
+                <!-- Split & Add Tool -->
+                <div class="action-row">
+                    <div class="input-group">
+                        <span>Split into:</span>
+                        <input type="number" id="splitCount" value="4" min="1" max="16">
+                        <span>frames</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="addSelectedFrames()">+ Add to <span id="currentCatName">Idle</span></button>
+                </div>
+            </div>
+
+            <!-- Added Frames List -->
+            <div class="frame-list-container" id="frameList">
+                <div class="section-title" id="frameListTitle">Frames in Idle (0)</div>
+                <div id="framesListInner"></div>
+            </div>
+
+            <!-- Export to Unity -->
+            <div class="panel-section" style="border-top: 1px solid var(--panel-border);">
+                <button class="btn btn-success" id="exportBtn" onclick="exportToGame()">
+                    ⚡ EXPORT & APPLY TO UNITY GAME
+                </button>
+                <div id="statusMsg" style="font-size:0.75rem; text-align:center; margin-top:8px; color:var(--text-dim);">
+                    Ready. Click & drag over frames to select.
+                </div>
+            </div>
+
+            <div class="instructions">
+                <strong>How to use:</strong><br>
+                1. <strong>Select Category</strong> (e.g. <em>Idle</em>).<br>
+                2. <strong>Drag a box</strong> around the character animation frames.<br>
+                3. If you selected a row of 4 frames, set <strong>Split = 4</strong> and click <strong>+ Add</strong>.<br>
+                4. Watch the <strong>Live Preview</strong> animate instantly!<br>
+                5. Click <strong>Export & Apply</strong> to inject directly into Unity.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const previewCanvas = document.getElementById("previewCanvas");
+        const pCtx = previewCanvas.getContext("2d");
+        const viewport = document.getElementById("viewport");
+
+        // App State
+        let currentCharacter = "goku";
+        let currentCategory = "idle";
+        let sheetImage = new Image();
+
+        // Canvas Transform
+        let scale = 1.5;
+        let panX = 40;
+        let panY = 40;
+
+        // Mouse Drag Selection
+        let isSelecting = false;
+        let isPanning = false;
+        let startX = 0, startY = 0;
+        let currentX = 0, currentY = 0;
+        let panStartX = 0, panStartY = 0;
+
+        // Selected Bounding Box in image space
+        let currentSelection = null; // {x, y, w, h}
+
+        // Stored Animations: { category: [ {x, y, w, h}, ... ] }
+        const characterData = {
+            goku: {
+                sheets: [
+                    { name: "Transparent JUS (Clean)", path: "Fighters/Goku/goku_transparent.png", bgColor: null },
+                    { name: "Original JUS (Blue BG)", path: "Fighters/Goku/DS _ DSi - Jump Ultimate Stars - Fighters - Goku.png", bgColor: [128, 128, 255] }
+                ],
+                activeSheetIndex: 0,
+                animations: {
+                    idle: [
+                        {x: 22, y: 25, w: 47, h: 47},
+                        {x: 115, y: 25, w: 46, h: 47},
+                        {x: 208, y: 25, w: 47, h: 47},
+                        {x: 301, y: 25, w: 46, h: 47}
+                    ],
+                    walk: [],
+                    jump: [],
+                    crouch: [],
+                    punch: [],
+                    heavy: [],
+                    skill: [],
+                    ultimate: [],
+                    meditate: []
+                }
+            },
+            saitama: {
+                sheets: [
+                    { name: "Arzeer JUS (Clean Transparent)", path: "Fighters/Saitama/saitama_jus__by_arzeer_de00xcg.png", bgColor: null },
+                    { name: "XmayGrrr JUS (Purple BG)", path: "Fighters/Saitama/saitama_jus_sprites_by_xmaygrrr_d9oqas6.png", bgColor: [140, 70, 130] }
+                ],
+                activeSheetIndex: 0,
+                animations: {
+                    idle: [],
+                    walk: [],
+                    jump: [],
+                    crouch: [],
+                    punch: [],
+                    heavy: [],
+                    skill: [],
+                    ultimate: [],
+                    meditate: []
+                }
+            }
+        };
+
+        function selectCharacter(char) {
+            currentCharacter = char;
+            document.getElementById("btnCharGoku").classList.toggle("active", char === "goku");
+            document.getElementById("btnCharSaitama").classList.toggle("active", char === "saitama");
+
+            updateSheetDropdown();
+            loadActiveSheet();
+        }
+
+        function updateSheetDropdown() {
+            const dropdown = document.getElementById("sheetDropdown");
+            dropdown.innerHTML = "";
+            const charObj = characterData[currentCharacter];
+            charObj.sheets.forEach((s, idx) => {
+                const opt = document.createElement("option");
+                opt.value = idx;
+                opt.textContent = s.name;
+                if (idx === charObj.activeSheetIndex) opt.selected = true;
+                dropdown.appendChild(opt);
+            });
+        }
+
+        function onSheetDropdownChange() {
+            const dropdown = document.getElementById("sheetDropdown");
+            const idx = parseInt(dropdown.value);
+            characterData[currentCharacter].activeSheetIndex = idx;
+            loadActiveSheet();
+        }
+
+        function loadActiveSheet() {
+            const charObj = characterData[currentCharacter];
+            const sheet = charObj.sheets[charObj.activeSheetIndex];
+            const badge = document.getElementById("imageInfoBadge");
+            badge.textContent = "Loading: " + sheet.name + "...";
+            badge.style.color = "#ffaa00";
+
+            const encodedPath = encodeURI(sheet.path);
+            sheetImage.src = "/sprites/" + encodedPath;
+
+            sheetImage.onload = () => {
+                badge.textContent = `✓ ${sheetImage.naturalWidth}x${sheetImage.naturalHeight}px (${sheet.name})`;
+                badge.style.color = "#00e676";
+                panX = 40;
+                panY = 40;
+                render();
+                updateFrameListUI();
+            };
+
+            sheetImage.onerror = (err) => {
+                badge.textContent = "✗ Failed to load: /sprites/" + encodedPath;
+                badge.style.color = "#ff5252";
+                console.error("Image load error:", err);
+            };
+        }
+
+        function setCategory(cat) {
+            currentCategory = cat;
+            document.querySelectorAll(".anim-tab-btn").forEach(btn => {
+                btn.classList.toggle("active", btn.textContent.toLowerCase().includes(cat));
+            });
+            document.getElementById("currentCatName").textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+            updateFrameListUI();
+        }
+
+        // Resize Canvas to fit viewport
+        function resize() {
+            canvas.width = viewport.clientWidth;
+            canvas.height = viewport.clientHeight;
+            render();
+        }
+        window.addEventListener("resize", resize);
+
+        // Pan & Zoom
+        viewport.addEventListener("wheel", (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.2 : 0.833;
+            const mouseX = e.clientX - viewport.getBoundingClientRect().left;
+            const mouseY = e.clientY - viewport.getBoundingClientRect().top;
+
+            panX = mouseX - (mouseX - panX) * zoomFactor;
+            panY = mouseY - (mouseY - panY) * zoomFactor;
+            scale = Math.max(0.2, Math.min(10.0, scale * zoomFactor));
+            document.getElementById("zoomLevel").textContent = scale.toFixed(1) + "x";
+            render();
+        });
+
+        // Mouse Down
+        viewport.addEventListener("mousedown", (e) => {
+            if (e.button === 1 || e.button === 2 || e.spaceKey || e.shiftKey) {
+                isPanning = true;
+                panStartX = e.clientX - panX;
+                panStartY = e.clientY - panY;
+                return;
+            }
+
+            if (e.button === 0) {
+                isSelecting = true;
+                const rect = viewport.getBoundingClientRect();
+                startX = (e.clientX - rect.left - panX) / scale;
+                startY = (e.clientY - rect.top - panY) / scale;
+                currentX = startX;
+                currentY = startY;
+            }
+        });
+
+        // Mouse Move
+        window.addEventListener("mousemove", (e) => {
+            if (isPanning) {
+                panX = e.clientX - panStartX;
+                panY = e.clientY - panStartY;
+                render();
+                return;
+            }
+
+            if (isSelecting) {
+                const rect = viewport.getBoundingClientRect();
+                currentX = (e.clientX - rect.left - panX) / scale;
+                currentY = (e.clientY - rect.top - panY) / scale;
+
+                const x = Math.round(Math.min(startX, currentX));
+                const y = Math.round(Math.min(startY, currentY));
+                const w = Math.round(Math.abs(currentX - startX));
+                const h = Math.round(Math.abs(currentY - startY));
+
+                currentSelection = { x, y, w, h };
+                document.getElementById("coordBadge").textContent = `X:${x} Y:${y} | W:${w} H:${h}`;
+                render();
+            }
+        });
+
+        // Mouse Up
+        window.addEventListener("mouseup", (e) => {
+            if (isPanning) isPanning = false;
+            if (isSelecting) {
+                isSelecting = false;
+                render();
+            }
+        });
+
+        viewport.addEventListener("contextmenu", e => e.preventDefault());
+
+        // Render Canvas
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(scale, scale);
+
+            // Draw Sprite Sheet
+            if (sheetImage.complete && sheetImage.naturalWidth > 0) {
+                ctx.drawImage(sheetImage, 0, 0);
+
+                // Draw existing saved frames for current category
+                const currentFrames = characterData[currentCharacter].animations[currentCategory] || [];
+                ctx.lineWidth = 1.5 / scale;
+                ctx.strokeStyle = "#00e676";
+                ctx.fillStyle = "rgba(0, 230, 118, 0.15)";
+                currentFrames.forEach((box, i) => {
+                    ctx.fillRect(box.x, box.y, box.w, box.h);
+                    ctx.strokeRect(box.x, box.y, box.w, box.h);
+                    ctx.fillStyle = "#fff";
+                    ctx.font = `${Math.max(10, 12 / scale)}px sans-serif`;
+                    ctx.fillText(`#${i}`, box.x + 2, box.y - 2);
+                    ctx.fillStyle = "rgba(0, 230, 118, 0.15)";
+                });
+
+                // Draw Active Selection Box
+                if (currentSelection && currentSelection.w > 0 && currentSelection.h > 0) {
+                    ctx.strokeStyle = "#ff7700";
+                    ctx.lineWidth = 2 / scale;
+                    ctx.fillStyle = "rgba(255, 119, 0, 0.25)";
+                    ctx.fillRect(currentSelection.x, currentSelection.y, currentSelection.w, currentSelection.h);
+                    ctx.strokeRect(currentSelection.x, currentSelection.y, currentSelection.w, currentSelection.h);
+
+                    // Show split lines if split > 1
+                    const splits = parseInt(document.getElementById("splitCount").value) || 1;
+                    if (splits > 1) {
+                        ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+                        ctx.lineWidth = 1 / scale;
+                        const subW = currentSelection.w / splits;
+                        for (let s = 1; s < splits; s++) {
+                            const splitX = currentSelection.x + s * subW;
+                            ctx.beginPath();
+                            ctx.moveTo(splitX, currentSelection.y);
+                            ctx.lineTo(splitX, currentSelection.y + currentSelection.h);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // Add Selection to Animation
+        function addSelectedFrames() {
+            if (!currentSelection || currentSelection.w <= 4 || currentSelection.h <= 4) {
+                alert("Please drag a box around the character frames on the image first!");
+                return;
+            }
+
+            const splits = Math.max(1, parseInt(document.getElementById("splitCount").value) || 1);
+            const subW = Math.round(currentSelection.w / splits);
+            const list = characterData[currentCharacter].animations[currentCategory];
+
+            for (let i = 0; i < splits; i++) {
+                list.push({
+                    x: currentSelection.x + i * subW,
+                    y: currentSelection.y,
+                    w: subW,
+                    h: currentSelection.h
+                });
+            }
+
+            currentSelection = null;
+            document.getElementById("coordBadge").textContent = "Added!";
+            updateFrameListUI();
+            render();
+        }
+
+        function removeFrame(idx) {
+            characterData[currentCharacter].animations[currentCategory].splice(idx, 1);
+            updateFrameListUI();
+            render();
+        }
+
+        function updateFrameListUI() {
+            const list = characterData[currentCharacter].animations[currentCategory] || [];
+            document.getElementById("frameListTitle").textContent = `Frames in ${currentCategory} (${list.length})`;
+            const container = document.getElementById("framesListInner");
+            container.innerHTML = "";
+
+            list.forEach((box, i) => {
+                const item = document.createElement("div");
+                item.className = "frame-item";
+                item.innerHTML = `
+                    <div class="frame-item-left">
+                        <strong>#${i}</strong>
+                        <span>X:${box.x} Y:${box.y} (${box.w}x${box.h})</span>
+                    </div>
+                    <button class="delete-btn" onclick="removeFrame(${i})">&times;</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // Live Animation Loop
+        let previewIndex = 0;
+        let previewLastTime = 0;
+        function animatePreview(time) {
+            requestAnimationFrame(animatePreview);
+
+            const fps = parseInt(document.getElementById("fpsSlider").value) || 8;
+            document.getElementById("fpsVal").textContent = fps;
+            const interval = 1000 / fps;
+
+            if (time - previewLastTime < interval) return;
+            previewLastTime = time;
+
+            const list = characterData[currentCharacter].animations[currentCategory] || [];
+            pCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+            if (list.length > 0 && sheetImage.complete && sheetImage.naturalWidth > 0) {
+                previewIndex = (previewIndex + 1) % list.length;
+                const f = list[previewIndex];
+
+                // Scale to fit preview box centered
+                const scaleFactor = Math.min(100 / f.w, 100 / f.h);
+                const drawW = f.w * scaleFactor;
+                const drawH = f.h * scaleFactor;
+                const drawX = (previewCanvas.width - drawW) / 2;
+                const drawY = (previewCanvas.height - drawH) / 2;
+
+                pCtx.imageSmoothingEnabled = false;
+                pCtx.drawImage(sheetImage, f.x, f.y, f.w, f.h, drawX, drawY, drawW, drawH);
+            }
+        }
+        requestAnimationFrame(animatePreview);
+
+        // Export Directly to Project
+        async function exportToGame() {
+            const status = document.getElementById("statusMsg");
+            status.style.color = "#ff7700";
+            status.textContent = "Exporting frames to Unity project...";
+
+            const charObj = characterData[currentCharacter];
+            const activeSheet = charObj.sheets[charObj.activeSheetIndex];
+            const payload = {
+                character: currentCharacter,
+                sheetPath: activeSheet.path,
+                bgColor: activeSheet.bgColor,
+                animations: charObj.animations
+            };
+
+            try {
+                const res = await fetch("/api/export", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.status === "ok") {
+                    status.style.color = "var(--success)";
+                    status.textContent = `✓ Successfully exported ${data.exported} frames directly into Unity!`;
+                } else {
+                    status.style.color = "#ff5252";
+                    status.textContent = "Error: " + data.message;
+                }
+            } catch (err) {
+                status.style.color = "#ff5252";
+                status.textContent = "Export failed: " + err.message;
+            }
+        }
+
+        // Init
+        selectCharacter("goku");
+        resize();
+    </script>
+</body>
+</html>

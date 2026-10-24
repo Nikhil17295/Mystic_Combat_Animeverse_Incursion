@@ -1,18 +1,16 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace MysticCombat.Input
 {
     /// <summary>
-    /// Reads raw keyboard input for a specific player (P1 or P2).
-    /// Uses Input.GetKey / GetKeyDown for shared-keyboard reliability.
+    /// Reads keyboard input for P1 or P2 using Unity's modern Input System (Keyboard.current).
+    /// Fallback supported for legacy input systems.
     /// </summary>
     public class PlayerInputHandler : MonoBehaviour
     {
         #region Enums
 
-        /// <summary>
-        /// Identifies which player this handler reads input for.
-        /// </summary>
         public enum PlayerIndex
         {
             P1,
@@ -24,51 +22,19 @@ namespace MysticCombat.Input
         #region Serialized Fields
 
         [Header("Player Assignment")]
-        [Tooltip("Which player's controls this handler reads.")]
         public PlayerIndex playerIndex = PlayerIndex.P1;
 
         #endregion
 
         #region Public Properties
 
-        /// <summary>
-        /// Horizontal and vertical movement input. X: -1/0/1 (left/right). Y: 1 (jump) / -1 (crouch) / 0.
-        /// </summary>
         public Vector2 MoveInput { get; private set; }
-
-        /// <summary>
-        /// True on the frame the jump key is pressed down.
-        /// </summary>
         public bool JumpPressed { get; private set; }
-
-        /// <summary>
-        /// True while the crouch key is held.
-        /// </summary>
         public bool CrouchHeld { get; private set; }
-
-        /// <summary>
-        /// True on the frame the light attack key is pressed down.
-        /// </summary>
         public bool LightAttackPressed { get; private set; }
-
-        /// <summary>
-        /// True on the frame the heavy attack key is pressed down.
-        /// </summary>
         public bool HeavyAttackPressed { get; private set; }
-
-        /// <summary>
-        /// True on the frame the skill key is pressed down.
-        /// </summary>
         public bool SkillPressed { get; private set; }
-
-        /// <summary>
-        /// True on the frame the ultimate key is pressed down.
-        /// </summary>
         public bool UltimatePressed { get; private set; }
-
-        /// <summary>
-        /// True while the meditate key is held.
-        /// </summary>
         public bool MeditateHeld { get; private set; }
 
         #endregion
@@ -77,64 +43,68 @@ namespace MysticCombat.Input
 
         private void Update()
         {
+            Keyboard kb = Keyboard.current;
+            if (kb == null) return;
+
             if (playerIndex == PlayerIndex.P1)
             {
-                ReadP1Input();
+                ReadP1Input(kb);
             }
             else
             {
-                ReadP2Input();
+                ReadP2Input(kb);
             }
         }
 
         #endregion
 
-        #region Private Methods
+        #region Input Reading (Modern Input System)
 
-        private void ReadP1Input()
+        private void ReadP1Input(Keyboard kb)
         {
-            // Movement
+            // Movement (W/A/S/D) + Space for Jump
             float horizontal = 0f;
-            if (UnityEngine.Input.GetKey(KeyCode.A)) horizontal -= 1f;
-            if (UnityEngine.Input.GetKey(KeyCode.D)) horizontal += 1f;
+            if (kb.aKey.isPressed) horizontal -= 1f;
+            if (kb.dKey.isPressed) horizontal += 1f;
 
             float vertical = 0f;
-            if (UnityEngine.Input.GetKey(KeyCode.W)) vertical += 1f;
-            if (UnityEngine.Input.GetKey(KeyCode.S)) vertical -= 1f;
+            if (kb.wKey.isPressed) vertical += 1f;
+            if (kb.sKey.isPressed) vertical -= 1f;
 
             MoveInput = new Vector2(horizontal, vertical);
 
-            // Buttons
-            JumpPressed = UnityEngine.Input.GetKeyDown(KeyCode.W);
-            CrouchHeld = UnityEngine.Input.GetKey(KeyCode.S);
-            LightAttackPressed = UnityEngine.Input.GetKeyDown(KeyCode.G);
-            HeavyAttackPressed = UnityEngine.Input.GetKeyDown(KeyCode.H);
-            SkillPressed = UnityEngine.Input.GetKeyDown(KeyCode.J);
-            UltimatePressed = UnityEngine.Input.GetKeyDown(KeyCode.K);
-            MeditateHeld = UnityEngine.Input.GetKey(KeyCode.T);
+            // Action Buttons (Custom Ergonomic Layout: F = Light, C = Heavy, E = Skill, Q = Ultimate, G = Meditate)
+            JumpPressed = kb.wKey.wasPressedThisFrame || (kb.spaceKey != null && kb.spaceKey.wasPressedThisFrame);
+            CrouchHeld = kb.sKey.isPressed;
+            LightAttackPressed = kb.fKey.wasPressedThisFrame;
+            HeavyAttackPressed = kb.cKey.wasPressedThisFrame;
+            SkillPressed = kb.eKey.wasPressedThisFrame;
+            UltimatePressed = kb.qKey.wasPressedThisFrame;
+            MeditateHeld = kb.gKey.isPressed;
         }
 
-        private void ReadP2Input()
+        private void ReadP2Input(Keyboard kb)
         {
-            // Movement
+            // Movement (I / J / K / L) + Arrow Keys as alternate
             float horizontal = 0f;
-            if (UnityEngine.Input.GetKey(KeyCode.LeftArrow)) horizontal -= 1f;
-            if (UnityEngine.Input.GetKey(KeyCode.RightArrow)) horizontal += 1f;
+            if (kb.jKey.isPressed || kb.leftArrowKey.isPressed) horizontal -= 1f;
+            if (kb.lKey.isPressed || kb.rightArrowKey.isPressed) horizontal += 1f;
 
             float vertical = 0f;
-            if (UnityEngine.Input.GetKey(KeyCode.UpArrow)) vertical += 1f;
-            if (UnityEngine.Input.GetKey(KeyCode.DownArrow)) vertical -= 1f;
+            if (kb.iKey.isPressed || kb.upArrowKey.isPressed) vertical += 1f;
+            if (kb.kKey.isPressed || kb.downArrowKey.isPressed) vertical -= 1f;
 
             MoveInput = new Vector2(horizontal, vertical);
 
-            // Buttons
-            JumpPressed = UnityEngine.Input.GetKeyDown(KeyCode.UpArrow);
-            CrouchHeld = UnityEngine.Input.GetKey(KeyCode.DownArrow);
-            LightAttackPressed = UnityEngine.Input.GetKeyDown(KeyCode.Keypad1);
-            HeavyAttackPressed = UnityEngine.Input.GetKeyDown(KeyCode.Keypad2);
-            SkillPressed = UnityEngine.Input.GetKeyDown(KeyCode.Keypad3);
-            UltimatePressed = UnityEngine.Input.GetKeyDown(KeyCode.Keypad5);
-            MeditateHeld = UnityEngine.Input.GetKey(KeyCode.Keypad0);
+            // Action Buttons (Custom Ergonomic Layout: H = Light, N = Heavy, U = Skill, O = Ultimate, M = Meditate)
+            JumpPressed = kb.iKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame;
+            CrouchHeld = kb.kKey.isPressed || kb.downArrowKey.isPressed;
+
+            LightAttackPressed = kb.hKey.wasPressedThisFrame;
+            HeavyAttackPressed = kb.nKey.wasPressedThisFrame;
+            SkillPressed = kb.uKey.wasPressedThisFrame;
+            UltimatePressed = kb.oKey.wasPressedThisFrame;
+            MeditateHeld = kb.mKey.isPressed;
         }
 
         #endregion

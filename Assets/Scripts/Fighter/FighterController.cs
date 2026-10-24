@@ -49,6 +49,7 @@ namespace MysticCombat.Fighter
         private SpriteRenderer spriteRenderer;
         private BoxCollider2D bodyCollider;
         private EnergySystem energySystem;
+        private float attackTimer;
 
         #endregion
 
@@ -199,6 +200,17 @@ namespace MysticCombat.Fighter
                         TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
                     }
                     break;
+
+                case FighterState.LightAttack:
+                case FighterState.HeavyAttack:
+                case FighterState.Skill:
+                case FighterState.Ultimate:
+                    attackTimer -= Time.deltaTime;
+                    if (attackTimer <= 0f)
+                    {
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
+                    }
+                    break;
             }
         }
 
@@ -218,6 +230,42 @@ namespace MysticCombat.Fighter
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, effectiveJump);
                 TransitionTo(FighterState.Jumping);
                 return;
+            }
+
+            // Attacks (allowed only when NOT exhausted)
+            if (!isExhausted && IsGrounded)
+            {
+                // Ultimate Attack (Q)
+                if (inputHandler.UltimatePressed)
+                {
+                    attackTimer = 1.35f;
+                    TransitionTo(FighterState.Ultimate);
+                    return;
+                }
+
+                // Skill Attack (E)
+                if (inputHandler.SkillPressed)
+                {
+                    attackTimer = 0.65f;
+                    TransitionTo(FighterState.Skill);
+                    return;
+                }
+
+                // Heavy Attack (C)
+                if (inputHandler.HeavyAttackPressed)
+                {
+                    attackTimer = 0.65f;
+                    TransitionTo(FighterState.HeavyAttack);
+                    return;
+                }
+
+                // Light Attack (F)
+                if (inputHandler.LightAttackPressed)
+                {
+                    attackTimer = 0.35f;
+                    TransitionTo(FighterState.LightAttack);
+                    return;
+                }
             }
 
             // Crouch
@@ -298,7 +346,9 @@ namespace MysticCombat.Fighter
 
                 case FighterState.Crouching:
                 case FighterState.Meditating:
-                    // Cannot move horizontally while crouching or meditating
+                case FighterState.LightAttack:
+                case FighterState.HeavyAttack:
+                    // Cannot move horizontally while crouching, meditating, or attacking
                     rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
                     break;
             }
