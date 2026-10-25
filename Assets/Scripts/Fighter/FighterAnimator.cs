@@ -24,16 +24,16 @@ namespace MysticCombat.Fighter
         [SerializeField] private float walkFps = 8f;
 
         [Tooltip("Light punch speed (comfortable read).")]
-        [SerializeField] private float lightAttackFps = 9f;
+        [SerializeField] private float lightAttackFps = 9.5f;
 
-        [Tooltip("Heavy attack windup & strike speed.")]
-        [SerializeField] private float heavyAttackFps = 8f;
+        [Tooltip("Heavy attack windup & strike speed (slowed down for weight & impact!).")]
+        [SerializeField] private float heavyAttackFps = 6f;
 
         [Tooltip("Skill flurry speed (e.g. Saitama Consecutive Normal Punches).")]
-        [SerializeField] private float skillFps = 14f;
+        [SerializeField] private float skillFps = 10f;
 
-        [Tooltip("Ultimate speed (Spirit Bomb / Serious Punch).")]
-        [SerializeField] private float ultimateFps = 9f;
+        [Tooltip("Ultimate speed (Spirit Bomb / Serious Punch) - heavy cinematic windup.")]
+        [SerializeField] private float ultimateFps = 6f;
 
         [Tooltip("Ki meditation channel loop speed.")]
         [SerializeField] private float meditateFps = 7f;
@@ -153,6 +153,23 @@ namespace MysticCombat.Fighter
             Debug.Log($"[FighterAnimator] Loaded {characterFolder}: {idleFrames.Count} idle, {walkFrames.Count} walk, " +
                       $"{jumpFrames.Count} jump, {punchFrames.Count} punch, {heavyFrames.Count} heavy, " +
                       $"{skillFrames.Count} skill, {ultimateFrames.Count} ult frames.");
+        }
+
+        /// <summary>
+        /// Instantly resets frame index, animation timer, and displays the first idle frame.
+        /// Useful when starting a new round or recovering from hitstun.
+        /// </summary>
+        public void ResetToIdle()
+        {
+            currentFrameIndex = 0;
+            animTimer = 0f;
+            lastState = FighterState.Idle;
+
+            if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer != null && idleFrames.Count > 0)
+            {
+                spriteRenderer.sprite = idleFrames[0];
+            }
         }
 
         private void LoadSequence(string dir, string prefix, List<Sprite> targetList)

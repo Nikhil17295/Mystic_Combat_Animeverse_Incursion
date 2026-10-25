@@ -122,10 +122,144 @@
 
 ---
 
+### Q13: Why did you decouple the HUD from the fighters using C# events instead of polling in Update()?
+**Answer:**
+> *"Polling in `Update()` (e.g. `p1HealthBar.fillAmount = fighter.health / 100f` every frame) creates unnecessary CPU overhead and tight coupling.
+> Instead, we adopted the **Observer Pattern**:
+> 1. `HealthSystem` and `EnergySystem` broadcast C# `Action` events (`OnHealthChanged`, `OnKiChanged`) ONLY when values actually mutate.
+> 2. `HUDController` subscribes to these events and updates the visual fill amounts reactively.
+> 3. If the UI is disabled or destroyed, gameplay logic runs with zero dependency on the view. This mirrors Godot's Signal architecture (`health_changed.connect(...)`)."*
+
+---
+
+### Q14: How does your damage ghost bar and retro round win tracker work?
+**Answer:**
+> *"1. **Damage Ghost Bar:** When an attack lands, the primary yellow/orange health fill drops immediately, but the red ghost bar stays frozen for 0.35s before sliding down smoothly via `Mathf.MoveTowards()`. This gives critical visual feedback on burst damage dealt.
+> 2. **Symmetrical Win Trackers:** P1's golden dragon gem and 'WINS: 0/1' sit under P1's Ki bar on the left, while P2's ruby gem sits under P2's Ki bar on the right. An empty socket fills when a player takes a round, maintaining clean arcade clarity without overcrowding the central timer."*
+
+---
+
+### Q15: How did you implement the Godot-style scene workflow in Unity so non-programmers can edit characters and UI visually?
+**Answer:**
+> *"In Godot, every character and UI element is an independent `.tscn` scene that can be opened and edited in isolation.
+> In Unity, the exact counterpart is the **Prefab System**:
+> 1. We converted Goku, Saitama, and the HUD into connected Prefabs (`Assets/Prefabs/Fighters/Goku.prefab`, `Saitama.prefab`, and `Assets/Prefabs/UI/HUD_Canvas.prefab`).
+> 2. By using `PrefabUtility.SaveAsPrefabAssetAndConnect()`, instances in the scene turn blue in the Hierarchy. Non-programmers can simply double-click any prefab to enter **Prefab Mode** (isolated scene editing), tweak colliders or UI layouts visually, and have those changes automatically apply everywhere.
+> 3. We also created `Assets/Scenes/HUDScene.unity`, a dedicated sandbox scene where UI artists can test and style the HUD without loading fighters or physics."*
+
+---
+
+### Q16: Why did you choose a 16-bit retro arcade aesthetic for the HUD over modern flat minimalist UI?
+**Answer:**
+> *"Modern minimalist UI often feels sterile, corporate, and detached from the high-energy spirit of anime fighting games.
+> Classic 16-bit arcade fighters (like *Street Fighter II*, *Alpha*, and *DBZ Hyper Dimension*) succeeded because their UI had tactile weight:
+> 1. Double-line square portrait frames give characters distinct fighting game presence.
+> 2. 2-tone specular health fills (lemon top, orange bottom) maximize contrast against detailed arena backgrounds.
+> 3. Point filtering (`FilterMode.Point`) ensures pixel-perfect crispness without blurry bilinear smoothing.
+> 4. The Time Stone sits directly inside the clock housing, marrying the mystical Marvel lore with retro arcade countdown typography."*
+
+---
+
+### Q17: How did you solve the Unity Prefab reference stripping problem when connecting UI events to fighters?
+**Answer:**
+> *"In Unity, saving a Canvas as a Prefab Asset (`HUD_Canvas.prefab`) automatically strips references to scene instances (like `Fighter_P1_Goku`) because assets on disk cannot point to transient scene objects.
+> If left unhandled, `HUDController` wakes up with null references, making the UI completely unresponsive to combat events.
+> We resolved this via **Self-Healing Reference Discovery**:
+> In `HUDController.Awake()`, `Start()`, and `OnEnable()`, if any fighter or match manager reference is null, it queries the scene dynamically, binds the C# action events (`OnHealthChanged`, `OnKiChanged`, `OnTimerUpdate`), and synchronizes the current state immediately. This gives us both modular prefab isolation and runtime responsiveness."*
+
+---
+
+### Q18: Why does the Time Stone use a Doctor Strange style magic mandala instead of a standard digital clock box?
+**Answer:**
+> *"In Marvel lore (*Doctor Strange*, *Infinity War*), the Time Stone is an ancient cosmic infinity stone harnessed through green eldritch sorcery. Placing it inside a generic plastic clock box felt immersion-breaking and bland.
+> Instead, we designed a circular 160×160 green Time Mandala inspired by the Tao Mandalas Doctor Strange conjures to manipulate time.
+> The mandala continuously rotates at 22°/s with concentric geometric rings, radiating emerald ki rays, and glowing emerald-white countdown numerals in the center. This marries authentic Marvel aesthetic with clear arcade fighting game visibility."*
+
+---
+
+### Q19: Why did 2D trigger-on-trigger collisions fail in Unity Box2D, and how did you resolve hit detection?
+**Answer:**
+> *"By default in Box2D (Unity's 2D physics engine), two `isTrigger = true` colliders (sensors) never generate contact events between each other.
+> Initially, both `Hitbox` and `Hurtbox` were triggers, causing `OnTriggerEnter2D` to be silently skipped.
+> We solved this robustly by upgrading `HitboxController`:
+> 1. It queries `other.GetComponentInParent<HealthSystem>()`, detecting any collider belonging to the opponent (body colliders, hurtboxes, or roots).
+> 2. It implements both `OnTriggerEnter2D` and `OnTriggerStay2D` so point-blank strikes register without requiring fresh movement.
+> 3. It filters out self-hits and multi-hits within the same strike cycle, guaranteeing 100% reliable combat damage."*
+
+---
+
+### Q20: Why is attack frame rate (FPS) tuning critical for fighting game weight and 'game feel'?
+**Answer:**
+> *"In fighting games, uniform high-speed playback makes all moves feel like flimsy paper.
+> To give attacks bone-crushing physical weight:
+> 1. Light jabs run at 9.5 FPS for snappy, immediate pokes.
+> 2. Heavy strikes and Ultimates run at 6 FPS, holding the anticipation and impact frames longer so players feel the massive kinetic force.
+> 3. Flurry skills (Consecutive Normal Punches) run at 10 FPS with multi-hit re-arming, giving a rhythmic, satisfying barrage instead of an unrecognizable blur."*
+
+---
+
+### Q21: How do TextMeshPro 4-corner vertex gradients create authentic 3D arcade typography in Unity?
+**Answer:**
+> *"Rather than relying on flat monochrome font colors or pre-rendered text bitmap images that blur when scaled, TextMeshProUGUI enables GPU-accelerated vertex gradients via `VertexGradient(topLeft, topRight, bottomLeft, bottomRight)`.
+> By assigning bright specular highlights to the top vertices (e.g. `#FFF573` for Goku, `#FFF0E8` for Saitama) and deep rich tones to the bottom vertices (e.g. `#D92600` crimson, `#8C001E` maroon), each glyph dynamically renders with a 3D beveled lighting gradient at zero runtime texture allocation."*
+
+---
+
+### Q22: How does the multi-layer HUD architecture prevent ornate decorative elements (like the Golden Dragon Crawler) from clipping or breaking gameplay?
+**Answer:**
+> *"In fighting game UIs, heavy decorative frames risk obscuring active fill bars or intercepting UI click events.
+> We solve this through clean architectural separation:
+> 1. The health bar container manages the 650×52 dimensions and 8px beveled frame.
+> 2. The fill bars (`GhostFill` and `HealthFill`) are inset with negative padding (`offsetMin = 8, 6`, `offsetMax = -8, -6`), ensuring health values never bleed over the border.
+> 3. The `DragonCrawler` overlay sits on the top rail as an independent image with `raycastTarget = false`. It delivers majestic anime visual aesthetic while completely avoiding any interference with UI events or hit tracking."*
+
+---
+
+### Q23: Why did health bars fail to decrease when attacks landed, and how does `IsInActiveScene()` resolve the Prefab Asset listener bug?
+**Answer:**
+> *"When a UI Canvas is saved as a Prefab Asset, Unity cannot serialize pointers to live scene GameObjects. Instead, Unity automatically remaps those references to the uninstantiated Prefab Assets stored on disk in `Assets/Prefabs/Fighters/`.
+> At runtime, standard null checks (`if (p1Health == null)`) fail to trigger because the field is not null—it holds a valid pointer to the disk asset!
+> Consequently, `HUDController` attached its event delegates to the inert disk asset while the live fighters in the active scene took hits in isolation.
+> We solved this by implementing `IsInActiveScene(Component comp) => comp != null && comp.gameObject.scene.IsValid() && comp.gameObject.scene.isLoaded;`.
+> If a reference points to a disk asset, the script discards it and dynamically binds to the active scene instances (`Fighter_P1_Goku`, `Fighter_P2_Saitama`), ensuring 100% reliable real-time health bar tracking."*
+
+### Q24: How does the Match Point indicator system work dynamically in Mystic Combat, and why use dual round gems and a hollow relic socket instead of simple text?
+**Answer:**
+> *"In competitive fighting games, match tension peaks when a fighter is one round away from victory. Instead of generic text like 'WINS: 1', Mystic Combat uses an environmental visual relic system:
+> 1. **Dual Player Round Gems:** Each fighter has two 56×56 point sockets (`p1PointGem1`, `p1PointGem2`, `p2PointGem1`, `p2PointGem2`). At 0 wins, both remain dark hollow sockets (`gem_socket_hollow.png`). On winning Round 1, Gem 1 turns into a glowing sapphire (`gem_shiny_blue.png`). On winning Round 2, Gem 2 ignites and clinches tournament victory.
+> 2. **The Hollow Relic Socket:** The central 68×68 championship relic begins the match as an empty, dark golden socket (`gem_big_gold_hollow.png`). This signals that the championship trophy is unearned.
+> 3. **Dynamic Event Evaluation:** In `HUDController.UpdateRoundScore(p1Wins, p2Wins)`, the game evaluates `isMatchPoint = (p1Wins >= 1 || p2Wins >= 1)`. 
+> 4. **Active Ignition:** When either fighter reaches match point, `centerBigGoldGem.sprite` swaps to the radiant [`gem_big_gold.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/UI/gem_big_gold.png) (extracted directly from the user's multi-gem screenshot `Screenshot 2026-10-25 112541.png`), triggering a breathing golden sine-wave pulse ($1.0\times \rightarrow 1.15\times$). This gives instant, dramatic feedback without crowding the screen."*
+
+### Q25: How did you transform a low-resolution user-provided sprite into a cinematic game-ready UI element with clean alpha blending and specular lighting?
+**Answer:**
+> *"When integrating raw user assets (such as the emerald Time Stone screenshot), three critical processing steps are applied:
+> 1. **Color Distance Keying:** Rather than an exact RGB match that leaves jagged white halos, we discard pixels within a variance threshold (`abs(r-g) < 15 && abs(g-b) < 15 && r > 170`) to strip compression artifacts while preserving emerald facets and highlights.
+> 2. **Point-Filtered Upscaling:** Scaling pixel art using bilinear filtering results in muddy, blurry edges. We upscale using nearest-neighbor (`Point`) filtering to keep crystalline facet boundaries razor-sharp.
+> 3. **Compositing Specular Facets & Cosmic Accents:** We embed the clean gem inside a golden Eye of Agamotto bezel, add top-left diamond glints, and place it atop an active 160×160 Doctor Strange Tao mandala rotating at $22^\circ/\text{s}$."*
+
+### Q26: How does `MatchManager` manage round transitions, and why is an asynchronous coroutine pause necessary between rounds in a 2D fighting game?
+**Answer:**
+> *"In fighting games, instant 0-millisecond round resets break gameplay because the fatal attack's active hitbox and knockback physics are still resolving on the frame health reaches zero.
+> We implemented an asynchronous coroutine `RoundEndSequence(winnerIndex)` in `MatchManager`:
+> 1. When a fighter's HP drops to 0, `currentMatchState` transitions to `RoundEnd`, freezing combat for 1.8 seconds so players see the K.O.
+> 2. `ResetForNewRound()` snaps both fighters back to their starting spawn coordinates (`-2.2` and `+2.2`), resets velocities to zero, clears attack hitboxes, and transitions the state machine back to `Idle`.
+> 3. If the match is tied 1–1 (P1 won Round 1, P2 won Round 2), the system automatically initiates Round 3 as the Final Round Match Point with all gems, health bars, and ghost bars cleanly refreshed."*
+
+### Q27: Why did TextMeshPro text shrink to microscopic sizes on long strings, and how does expanding RectTransform width and disabling word wrapping fix it?
+**Answer:**
+> *"TextMeshProUGUI components with narrow RectTransforms (such as our original 340px header) suffer from text distortion when long match point strings are assigned. If auto-sizing is active or container bounds are constrained, TMP either forces word-wrapping or scales font size down to fit.
+> We resolved this by:
+> 1. Expanding the `RoundTitle` RectTransform sizeDelta to `600×36px`, providing ample horizontal clearance across 1080p and 4K viewports.
+> 2. Setting `textWrappingMode = TextWrappingModes.NoWrap` (replacing obsolete `enableWordWrapping` in Unity 6) and `overflowMode = TextOverflowModes.Overflow`, guaranteeing that match point titles remain strictly on a single line at bold 24pt with 3D antique gold vertex gradients."*
+
+---
+
 ## 3. Live Demo Checklist for Judges
 
 When demonstrating the game to evaluators:
 1. **Show the Console:** Point out `[CharacterDataLoader]` loading `goku.json` and `saitama.json` at startup to prove the data-driven architecture.
 2. **Show Auto-Facing:** Jump over Saitama with Goku and show both characters flipping smoothly.
-3. **Show Meditation:** Hold the meditate key (`T`) and show the fighter rooting in place to channel mystic Ki.
+3. **Show Meditation:** Hold the meditate key (`G` for P1, `M` for P2) and show the fighter rooting in place to channel mystic Ki.
 4. **Show Arena Colliders:** Run into the arena boundary walls to show solid 2D collision resolution.
+5. **Show Damage Ghost Bar & Time Stone:** Land a heavy strike to show the instant health drop followed by the smooth trailing ghost bar, and point out the rotating energy aura behind the central Time Stone.

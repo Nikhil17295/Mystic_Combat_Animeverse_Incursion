@@ -5,9 +5,9 @@ using MysticCombat.Systems;
 namespace MysticCombat.Combat
 {
     /// <summary>
-    /// Controls a hitbox trigger collider attached to an attacking fighter.
-    /// Manages damage resolution, physics knockback, Ki generation, and draws
-    /// visual red Scene Gizmos so designers can visually adjust hitboxes.
+    /// Controls attack hitboxes attached to fighters.
+    /// Uses active Physics2D.OverlapBoxAll queries dynamically calculated in front of the fighter's
+    /// facing direction. Completely immune to 2D trigger-on-trigger blindness or stationary overlap drops.
     /// </summary>
     [RequireComponent(typeof(BoxCollider2D))]
     public class HitboxController : MonoBehaviour
@@ -24,11 +24,11 @@ namespace MysticCombat.Combat
         [Tooltip("Ki gained by attacker on hit.")]
         [SerializeField] private float kiGainOnHit = 6f;
 
-        [Tooltip("Offset relative to the fighter's pivot.")]
-        public Vector2 hitboxOffset = new Vector2(0.8f, 0.9f);
+        [Tooltip("Offset relative to the fighter's pivot when facing right.")]
+        public Vector2 hitboxOffset = new Vector2(0.85f, 0.9f);
 
         [Tooltip("Width and height of the attack reach.")]
-        public Vector2 hitboxSize = new Vector2(0.9f, 0.7f);
+        public Vector2 hitboxSize = new Vector2(1.1f, 0.85f);
 
         [Header("Owner")]
         [Tooltip("The root transform of the attacking fighter.")]
@@ -46,6 +46,7 @@ namespace MysticCombat.Combat
         private BoxCollider2D hitboxCollider;
         private readonly HashSet<Transform> hitTargetsThisSwing = new HashSet<Transform>();
         private EnergySystem ownerEnergy;
+        private SpriteRenderer ownerSr;
 
         #endregion
 
@@ -63,7 +64,11 @@ namespace MysticCombat.Combat
         {
             hitboxCollider = GetComponent<BoxCollider2D>();
             hitboxCollider.isTrigger = true;
-            ApplyColliderGeometry();
+            if (owner != null)
+            {
+                ownerEnergy = owner.GetComponent<EnergySystem>();
+                ownerSr = owner.GetComponent<SpriteRenderer>();
+            }
             Deactivate();
         }
 
@@ -71,48 +76,51 @@ namespace MysticCombat.Combat
         {
             if (owner != null)
             {
-                ownerEnergy = owner.GetComponent<EnergySystem>();
+                if (ownerEnergy == null) ownerEnergy = owner.GetComponent<EnergySystem>();
+                if (ownerSr == null) ownerSr = owner.GetComponent<SpriteRenderer>();
+            }
+        }
+
+        private void Update()
+        {
+            if (!isActive) return;
+
+            // Active physics frame query: guarantees hits register even if fighters are standing still!
+            Vector2 center = GetHitboxWorldCenter();
+            Collider2D[] hits = Physics2D.OverlapBoxAll(center, hitboxSize, 0f);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                ProcessHit(hits[i]);
             }
         }
 
         private void OnTriggerEnter2D(Collider2D other)
         {
-            if (!isActive) return;
+            ProcessHit(other);
+        }
 
-            // Only collide with Hurtboxes
-            if (!other.CompareTag("Hurtbox")) return;
-
-            HurtboxController hurtbox = other.GetComponent<HurtboxController>();
-            if (hurtbox == null || hurtbox.Owner == null) return;
-
-            // Never hit self
-            if (hurtbox.Owner == owner) return;
-
-            // Prevent hitting the same opponent multiple times in one swing
-            if (hitTargetsThisSwing.Contains(hurtbox.Owner)) return;
-            hitTargetsThisSwing.Add(hurtbox.Owner);
-
-            ResolveHit(hurtbox);
+        private void OnTriggerStay2D(Collider2D other)
+        {
+            ProcessHit(other);
         }
 
         private void OnDrawGizmos()
         {
             if (!showGizmo) return;
 
-            // Bright red when active, dim red outline when inactive
-            Vector3 center = transform.position + (Vector3)hitboxOffset;
+            Vector3 center = GetHitboxWorldCenter();
             Vector3 size = new Vector3(hitboxSize.x, hitboxSize.y, 0.1f);
 
             if (isActive)
             {
-                Gizmos.color = new Color(1f, 0.1f, 0.1f, 0.55f);
+                Gizmos.color = new Color(1f, 0.1f, 0.1f, 0.65f);
                 Gizmos.DrawCube(center, size);
                 Gizmos.color = Color.red;
                 Gizmos.DrawWireCube(center, size);
             }
             else
             {
-                Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.25f);
+                Gizmos.color = new Color(1f, 0.4f, 0.4f, 0.25f);
                 Gizmos.DrawWireCube(center, size);
             }
         }
@@ -121,9 +129,6 @@ namespace MysticCombat.Combat
 
         #region Public Methods
 
-        /// <summary>
-        /// Sets the owner and initial stats for this hitbox.
-        /// </summary>
         public void Setup(Transform ownerTransform, int hitDamage, float hitKnockback, float kiGain)
         {
             owner = ownerTransform;
@@ -133,12 +138,10 @@ namespace MysticCombat.Combat
             if (owner != null)
             {
                 ownerEnergy = owner.GetComponent<EnergySystem>();
+                ownerSr = owner.GetComponent<SpriteRenderer>();
             }
         }
 
-        /// <summary>
-        /// Configures the hitbox geometry and stats for a specific attack (Light, Heavy, Skill, Ult).
-        /// </summary>
         public void ConfigureAttack(int hitDamage, float hitKnockback, float kiGain, Vector2 offset, Vector2 size)
         {
             damage = hitDamage;
@@ -146,23 +149,15 @@ namespace MysticCombat.Combat
             kiGainOnHit = kiGain;
             hitboxOffset = offset;
             hitboxSize = size;
-            ApplyColliderGeometry();
         }
 
-        /// <summary>
-        /// Activates the hitbox for an attack swing. Clears previously hit targets.
-        /// </summary>
         public void Activate()
         {
             hitTargetsThisSwing.Clear();
-            ApplyColliderGeometry();
             isActive = true;
             if (hitboxCollider != null) hitboxCollider.enabled = true;
         }
 
-        /// <summary>
-        /// Deactivates the hitbox after an attack swing ends.
-        /// </summary>
         public void Deactivate()
         {
             isActive = false;
@@ -170,30 +165,59 @@ namespace MysticCombat.Combat
             if (hitboxCollider != null) hitboxCollider.enabled = false;
         }
 
+        public void ResetHitTargets()
+        {
+            hitTargetsThisSwing.Clear();
+        }
+
         #endregion
 
         #region Internal Hit Logic
 
-        private void ApplyColliderGeometry()
+        private Vector2 GetHitboxWorldCenter()
         {
-            if (hitboxCollider == null) hitboxCollider = GetComponent<BoxCollider2D>();
-            if (hitboxCollider != null)
+            float facingDir = 1f;
+            if (ownerSr != null && ownerSr.flipX)
             {
-                hitboxCollider.offset = hitboxOffset;
-                hitboxCollider.size = hitboxSize;
+                facingDir = -1f;
             }
+            else if (owner != null)
+            {
+                // Fallback check: if facing opponent to the left
+                Fighter.FighterController fc = owner.GetComponent<Fighter.FighterController>();
+                if (fc != null && fc.opponent != null && fc.opponent.position.x < owner.position.x)
+                {
+                    facingDir = -1f;
+                }
+            }
+
+            Vector2 rootPos = owner != null ? (Vector2)owner.position : (Vector2)transform.position;
+            return rootPos + new Vector2(facingDir * hitboxOffset.x, hitboxOffset.y);
         }
 
-        private void ResolveHit(HurtboxController hurtbox)
+        private void ProcessHit(Collider2D other)
         {
-            Transform target = hurtbox.Owner;
+            if (!isActive || other == null) return;
 
+            HealthSystem targetHealth = other.GetComponentInParent<HealthSystem>();
+            if (targetHealth == null) return;
+
+            Transform target = targetHealth.transform;
+
+            // Never hit self
+            if (owner != null && (target == owner || target == owner.root)) return;
+
+            // Prevent multiple hits in the same attack swing
+            if (hitTargetsThisSwing.Contains(target)) return;
+            hitTargetsThisSwing.Add(target);
+
+            ResolveHit(targetHealth, target);
+        }
+
+        private void ResolveHit(HealthSystem targetHealth, Transform target)
+        {
             // 1. Deal Damage
-            HealthSystem targetHealth = target.GetComponent<HealthSystem>();
-            if (targetHealth != null)
-            {
-                targetHealth.TakeDamage(damage);
-            }
+            targetHealth.TakeDamage(damage);
 
             // 2. Grant Ki to Attacker
             if (ownerEnergy != null)
@@ -212,22 +236,14 @@ namespace MysticCombat.Combat
             Rigidbody2D targetRb = target.GetComponent<Rigidbody2D>();
             if (targetRb != null)
             {
-                // Calculate push direction based on attacker facing
                 float facingDir = 1f;
-                SpriteRenderer sr = owner.GetComponent<SpriteRenderer>();
-                if (sr != null && sr.flipX)
-                {
-                    facingDir = -1f;
-                }
-                else if (target.position.x < owner.position.x)
-                {
-                    facingDir = -1f;
-                }
+                if (ownerSr != null && ownerSr.flipX) facingDir = -1f;
+                else if (target.position.x < owner.position.x) facingDir = -1f;
 
                 targetRb.linearVelocity = new Vector2(facingDir * knockback, 3.2f);
             }
 
-            Debug.Log($"<color=#ff4444>[COMBAT]</color> {owner.name} LANDED HIT on {target.name}! Damage: {damage}, Ki Gain: +{kiGainOnHit}");
+            Debug.Log($"<color=#00e676>[COMBAT HIT RESOLVED]</color> {owner?.name} -> {target.name} | Damage: {damage} | New HP: {targetHealth.CurrentHealth}/{targetHealth.MaxHealth} | Attacker Ki: +{kiGainOnHit}");
         }
 
         #endregion

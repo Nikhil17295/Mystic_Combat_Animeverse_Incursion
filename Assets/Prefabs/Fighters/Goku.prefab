@@ -33,7 +33,7 @@ Transform:
   m_GameObject: {fileID: 196570998643446817}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -2.2, y: -3, z: 0}
   m_LocalScale: {x: 0.88, y: 0.88, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -106,14 +106,14 @@ BoxCollider2D:
   m_Offset: {x: 0, y: 0.95}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.1796875}
-    oldSize: {x: 5.3333335, y: 5.3333335}
-    newSize: {x: 5.3333335, y: 5.3333335}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 0.47, y: 0.47}
+    newSize: {x: 0.47, y: 0.47}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.8, y: 1.9}
+  m_Size: {x: 0.85, y: 1.9}
   m_EdgeRadius: 0
 --- !u!212 &4268172441527938763
 SpriteRenderer:
@@ -169,7 +169,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 5.3333335, y: 5.3333335}
+  m_Size: {x: 0.47, y: 0.47}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 0
@@ -201,7 +201,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Fighter.FighterController
   inputHandler: {fileID: 7630830238063693531}
-  opponent: {fileID: 0}
+  opponent: {fileID: 5331331634078136830, guid: 86d3c90f74b5a3747a37a866f79a562f, type: 3}
   attackHitbox: {fileID: 8248166633078589144}
   groundCheckPoint: {fileID: 8360602784235929951}
   groundCheckRadius: 0.15
@@ -227,10 +227,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Fighter.FighterAnimator
   idleFps: 5
   walkFps: 8
-  lightAttackFps: 9
-  heavyAttackFps: 8
-  skillFps: 14
-  ultimateFps: 9
+  lightAttackFps: 9.5
+  heavyAttackFps: 6
+  skillFps: 10
+  ultimateFps: 6
   meditateFps: 7
   pixelsPerUnit: 24
 --- !u!114 &2215052640620348780
@@ -330,7 +330,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.8, y: 0.9}
+  m_Offset: {x: 0.8, y: 0.85}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0, y: 0}
@@ -357,8 +357,8 @@ MonoBehaviour:
   damage: 10
   knockback: 5
   kiGainOnHit: 6
-  hitboxOffset: {x: 0.8, y: 0.9}
-  hitboxSize: {x: 0.9, y: 0.7}
+  hitboxOffset: {x: 0.85, y: 0.9}
+  hitboxSize: {x: 1.1, y: 0.85}
   owner: {fileID: 4284370108491550822}
   showGizmo: 1
 --- !u!1 &1427069793875772314
@@ -469,7 +469,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.9, y: 1.8}
+  m_Size: {x: 0.85, y: 1.8}
   m_EdgeRadius: 0
 --- !u!114 &4690481992769626899
 MonoBehaviour:
