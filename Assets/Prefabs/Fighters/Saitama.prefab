@@ -77,7 +77,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.9, y: 1.8}
+  m_Size: {x: 0.85, y: 1.8}
   m_EdgeRadius: 0
 --- !u!114 &5329731355989888119
 MonoBehaviour:
@@ -160,7 +160,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.8, y: 0.9}
+  m_Offset: {x: 0.8, y: 0.85}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0, y: 0}
@@ -187,8 +187,8 @@ MonoBehaviour:
   damage: 10
   knockback: 5
   kiGainOnHit: 6
-  hitboxOffset: {x: 0.8, y: 0.9}
-  hitboxSize: {x: 0.9, y: 0.7}
+  hitboxOffset: {x: 0.85, y: 0.9}
+  hitboxSize: {x: 1.1, y: 0.85}
   owner: {fileID: 5331331634078136830}
   showGizmo: 1
 --- !u!1 &5636494491918378925
@@ -224,7 +224,7 @@ Transform:
   m_GameObject: {fileID: 5636494491918378925}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 2.2, y: -3, z: 0}
   m_LocalScale: {x: 1.12, y: 1.12, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -297,14 +297,14 @@ BoxCollider2D:
   m_Offset: {x: 0, y: 0.95}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.15625}
-    oldSize: {x: 5.714286, y: 5.714286}
-    newSize: {x: 5.714286, y: 5.714286}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1.6, y: 1.6}
+    newSize: {x: 1.6, y: 1.6}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.8, y: 1.9}
+  m_Size: {x: 0.85, y: 1.9}
   m_EdgeRadius: 0
 --- !u!212 &6652089876104225734
 SpriteRenderer:
@@ -360,7 +360,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 5.714286, y: 5.714286}
+  m_Size: {x: 1.6, y: 1.6}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 0
@@ -392,7 +392,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Fighter.FighterController
   inputHandler: {fileID: 112296142506977528}
-  opponent: {fileID: 0}
+  opponent: {fileID: 4284370108491550822, guid: fd362ab0e7f64e44ebb02d1fccaa9e62, type: 3}
   attackHitbox: {fileID: 7795675334206622691}
   groundCheckPoint: {fileID: 1617011440705394427}
   groundCheckRadius: 0.15
@@ -418,10 +418,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Fighter.FighterAnimator
   idleFps: 5
   walkFps: 8
-  lightAttackFps: 9
-  heavyAttackFps: 8
-  skillFps: 14
-  ultimateFps: 9
+  lightAttackFps: 9.5
+  heavyAttackFps: 6
+  skillFps: 10
+  ultimateFps: 6
   meditateFps: 7
   pixelsPerUnit: 28
 --- !u!114 &4550509057508311584

@@ -230,3 +230,60 @@ Rather than generating the game world dynamically in code on Play (`PrototypeBoo
 3. Goku and Saitama are placed in their starting positions with their real idle sprites rendered in the editor via `[ExecuteAlways]`.
 4. The Scene View automatically locks to 2D Mode (`in2DMode = true`).
 5. **Result:** Developers experience the exact same live WYSIWYG visual editing as Godot's 2D workspace!
+
+---
+
+## 12. Grand 20% Anime Tournament HUD & Doctor Strange Time Mandala
+
+### 1. 20% Screen Coverage & Majestic Arcade Presence
+In competitive fighting games, the HUD cannot be a flimsy, miniature overlay. At 1080p, Mystic Combat's HUD spans the top **216px** (exactly $20\%$ of the screen height), creating an authoritative, commanding visual header:
+- **Heroic Bust Portrait Cards (160×160px with Designer Dragon Corners):**
+  - **Saitama:** Full bust portrait (head, intense combat stare, white cape, yellow collar) set against a high-contrast crimson solar burst with kinetic speed streaks (`saitama_avatar_heroic.png`). Mirrored inward toward center stage and framed with ornate 8px gold filigree and dragon corner brackets.
+  - **Goku:** Official *Extreme Butoden* combat bust set against a multi-stop golden Super Saiyan dragon ki sunburst (`goku_avatar_heroic.png`).
+- **Heavy 2-Tone Arcade Health Bars (650×52px) with Golden Dragon Crawlers:**
+  - Framed in `health_bar_grand_bg.png` with 8px beveled gold rims and charcoal shadow.
+  - **Golden Dragon Crawler (`dragon_crawler_p1.png` & `p2.png` 650×44px):** A sinuous Eastern lung dragon with golden scales, whiskers, serrated dorsal spines, and sharp claws crawling along the top outer rim of the health bar, facing toward the central Time Stone.
+  - 2-tone fill (`health_bar_grand_fill.png`): bright lemon-yellow top half, rich amber bottom half.
+  - Red damage ghost bar (`health_bar_grand_ghost.png`): holds position for `0.35s` before sliding down at `0.45/s` via `Mathf.MoveTowards()`.
+- **Electric Cyan Ki Gauges (520×24px):**
+  - High-visibility energy meters (`ki_bar_grand_bg.png` & `ki_bar_grand_fill.png`) that fill as fighters meditate or land hits.
+- **Bold 3D Multi-Color Gradient Typography:**
+  - **Goku Name ("GOKU"):** 36pt bold font with Super Saiyan 4-corner vertex gradient (Radiant Sun Gold `#FFF573` $\rightarrow$ Fiery Dragon Crimson `#D92600`).
+  - **Saitama Name ("SAITAMA"):** 36pt bold font with One-Punch Hero vertex gradient (Blazing White-Gold `#FFF0E8` $\rightarrow$ Deep Hero Maroon `#8C001E`).
+  - **Countdown Timer:** 50pt bold numerals with MCU Emerald-Jade gradient (`#E0FFF8` $\rightarrow$ `#00B359`).
+  - **Round Title:** 20pt bold header with Antique Tournament Gold gradient (`#FFF9E0` $\rightarrow$ `#D98200`).
+
+### 2. Doctor Strange / MCU Mystic Time Stone & Spell Mandala (No Box!)
+- **No Generic Clock Box:** The rectangular clock housing was completely discarded. In Marvel lore, the Time Stone is an ancient cosmic infinity stone harnessed through green eldritch magic.
+- **Mystic Runic Spell Banner (`mystic_runic_banner.png` 960×36px):**
+  - Repositioned along the top border (`y = -18`) with high-luminescence Taoist eldritch mandalas and runic bridges framing the entire combat cluster.
+- **Rotating Time Mandala (`time_stone_mandala.png`):**
+  - A 160×160 circular emerald spell mandala (Tao dial) featuring concentric runic rings, sacred geometric interlaced triangles, and 24 outer eldritch tick marks.
+  - Continuously rotates at $22^\circ/\text{s}$ in `Update()`, giving the physical impression of active temporal sorcery.
+- **Emerald Time Stone (`timestone_gem_emerald.png` enlarged to 56×56):**
+  - Isolated from the user's authentic artifact screenshot, cleaned of white halos, upscaled with point filtering, and enhanced with diamond specular facets, an inner pulsing Infinity Core (`#00FFA3`), and an Eye of Agamotto bronze/gold bezel.
+- **Radiant Emerald Countdown Numerals:**
+  - Big 50pt numerals in electric emerald-white glowing in the center of the spell dial.
+
+### 3. Tactical Dual-Gem Point System & Central Golden Trophy Relic
+- **Dual Round Gems per Fighter (Two 56×56 Sockets per Player):**
+  - **Zero Text Clutter:** Removed clunky `"WINS: 0"` and `"WINS: 1"`. The dual gems alone provide immediate, tactile visual clarity:
+    - **0 Rounds Won:** Both Gem 1 and Gem 2 are dark hollow metallic sockets (`gem_socket_hollow.png` 56×56).
+    - **1st Round Won:** Gem 1 ignites into the vibrant **Shiny Blue Gem** (`gem_shiny_blue.png` 56×56).
+    - **2nd Round Won:** Gem 2 ignites into the second **Shiny Blue Gem**, clinching the match.
+- **Center Big Gold Gem (`gem_big_gold.png` & `gem_big_gold_hollow.png` enlarged to 68×68):**
+  - Positioned directly beneath the Time Stone mandala as the grand tournament championship relic.
+  - **Round Hollow Socket Pre-Match:** Starts as a circular hollow golden socket (`gem_big_gold_hollow.png`), matching the round point gems.
+  - **Match Point Mode:** When either fighter reaches match point (`p1Wins >= 1 || p2Wins >= 1`), the relic ignites into the radiant **authentic round golden gem** ([`gem_big_gold.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/UI/gem_big_gold.png), extracted directly from the multi-gem screenshot `Screenshot 2026-10-25 112541.png`) with a breathing golden pulse ($1.0\times \rightarrow 1.15\times$ sine wave), and the title banner updates to `★ ROUND X • MATCH POINT ★` (or `★ FINAL ROUND • MATCH POINT ★` on 1–1 ties).
+- **Single-Line Bold Header Typography (600×36px):**
+  - Expanded container from 340px to 600px with `textWrappingMode = TextWrappingModes.NoWrap` and bold 24pt 3D vertex gradient text, guaranteeing crisp, unclipped single-line titles across all match states.
+- **Vibrant Heroic Avatar Cards (160×160):**
+  - **Goku:** Deep cosmic indigo night sky with a 12-ray blazing Super Saiyan golden ki sunburst behind his spiky hair, framed in an 8px chiseled gold arcade border.
+  - **Saitama (Full Bust):** Extracted in full proportion from the user's authentic reference (`Screenshot 2026-10-25 112023.png`) displaying his entire heroic bust (bald head, white cape, yellow collar/suit, and clenched red gloved fist) over a deep anime purple/magenta vignette, mirrored inward toward the ring.
+
+### 4. Autonomous Round Transitions & Round 3 Decider
+- **1.8s K.O. Pause:** Combat smoothly pauses on final hit to display the K.O. impact before score incrementing.
+- **Round Reset (`ResetForNewRound`):** Fighters snap back to spawn positions (`-2.2` and `+2.2`), velocities zeroed, states reset to Idle, and health/ghost bars immediately refilled to 100%.
+- **Round 3 Decider:** If P1 wins Round 1 and P2 wins Round 2, the match automatically advances to Round 3 (Final Round Match Point), where the winner takes the tournament.
+
+

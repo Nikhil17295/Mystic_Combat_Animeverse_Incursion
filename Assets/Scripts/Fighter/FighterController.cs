@@ -56,6 +56,7 @@ namespace MysticCombat.Fighter
         private float attackTimer;
         private float attackStartupTimer;
         private float attackActiveTimer;
+        private float flurryHitTimer;
 
         #endregion
 
@@ -84,6 +85,15 @@ namespace MysticCombat.Fighter
 
             rb.gravityScale = gravityScale;
             rb.freezeRotation = true;
+        }
+
+        private void Start()
+        {
+            // Give fighters 25 initial Ki so players can immediately test special skills!
+            if (energySystem != null && energySystem.CurrentKi < 25f)
+            {
+                energySystem.AddKi(25f);
+            }
         }
 
         private void Update()
@@ -137,6 +147,44 @@ namespace MysticCombat.Fighter
         public void SetHitbox(HitboxController hitbox)
         {
             attackHitbox = hitbox;
+        }
+
+        /// <summary>
+        /// Completely resets the fighter's state, physics velocity, hitboxes, and position for a clean new round.
+        /// </summary>
+        public void ResetForNewRound(Vector3 spawnPosition, bool faceRight)
+        {
+            transform.position = spawnPosition;
+
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+            }
+
+            TransitionTo(FighterState.Idle);
+
+            attackTimer = 0f;
+            attackStartupTimer = 0f;
+            attackActiveTimer = 0f;
+
+            if (attackHitbox != null)
+            {
+                attackHitbox.Deactivate();
+                attackHitbox.ResetHitTargets();
+            }
+
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.flipX = !faceRight;
+            }
+
+            FighterAnimator anim = GetComponent<FighterAnimator>();
+            if (anim != null)
+            {
+                anim.ResetToIdle();
+            }
+
+            Debug.Log($"<color=#00e676>[FighterController]</color> {gameObject.name} reset for new round at {spawnPosition} (Facing: {(faceRight ? "Right" : "Left")})");
         }
 
         /// <summary>
@@ -217,7 +265,6 @@ namespace MysticCombat.Fighter
 
                 case FighterState.LightAttack:
                 case FighterState.HeavyAttack:
-                case FighterState.Skill:
                 case FighterState.Ultimate:
                     attackTimer -= Time.deltaTime;
 
@@ -234,6 +281,41 @@ namespace MysticCombat.Fighter
                     else if (attackActiveTimer > 0f)
                     {
                         attackActiveTimer -= Time.deltaTime;
+                        if (attackActiveTimer <= 0f && attackHitbox != null)
+                        {
+                            attackHitbox.Deactivate();
+                        }
+                    }
+
+                    if (attackTimer <= 0f)
+                    {
+                        if (attackHitbox != null) attackHitbox.Deactivate();
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
+                    }
+                    break;
+
+                case FighterState.Skill:
+                    attackTimer -= Time.deltaTime;
+
+                    if (attackStartupTimer > 0f)
+                    {
+                        attackStartupTimer -= Time.deltaTime;
+                        if (attackStartupTimer <= 0f && attackHitbox != null)
+                        {
+                            attackHitbox.Activate();
+                            flurryHitTimer = 0.16f;
+                        }
+                    }
+                    else if (attackActiveTimer > 0f)
+                    {
+                        attackActiveTimer -= Time.deltaTime;
+                        flurryHitTimer -= Time.deltaTime;
+                        if (flurryHitTimer <= 0f)
+                        {
+                            flurryHitTimer = 0.16f;
+                            if (attackHitbox != null) attackHitbox.ResetHitTargets();
+                        }
+
                         if (attackActiveTimer <= 0f && attackHitbox != null)
                         {
                             attackHitbox.Deactivate();
@@ -417,10 +499,15 @@ namespace MysticCombat.Fighter
                 case FighterState.Meditating:
                 case FighterState.LightAttack:
                 case FighterState.HeavyAttack:
-                case FighterState.Skill:
                 case FighterState.Ultimate:
-                    // Cannot move horizontally while crouching, meditating, or attacking
+                    // Cannot move horizontally while crouching, meditating, or regular attacking
                     rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
+                    break;
+
+                case FighterState.Skill:
+                    // Anime forward step into punch flurry!
+                    float surgeDir = spriteRenderer != null && spriteRenderer.flipX ? -1f : 1f;
+                    rb.linearVelocity = new Vector2(surgeDir * 1.5f, rb.linearVelocity.y);
                     break;
             }
         }

@@ -1,7 +1,9 @@
 import os
 import sys
+import time
 import json
 import urllib.parse
+import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from PIL import Image
 
@@ -35,6 +37,19 @@ class SlicerHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        # API: Graceful shutdown
+        if self.path == "/api/shutdown":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"stopped"}')
+            print("[SpriteSlicer] Server shutdown requested by user from web interface. Stopping...")
+            def shutdown_task():
+                time.sleep(0.5)
+                os._exit(0)
+            threading.Thread(target=shutdown_task, daemon=True).start()
+            return
+
         if self.path == "/api/export":
             content_length = int(self.headers["Content-Length"])
             post_data = self.rfile.read(content_length)

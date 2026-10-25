@@ -240,3 +240,123 @@ In Godot, the script editor is embedded right in the center window. In Unity, yo
    * Snap Unity to the right half of your monitor (`Windows Key + Right Arrow`).
    * Snap VS Code / Visual Studio to the left half (`Windows Key + Left Arrow`).
    * Now your code is sitting right beside your 2D scene, exactly like Godot!
+
+---
+
+## 10. Unity Prefabs vs Godot `.tscn` Scenes: The Big Mystery Solved!
+
+If you come from Godot, you are used to the golden rule: **"Everything is a Scene."**
+* In Godot, `Goku` is a scene (`Goku.tscn`). `Saitama` is a scene (`Saitama.tscn`). The HUD is a scene (`HUD.tscn`).
+* You instance `Goku.tscn` into `Main.tscn`.
+* In Godot's Scene Tree, you can click on Goku, click the little movie clapper icon (or double-click), and Godot opens a tab showing **ONLY Goku**, where you can visually tweak his colliders and sprite.
+
+### How Unity Does the Exact Same Thing: **Prefabs**
+In Unity, the equivalent of a `.tscn` scene file is a **`.prefab` asset**:
+* `Assets/Prefabs/Fighters/Goku.prefab` = `Goku.tscn`
+* `Assets/Prefabs/Fighters/Saitama.prefab` = `Saitama.tscn`
+* `Assets/Prefabs/UI/HUD_Canvas.prefab` = `HUD.tscn`
+
+### How to Tell if an Object is a Real Prefab in Unity:
+1. Look at the **Hierarchy** window:
+   * **Black / Grey Text with White Cube:** It's just a raw GameObject created in that one scene. If you delete it, it's gone.
+   * **Blue Text with a Blue Cube Icon:** It is a **Live Prefab Instance**!
+2. **How to Open It in Isolation (Godot-Style Scene Mode):**
+   * In the Project tab, double-click `Assets/Prefabs/Fighters/Goku.prefab`.
+   * **OR** in the Hierarchy, click the tiny arrow **`>`** next to `Fighter_P1_Goku`.
+   * Unity's Scene view will dim into **Prefab Mode** (with a dark blue environment bar at the top). You are now editing *only* Goku in complete isolation, exactly like opening `Goku.tscn` in Godot!
+   * Any change you make here automatically updates the game scene, your test scenes, and your teammate's scenes!
+
+---
+
+## 11. TextMeshPro 3D Typography & Vertex Gradients (Godot vs Unity)
+
+In 2D fighting games, flat, single-color text feels dull and amateur. High-impact arcade fighters (like *Dragon Ball FighterZ* and *Street Fighter*) use **multi-color gradient fills** and **3D bevels**.
+
+### How Godot Does It:
+In Godot, you attach a `LabelSettings` resource to a `Label` node:
+- You configure `font_color`, `outline_color`, `outline_size`, and `shadow_color`.
+- To get multi-color gradients in Godot, you typically attach a custom `ShaderMaterial` to the CanvasItem.
+
+### How Unity Does It: TextMeshPro `VertexGradient`
+In Unity, `TextMeshProUGUI` has native hardware vertex color blending built directly into the text mesh:
+
+```csharp
+TextMeshProUGUI p1Name = GetComponent<TextMeshProUGUI>();
+p1Name.enableVertexGradient = true;
+p1Name.colorGradient = new VertexGradient(
+    new Color(1f, 0.96f, 0.45f, 1f),  // Top-Left: Radiant Sun Gold
+    new Color(1f, 0.85f, 0.20f, 1f),  // Top-Right: Pure Super Saiyan Gold
+    new Color(1f, 0.45f, 0.05f, 1f),  // Bottom-Left: Blazing Amber Orange
+    new Color(0.85f, 0.15f, 0.00f, 1f) // Bottom-Right: Deep Dragon Crimson
+);
+```
+
+### Why Vertex Gradients are Better than Images for Text:
+1. **Zero Texture Memory:** The gradient is computed on 4 vertices per character letter dynamically by the GPU.
+2. **Infinite Scaling:** When the screen resolution changes from 1080p to 4K, the text and gradient never pixelate or blur.
+3. **Dynamic Animation:** You can pulse or shift the colors in C# code during special states (like Red Zone or Super Attacks).
+
+---
+
+## 12. 2D Sprite Alpha Cutouts & Nearest-Neighbor Scaling (Godot vs Unity)
+
+### Godot Concept vs Unity Concept
+- In **Godot**, a `Sprite2D` or `TextureRect` uses a `CanvasItem` material. If an imported image has a white rectangular background, developers sometimes try to use a shader with `discard` or chroma-keying.
+- In **Unity**, 2D sprites rely on an unmultiplied or premultiplied **Alpha Channel (RGBA)**. The `TextureImporter` requires:
+  - `Texture Type: Sprite (2D and UI)`
+  - `Alpha is Transparency: Enabled`
+  - `Filter Mode: Point (no filter)` for crisp retro anime pixel art.
+
+### The White-Background Screenshot Dilemma:
+When raw screenshots of gems or items are dragged directly into a project, they often contain compression artifacts or near-white boundary pixels (`#F4F4F4` to `#FFFFFF`):
+1. **Chroma-Keying Thresholds:** A simple single-color key (`r == 255 && g == 255 && b == 255`) leaves jagged white halos (fringing) around dark facet borders.
+2. **Clean Distance Keying:** To make the user's emerald Time Stone look majestic, the background cutout evaluates color variance (`abs(r-g) < 15 && abs(g-b) < 15 && r > 170`) to discard near-white compression artifacts while strictly preserving the deep emerald greens (`#167F00`, `#083A01`) and specular glints.
+3. **Point (Nearest-Neighbor) Scaling:** When scaling pixel art gems from 34px to 96px, bilinear filtering turns crisp diamond facets into blurry mush. Point filtering keeps every crystalline facet edge razor-sharp.
+
+---
+
+## 13. Coroutines (`IEnumerator`) vs Godot `await get_tree().create_timer()`
+
+### Godot Concept vs Unity Concept
+- In **Godot**, when you want to pause execution for a dramatic K.O. moment or delay before starting the next round, you write:
+  ```gdscript
+  await get_tree().create_timer(1.8).timeout
+  start_next_round()
+  ```
+- In **Unity C#**, standard methods run synchronously from start to finish on the main thread in a single frame. Calling `System.Threading.Thread.Sleep()` would freeze the entire game window!
+  Instead, Unity uses **Coroutines** via the `IEnumerator` return type:
+  ```csharp
+  StartCoroutine(RoundEndSequence(winnerIndex));
+
+  private IEnumerator RoundEndSequence(int winnerIndex)
+  {
+      // 1.8 second dramatic pause while game renders and particles play
+      yield return new WaitForSeconds(1.8f);
+
+      // Check win condition and start next round
+      CheckWinCondition();
+  }
+  ```
+
+### Why 0ms Instant Round Transitions Break Fighting Games:
+If a round ends and immediately resets health on the very same frame:
+1. **The Attacker's Hitbox Is Still Active:** The winning punch has not finished its swing, so the resetting opponent immediately gets hit again on frame 1 of the new round!
+2. **Knockback Physics Glitch:** Rigidbody velocities applied on the fatal hit launch the newly respawned fighter across the arena.
+3. **Player Perception:** Human reaction time requires at least $1.5\text{s}$ to recognize a K.O., see the score update, and mentally reset for the next round. Coroutines give the engine the exact temporal control needed for arcade game flow.
+
+---
+
+## 14. Dual Round Indicators & Match Point Relics (UI Score Systems in Godot vs Unity)
+
+### Godot Concept vs Unity Concept
+- In **Godot**, to track rounds in a fighting game, you create an `HBoxContainer` containing two `TextureRect` nodes for each fighter. When a round win signal is received, you update `texture = preload("res://shiny_blue_gem.png")`.
+- In **Unity UI (uGUI)**, we instantiate two `Image` components per player (`P1_PointGem_1`, `P1_PointGem_2`, `P2_PointGem_1`, `P2_PointGem_2`) positioned beside their avatar cards. We assign `gem_socket_hollow` (unearned) and `gem_shiny_blue` (earned) directly through serialized `Sprite` references on the [`HUDController`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/HUDController.cs).
+
+### Why 2 Discrete Gem Sockets Beat Plain Text:
+1. **Immediate Visual Reading:** In the heat of combat, players can glance peripherally at the HUD and count glowing gems without reading textual numerals like `"WINS: 1"`.
+2. **Arcade Authenticity:** Classic fighting games (Street Fighter, Tekken, Guilty Gear) use 2 round sockets for Best of 3 tournaments. Empty sockets create visual anticipation, while filled gems create visual satisfaction.
+3. **The Center Championship Relic:** Having an overarching 68×68 center gem that ignites into radiant gold with an active breathing sine-wave pulse ($1.0\times \rightarrow 1.15\times$) during Match Point dynamically communicates high-stakes tension to spectators and players alike.
+
+
+
+
