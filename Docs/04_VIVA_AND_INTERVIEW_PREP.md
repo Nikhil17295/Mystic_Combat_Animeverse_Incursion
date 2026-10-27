@@ -255,6 +255,68 @@
 
 ---
 
+### Q28: What is `[SerializeField]` in Unity, and why is it preferred over making variables `public`?
+**Answer:**
+> *"In C#, making a variable `public` exposes it in the Unity Inspector, but it violates Object-Oriented Programming (OOP) encapsulation because any external script can inadvertently overwrite it during runtime.
+> `[SerializeField] private` achieves the best of both worlds:
+> 1. It keeps the variable strictly `private` in code, protecting it from external tampering.
+> 2. It instructs Unity's serializer to save the value to the scene/prefab file and draw an editable UI field in the Inspector.
+> In Godot, this is the direct equivalent of the `@export` keyword."*
+
+---
+
+### Q29: Why does Unity separate `Update()` and `FixedUpdate()`? What happens if physics runs on variable `Time.deltaTime`?
+**Answer:**
+> *"`Update()` executes once per render frame, which fluctuates based on GPU load and display refresh rates (e.g., 30 FPS vs. 144 FPS).
+> `FixedUpdate()` executes on a rock-solid, deterministic time step (default 50 ticks/sec or `0.02s`).
+> If physics ran inside `Update()` with variable delta time, sudden lag spikes would cause 'tunneling'—a high-speed projectile moving at 100 m/s would jump 20 meters in a single lag frame and pass completely through solid walls without triggering collision detection. A fixed time step guarantees identical, reproducible physics simulation on all hardware."*
+
+---
+
+### Q30: Why shouldn't you multiply `Rigidbody2D.linearVelocity` by `Time.deltaTime`?
+**Answer:**
+> *"Velocity in physics is defined as distance per second (meters/second).
+> Unity's physics engine (`Box2D`) automatically integrates velocity over time by multiplying it by `Time.fixedDeltaTime` under the hood.
+> If a developer writes `rb.linearVelocity = new Vector2(speed * Time.deltaTime, 0)`, they are multiplying by delta time twice (the 'Double Delta' error), which shrinks the character's movement velocity down to an imperceptible crawl."*
+
+---
+
+### Q31: Why do we append the `f` suffix to decimal numbers in Unity C# (e.g. `5.5f`)?
+**Answer:**
+> *"In C#, any literal decimal number (such as `5.5`) is treated as a 64-bit `double` by default.
+> However, game engines, graphics cards (GPUs), and physics systems (`Vector2`, `Vector3`, `Time.deltaTime`) operate on 32-bit single-precision `float` numbers because GPUs process 32-bit floats twice as fast with half the memory footprint.
+> Appending `f` explicitly instructs the compiler to treat the number as a 32-bit float, avoiding implicit type conversion errors."*
+
+---
+
+### Q32: How is text rendered in modern Unity, and how does TextMeshPro differ from legacy UI Text?
+**Answer:**
+> *"Legacy Unity UI Text relied on rasterized bitmap fonts, which blur and pixelate when scaled or viewed on high-resolution displays.
+> Modern Unity uses TextMeshPro (TMP), which renders text using Signed Distance Field (SDF) vector shaders. SDF fonts remain mathematically razor-sharp at any zoom level, screen resolution, or perspective angle, while supporting GPU-accelerated vertex gradients, drop shadows, and glowing outlines at zero runtime texture allocation overhead."*
+
+---
+
+### Q33: Can you explain your character's architecture in 60 seconds?
+**Answer:**
+> *"Our fighter architecture follows a clean 4-stage pipeline that separates input, logic, animation, and combat:
+> 1. **The Senses (`PlayerInputHandler.cs`):** Polls raw hardware keys for P1 (WASD) and P2 (IJKL) and exposes clean input flags.
+> 2. **The Brain (`FighterController.cs`):** Acts as the central state machine. It evaluates physics conditions (grounded checks, knockback, Red Zone exhaustion) and updates fighter state.
+> 3. **The Artist (`FighterAnimator.cs`):** Reactively monitors the controller's current state and animates calibrated sprite flipbooks (idle at 5 FPS, punch at 9 FPS, flurry at 14 FPS).
+> 4. **The Combat Layer (`HitboxController.cs` & `HurtboxController.cs`):** Activates collision triggers during attack frames. When a hitbox overlaps an opponent's hurtbox, it fires events that apply damage, physics knockback impulse, and Ki generation without coupling the two fighters directly."*
+
+---
+
+### Q34: How did you design and implement the Retro Arcade Main Menu, and how does the game ensure authentic 90s aesthetic without compromising modern UI responsiveness?
+**Answer:**
+> *"We fused Technos Japan's 1988 Double Dragon II arcade aesthetic with the Doctor Strange cosmic multiverse theme:
+> 1. **Handcrafted Title Logo & Alpha Cutout:** An extruded metallic chrome 'MYSTIC COMBAT' title with embedded Doctor Strange gold mandala, alpha-keyed to zero transparency to float seamlessly across the cosmic multiverse backdrop without boxy borders.
+> 2. **Arcade Entrance Coroutine:** On launch, the title logo performs an elastic punch impact ($1.35\times \rightarrow 0.94\times \rightarrow 1.0\times$) accompanied by an 8-bit sound confirmation, followed by a staggered cascade of the 4 menu options ($0.06\text{s}$ interval).
+> 3. **Multi-Color Vertex Gradients:** Instead of flat modern monochromatic text, options render with GPU-accelerated 4-corner TextMeshPro vertex gradients (active: Radiant Gold/White to Blazing Amber/Crimson with dynamic shimmer; inactive: Electric Cyan/Silver to Neon Violet/Indigo).
+> 4. **Automated BGM Pipeline:** Built-in looping audio architecture in `MainMenuController.cs` that dynamically discovers and streams audio tracks placed in `Assets/Audio/Music/`."*
+
+
+---
+
 ## 3. Live Demo Checklist for Judges
 
 When demonstrating the game to evaluators:

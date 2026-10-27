@@ -201,6 +201,105 @@
   3. Replaced rigid static animation category buttons with a dynamic dictionary model and an interactive `➕ New Animation` creator, allowing developers to test arbitrary moves (`dash`, `taunt`, `fireball`).
   4. Added a client-side `💾 Download Slices (JSON)` coordinate backup, allowing developers to save bounding boxes locally without polluting project folders until a character is officially approved for the roster.
 
+### Bug 7: UI Font and Sprite Importer Configuration for Main Menu
+- **Symptom:** Raw `.ttf` fonts and downloaded high-res `.png` textures dropped into `Assets/` cannot be directly assigned to UI `Image` or TextMeshPro components in Unity unless imported as Sprite (2D and UI) and converted to TMP Font Assets.
+- **Root Cause:** By default, Unity imports new 2D images as `TextureType.Default` (standard 3D diffuse texture) rather than `TextureType.Sprite`. Similarly, TextMeshPro requires an SDF Font Asset rather than a raw TrueType font to render high-contrast arcade drop shadows and vertex gradients.
+- **Solution:** 
+  1. Built automated texture configuration in [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) to ensure `menu_bg_multiverse.png` is imported as `Sprite (2D and UI)` with Bilinear filtering and no mipmaps.
+  2. Created procedural fallback and automated `TMP_FontAsset.CreateFontAsset(font)` generation to preserve 16-bit arcade typography without manual editor clicks.
+  3. Generated procedural 8-bit navigation and selection sound waves (`AudioClip.Create`) in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) to eliminate missing asset sound bugs.
+
+---
+
+### Bug 8: Sibling Namespace Collision with `UnityEngine.Input` (`error CS0234`)
+- **Symptom:** Compiler throws `error CS0234: The type or namespace name 'GetKeyDown' does not exist in the namespace 'MysticCombat.Input'`.
+- **Root Cause:** In C#, code declared inside `namespace MysticCombat.UI` resolves sibling namespaces within `MysticCombat` first. Since our project has a namespace `MysticCombat.Input` (containing `PlayerInputHandler.cs`), bare calls to `Input.GetKeyDown(...)` resolved `Input` to the namespace `MysticCombat.Input` instead of the static class `UnityEngine.Input`.
+- **Solution:** Fully qualify all Unity input calls as `UnityEngine.Input.GetKeyDown(...)` and `UnityEngine.Input.GetAxisRaw(...)` inside [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs).
+
+---
+
+### Bug 9: Invisible TextMeshPro Text from Incomplete Sub-Asset Serialization (`m_Material: {fileID: 0}`)
+- **Symptom:** TextMeshPro objects in the scene exist in the Hierarchy with text strings assigned, but render completely invisible in both Scene and Game views.
+- **Root Cause:** Generating a `TMP_FontAsset` via script without explicitly creating its Distance Field Material and adding it as a child sub-asset (`AssetDatabase.AddObjectToAsset`) causes Unity to serialize an empty ~3 KB asset file where `m_Material` is saved as `{fileID: 0}`. Without a material and font atlas texture, the renderer draws zero vertices.
+- **Solution:** 
+  1. Configured [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) to assign a valid `TextMeshPro/Distance Field` material, bind the atlas texture, and serialize both as sub-assets.
+  2. Implemented guaranteed fallback to `LiberationSans SDF.asset` if any custom TrueType font fails to build an atlas, ensuring text is never invisible.
+
+---
+
+### Bug 10: Empty Character Table & Story Intro Screen Blocking Menu
+- **Symptom:** Playing `MainMenuScene.unity` appeared stuck on a dark screen without showing the title marquee or menu options.
+- **Root Cause:**
+  1. Dynamic `TMP_FontAsset` generation created font assets with an empty character table (`m_Unicode: 95` only). Text with unbaked characters drew as blank spaces.
+  2. The Story Intro overlay was enabled on startup by default, covering the entire screen with a 96% opacity dark veil for ~10 seconds while waiting for text lines that were invisible due to the font issue.
+  3. `UnityEngine.UI.Shadow` components attached to TextMeshPro objects threw internal component warnings.
+- **Solution:**
+  1. Swapped all primary UI text to Unity's pre-baked `LiberationSans SDF.asset` (with bold uppercase styling, high letter spacing, and vertex gradients), guaranteeing 100% of characters render visibly with zero missing glyphs.
+  2. Set `playIntroOnStart = false` and deactivated the story overlay by default, ensuring the Title Marquee and 4 arcade options are immediately visible and playable upon pressing Play.
+  3. Removed legacy `Shadow` components from TextMeshPro objects.
+
+---
+
+### Bug 11: Main Menu UI Element Overlap & Negative Anchor Coordinate Collision
+- **Symptom:** In `MainMenuScene.unity`, the bottom edge of the massive Title Logo collided directly with the top option (`1 PLAYER VS CPU`), obscuring the text. Additionally, flat monochromatic white text looked modern and non-arcade.
+- **Root Cause:**
+  1. Logo with height $546\text{px}$ positioned at $y = +160\text{px}$ had its bottom boundary at $160 - 273 = -113\text{px}$. The button group at $y = -180\text{px}$ had its first child offset by $+70\text{px}$, placing it at $-180 + 70 = -110\text{px}$, resulting in a $3\text{px}$ negative overlap.
+  2. Unity's standard `TextMeshProUGUI.color` applies a single uniform tint, preventing the multi-color top-to-bottom character gradients characteristic of 90s Capcom / Technos CPS-1 arcade games.
+- **Solution:**
+  1. Recalculated coordinate bounds in [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs):
+     - Logo: $y = +195\text{px}$, height $502\text{px}$ $\rightarrow$ bottom edge at $-56\text{px}$.
+     - Button group: $y = -225\text{px}$, first item at $+45\text{px}$ $\rightarrow$ item 0 at $-180\text{px}$.
+     - Creates a pristine $124\text{px}$ void clearance gap.
+  2. Implemented 4-corner `VertexGradient` structures in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) using electric cyan/diamond silver/violet for inactive items and radiant sun gold/white/amber/crimson for active items, paired with dynamic color shimmer cycling.
+  3. Added an automated title music discovery routine scanning `Assets/Audio/Music/` for `.mp3`, `.wav`, or `.ogg` tracks.
+
+---
+
+### Bug 12: Silent Title Screen Due to AssetDatabase Refresh Race & Serialization Timing
+- **Symptom:** After downloading the audio file into `Assets/Audio/Music/`, pressing Play in the scene resulted in silence with no background music playing.
+- **Root Cause:**
+  1. Files added to the filesystem externally are not recognized by Unity's in-memory `AssetDatabase` until `AssetDatabase.Refresh()` is executed. In the initial bake pass, the scene file saved `titleMusicClip: {fileID: 0}` because the file was not yet in the editor index at the moment the scene was serialized.
+  2. When hitting Play without re-baking, `MainMenuController` observed `titleMusicClip == null` and had no fallback mechanism to load the audio directly off disk.
+- **Solution:**
+  1. Implemented a dual-layer audio architecture in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs):
+     - *Primary:* Plays serialized `titleMusicClip` if assigned in Inspector / scene.
+     - *Fallback:* If `titleMusicClip == null`, automatically launches `LoadTitleMusicFromDisk()` coroutine using `UnityWebRequestMultimedia.GetAudioClip("file://...")`, dynamically streaming the MP3 directly off disk at runtime.
+  2. Serialized the direct asset GUID pointer (`{fileID: 8300000, guid: 99bbb0ea7d6b41cb8b7b33a81f6bab3d, type: 3}`) directly into [`MainMenuScene.unity`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scenes/MainMenuScene.unity).
+  3. Added `AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport)` to [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) to ensure editor indexes are always synchronized with the filesystem.
+
+---
+
+### Bug 13: Total Hardware Audio Silence Due to Missing `AudioListener`
+- **Symptom:** In `MainMenuScene.unity`, neither background music nor procedural 8-bit sound effects (navigation blips, select confirm punch) produced any audible sound through the speakers, despite `AudioSource.isPlaying` returning true.
+- **Root Cause:**
+  1. In Unity, the `AudioListener` component acts as the virtual microphone/ears in the scene. Without exactly one active `AudioListener` in the scene, the Unity FMOD audio engine routes zero audio packets to the operating system's sound device.
+  2. Scenes generated via `EditorSceneManager.NewScene(NewSceneSetup.EmptyScene)` lack default camera rigs. When `MainMenuSetupTool.SetupCamera()` created the `Main Camera`, it attached a `Camera` component but omitted `camObj.AddComponent<AudioListener>()`.
+- **Solution:**
+  1. Added `camObj.AddComponent<AudioListener>()` in [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs).
+  2. Serialized `AudioListener` (`!u!81 &462071808`) on `Main Camera` directly in [`MainMenuScene.unity`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scenes/MainMenuScene.unity).
+  3. Implemented dynamic self-healing in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) during `Awake()`: if `Object.FindAnyObjectByType<AudioListener>() == null`, it dynamically attaches an `AudioListener` to the camera or canvas and sets `AudioListener.volume = 1f; AudioListener.pause = false;`.
+
+---
+
+### Postmortem: The "Double Delta" Physics Velocity Pitfall
+- **Incident:** A developer attempts to make movement frame-rate independent by writing `rb.linearVelocity = new Vector2(speed * Time.deltaTime, 0)`, but the character crawls at an imperceptible snail's pace.
+- **Root Cause:** In physics simulation, velocity is already expressed in **units per second**. Unity's 2D physics engine (`Box2D`) automatically integrates velocity over time by multiplying it by `Time.fixedDeltaTime` ($0.02\text{s}$) in its internal solver loop. Multiplying by `Time.deltaTime` in user code applies delta time twice ($5 \times 0.02 \times 0.02 = 0.002\text{ m/tick}$), effectively nullifying movement.
+- **Resolution:**
+  - When setting Rigidbody velocities, assign speeds directly in meters/second: `rb.linearVelocity = new Vector2(speed, rb.linearVelocity.y);`.
+  - Reserve `Time.deltaTime` exclusively for direct `Transform` translations (`transform.position += dir * speed * Time.deltaTime`) and custom countdown timers.
+
+---
+
+### Postmortem: The Missing Inspector Variables & Child Selection Mistake
+- **Incident:** A teammate opens Unity, selects a fighter in the Hierarchy, but cannot find the `moveSpeed`, `jumpForce`, or combat tuning fields in the Inspector, assuming serialized fields failed to compile.
+- **Root Cause:** 
+  1. In Unity, GameObjects follow a multi-component stack architecture rather than Godot's "One Node = One Script" model. A fighter has 8 distinct components (`Transform`, `SpriteRenderer`, `Rigidbody2D`, `BoxCollider2D`, etc.). `FighterController` is positioned lower in the stack, requiring scrolling or collapsing earlier components.
+  2. Additionally, selecting child GameObjects (`Hitbox`, `Hurtbox`, `GroundCheckPoint`) displays only that child's isolated trigger colliders, not the root controller.
+- **Resolution:**
+  1. Always select the root entity (`Fighter_P1_Goku` or `Fighter_P2_Saitama`) in the Hierarchy.
+  2. Collapse standard engine components (`Transform`, `SpriteRenderer`, `Rigidbody2D`) to bring gameplay logic to the top.
+  3. Utilize the Inspector Search bar (`Ctrl + F` or typing `speed` into the 🔍 field) to instantly isolate target variables.
+
 ---
 
 ## 3. Team Best Practices Checklist

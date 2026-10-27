@@ -72,6 +72,8 @@ Instead of a giant 2,000-line `Player.cs`, responsibilities are strictly separat
 | **`HealthSystem`** | Stores HP, handles `TakeDamage()` and `Heal()`. | Does not know what attack hit the player. |
 | **`EnergySystem`** | Stores Ki (0–100), handles meditation, manages 5-second Red Zone timer. | Does not draw UI or move the player. |
 | **`HUDController`** | Updates UI bars and text. | Does not store or modify game variables. |
+| **`MainMenuController`** | Manages start screen navigation, mode selection, audio feedback, and options. | Does not execute in-match fight logic. |
+| **`GameManager`** | Persists across scenes, stores chosen `GameMode` (Vs CPU / Local PvP) and selected character IDs. | Does not handle per-frame combat ticks. |
 
 ### Decision 3: Event-Driven Communication (Observer Pattern)
 Components communicate through C# `event Action` rather than direct hard references.

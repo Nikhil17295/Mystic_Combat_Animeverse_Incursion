@@ -316,5 +316,51 @@ The interactive Sprite Slicer web application was upgraded into a **general-purp
 | **Frame Region** | `AtlasTexture` Region `(Rect2)` | `Sprite.Create(rect, pivot)` / Sprite Editor slicing | Green bounding box `(x, y, w, h)` |
 | **Live Playback** | `AnimatedSprite2D` editor preview | `FighterAnimator.cs` `[ExecuteAlways]` | `<canvas id="previewCanvas">` preview loop |
 
+---
+
+## 14. Retro Arcade Main Menu & Double Dragon II Story Prologue (`MainMenuScene.unity`)
+
+### Overview & Visual Design
+The start page delivers an authentic 90s retro arcade brawler experience directly inspired by ***Double Dragon II: The Revenge*** (NES & Arcade) and fused with the Doctor Strange cosmic multiverse theme:
+
+1. **Stage 1: Dramatic Story Prologue (Attract Sequence):**
+   - High-contrast void backdrop with sequential line-by-line narrative reveal:
+     - *"IN THE YEAR 20XX..."*
+     - *"A CATASTROPHIC MULTIVERSE RIFT SHATTERED REALITY."*
+     - *"WARRIORS FROM PARALLEL ANIME REALMS ARE DRAWN INTO BATTLE."*
+     - *"ONLY THE STRONGEST CAN HOLD THE LINE!"*
+     - *"LET'S GO MYSTIC WARRIORS!"*
+   - Each line pops in with dynamic color shift (dim cyan $\rightarrow$ radiant gold $\rightarrow$ crisp white) and scale zoom.
+   - Blinking `► PRESS ANY KEY OR CLICK TO SKIP ◄` prompt allowing instant transition to the title screen.
+
+2. **Stage 2: Double Dragon II Style Hero Title Logo Sprite:**
+   - Handcrafted 16-bit arcade title logo ([`mystic_combat_title_logo.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/UI/MainMenu/mystic_combat_title_logo.png)) mirroring Technos Japan's 1988 *Double Dragon II* arcade composition:
+     - Giant chiseled gold Doctor Strange mystic mandala relic in the background.
+     - Extruded metallic chrome "MYSTIC COMBAT" typography with sky-blue and white horizontal reflection.
+     - Electric royal-blue anime kanji calligraphy in the center with gunmetal 3D drop shadow.
+     - Fiery crimson brush-script "~ Animeverse Incursion ~" subtitle slanted across the bottom.
+     - **Clean Alpha Pipeline:** Background box alpha-keyed to zero transparency (`alphaIsTransparency = 1`), seamlessly floating the gold mandala and chrome typography over the cosmic void without blue bounding boxes or secondary green mandala clutter.
+     - Subtle breathing/heartbeat scaling animation ($1.0\times$ to $1.015\times$) at 3 Hz.
+
+3. **Stage 3: Pure Retro Arcade Menu Typography & Multi-Color Vertex Gradients:**
+   - Eliminated modern monochromatic white text and rounded Web2 boxes.
+   - TextMeshPro 4-corner `VertexGradient` rendering:
+     - **Active Selection:** Top-Left Radiant Gold (`#FFF066`), Top-Right Sunburst White (`#FFFFFF`), Bottom-Left Blazing Amber (`#FF8C00`), Bottom-Right Fiery Crimson (`#FF2244`), enhanced with dynamic gold-amber shimmer cycling at 4.5 Hz.
+     - **Inactive Items:** Top-Left Electric Cyan (`#00F2FE`), Top-Right Diamond Silver (`#E0F7FA`), Bottom-Left Neon Violet (`#7F00FF`), Bottom-Right Deep Cobalt (`#3F51B5`).
+   - Classic flashing retro cursor: `►` that tracks the selected option.
+   - Classic blinking `[ PUSH ENTER OR SPACE TO START ]` arcade prompt at 2 Hz.
+   - 124px vertical clearance gap between the bottom of the logo ($y = -56\text{px}$) and Item 0 ($y = -180\text{px}$).
+   - Keyboard (`W/S`, `Up/Down`), Gamepad, and Mouse pointer hover/click support.
+
+4. **Stage 4: Arcade Entrance Animation & Audio Pipeline:**
+   - **Logo Impact Punch:** On start, title logo zooms from $1.35\times$ down to $1.0\times$ with an elastic arcade spring bounce ($0.94\times \rightarrow 1.0\times$) smoothly settling into place.
+   - **Staggered Option Cascade:** The 4 arcade options slide up into position sequentially with a $0.06\text{s}$ interval.
+   - **Selective SFX Muting for Music Showcase:** Procedural entrance "twik" impact sounds and button navigation clicks are muted (`enableEntranceImpactAudio = false`, `enableButtonChangeAudio = false`) to isolate the authentic Double Dragon II title track without conflicting synth blips.
+   - **Title Screen BGM Player:** Built-in looping audio architecture in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) (`musicSource` + `titleMusicClip`) with automated discovery in `Assets/Audio/Music/`.
+   - Fullscreen cosmic multiverse backdrop ([`menu_bg_multiverse.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/UI/MainMenu/menu_bg_multiverse.png)) showcasing deep space stars, nebulae, and dimensional rift colors.
+
+
+
+
 
 

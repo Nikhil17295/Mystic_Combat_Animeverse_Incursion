@@ -357,6 +357,129 @@ If a round ends and immediately resets health on the very same frame:
 2. **Arcade Authenticity:** Classic fighting games (Street Fighter, Tekken, Guilty Gear) use 2 round sockets for Best of 3 tournaments. Empty sockets create visual anticipation, while filled gems create visual satisfaction.
 3. **The Center Championship Relic:** Having an overarching 68×68 center gem that ignites into radiant gold with an active breathing sine-wave pulse ($1.0\times \rightarrow 1.15\times$) during Match Point dynamically communicates high-stakes tension to spectators and players alike.
 
+---
+
+## 15. `[SerializeField]` vs `public` vs `private`: What Serialization Actually Means
+
+### The Diary Metaphor
+Think of a C# script as a private diary:
+- **`private` variables** are locked inside the diary. No other script can read or modify them, and **Unity's Inspector cannot see them either**.
+- **`public` variables** leave the diary wide open on the table. Any other script in the entire game can tamper with them, violating Object-Oriented Programming (OOP) encapsulation.
+
+### What is "Serialization"?
+In computer science, **serialization** means converting an active object from computer memory (RAM) into a formatted stream of bytes that can be saved to disk (like in a `.unity` scene or `.prefab` asset file) and reconstructed later when the game boots.
+
+### The Solution: `[SerializeField]`
+```csharp
+[SerializeField] private float moveSpeed = 6.5f;
+```
+- **To the C# Compiler:** The variable remains strictly `private` (protected from external scripts).
+- **To the Unity Engine:** The `[SerializeField]` attribute instructs Unity's serializer: *"Save this variable to the scene file and draw an editable UI field for it in the Inspector window!"*
+
+> **Godot Equivalent:** In Godot 4, this is the exact same as writing `@export var move_speed: float = 6.5`.
+
+---
+
+## 16. The Unity Inspector Mental Map & Decluttering Guide
+
+### Why Unity Feels Cluttered Compared to Godot
+In **Godot**, the architecture follows **"One Node = One Clean Script"**. Clicking a character node displays a neat list of `@export` variables at the top of the Inspector.
+
+In **Unity**, the architecture follows **"One GameObject = A Stack of Many Components"**. Clicking `Fighter_P1_Goku` renders a tall scrolling column containing:
+1. `Transform` (Position, Rotation, Scale)
+2. `SpriteRenderer` (Sprite graphic, sorting layer)
+3. `Rigidbody2D` (Mass, gravity, physics velocities)
+4. `BoxCollider2D` (Solid physical boundary)
+5. `PlayerInputHandler` (Keyboard polling)
+6. `FighterController` (State machine brain)
+7. `FighterAnimator` (Sprite flipbook animator)
+8. `HealthSystem` & `EnergySystem` (Vitals and Ki tracking)
+
+### 3 Tips to Declutter the Inspector:
+1. **Collapse Components:** Click the small triangle **▼** next to `Transform`, `SpriteRenderer`, `Rigidbody2D`, and colliders. They shrink to thin 1-line strips, bringing your gameplay scripts straight to the top.
+2. **Use the Inspector Search Bar:** Type `speed` or `health` into the magnifying glass 🔍 at the top of the Inspector. Unity instantly hides all unrelated components and highlights only matching fields!
+3. **The Root vs. Child Trap:** If you click a child GameObject (like `Hitbox` or `GroundCheckPoint`), the Inspector will only show that child's components. Always ensure you click the root `Fighter_P1_Goku` or `Fighter_P2_Saitama` to edit main controller variables.
+
+---
+
+## 17. The Math Behind the `f` Suffix in C# (`5.0f` vs `double`)
+
+### Why Do We Need the `f`?
+In C#, any literal number written with a decimal point (like `3.14`, `0.5`, or `5.0`) is treated as a **`double`** (a 64-bit precision floating point number) by default.
+
+However, in real-time game engines (Unity, Unreal, Godot), graphic cards (GPUs) and physics calculations (`Vector2`, `Vector3`, `Time.deltaTime`) operate on **`float`** (a 32-bit single-precision number).
+
+### Why Do Game Engines Use 32-bit `float` Instead of 64-bit `double`?
+1. **GPU Speed:** Modern graphics hardware processes 32-bit `float` mathematical vectors **twice as fast** as 64-bit `double`.
+2. **Memory Footprint:** A `float` consumes 4 bytes, whereas a `double` consumes 8 bytes. In physics engines calculating thousands of collision vectors, 32-bit floats cut memory bandwidth in half.
+
+### The C# Compiler Rule:
+```csharp
+float speed = 5.5;   // ❌ COMPILE ERROR: Cannot implicitly convert 'double' to 'float'
+float speed = 5.5f;  // ✅ CORRECT: The 'f' suffix explicitly marks it as a 32-bit float!
+```
+
+---
+
+## 18. `Time.deltaTime` vs. `Time.fixedDeltaTime` & The "Double Delta" Trap
+
+### Why Does Delta Time Exist?
+If you move a character with `position.x += 5;`:
+- On a **30 FPS laptop**: The character travels $5 \times 30 =$ **150 units per second**.
+- On a **120 FPS gaming PC**: The character travels $5 \times 120 =$ **600 units per second** (4x faster!).
+
+Multiplying by `Time.deltaTime` ("the fraction of a second since the last frame") guarantees that movement is **frame-rate independent**—traveling the exact same physical distance in 1 real-world second on any hardware.
+
+### Why Must Physics Use `Time.fixedDeltaTime`? (The Tunneling Disaster)
+Physics math (friction, momentum, collision resolution) cannot tolerate fluctuating frame rates:
+- If a sudden frame drop occurs (`deltaTime` spikes to $0.2\text{s}$), a high-speed projectile moving at $100\text{ m/s}$ will leap $20\text{ meters}$ in a single step, **tunneling straight through a 2-meter solid wall** without colliding.
+- To prevent this, Unity runs physics on a separate, locked clock in `FixedUpdate()` using **`Time.fixedDeltaTime`** (default $0.02\text{s}$ or 50 ticks per second). Every physics tick is identical, guaranteeing rock-solid, reproducible collisions.
+
+### ⚠️ The "Double Delta" Rookie Mistake:
+```csharp
+// ❌ WRONG: Multiplying velocity by deltaTime
+rb.linearVelocity = new Vector2(speed * Time.deltaTime, 0f);
+```
+**Why this breaks physics:**
+Velocity already represents **meters per second**. Unity's physics engine automatically multiplies velocity by `Time.fixedDeltaTime` inside its internal integration loop. If you multiply by `Time.deltaTime` in your script, you multiply by delta **twice**, reducing your character's speed to an imperceptible crawl!
+
+```csharp
+// ✅ CORRECT: Assign speed directly in meters per second
+rb.linearVelocity = new Vector2(speed, rb.linearVelocity.y);
+```
+
+---
+
+## 19. How to Display Information in Unity (Console vs Gizmos vs UI Text)
+
+Depending on the context, Unity provides 3 distinct display channels:
+
+| Display Channel | Code Example | Where it Appears | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Developer Console** | `Debug.Log("Health: " + hp);` | Unity Console Window (bottom bar) | Diagnosing logic bugs and printing state transitions. |
+| **Scene Gizmos** | `void OnDrawGizmos() { Gizmos.DrawWireCube(...); }` | Scene View (Editor only) | Visualizing invisible boundaries (hitboxes, hurtboxes, ground check circles). |
+| **In-Game Text** | `scoreText.text = "HP: " + hp;` (via `TMP_Text`) | On-screen Canvas overlay | Crisp, high-resolution vector text rendered for the player. |
+
+### Adding Text with TextMeshPro (TMP):
+1. **Hierarchy:** Right-click $\rightarrow$ **UI** $\rightarrow$ **Text - TextMeshPro** (automatically creates Canvas and EventSystem).
+2. **C# Script:**
+   ```csharp
+   using UnityEngine;
+   using TMPro; // Always import the TextMeshPro namespace!
+
+   public class HealthDisplay : MonoBehaviour
+   {
+       [SerializeField] private TMP_Text healthLabel;
+
+       public void UpdateHealth(int current)
+       {
+           healthLabel.text = "HP: " + current;
+       }
+   }
+   ```
+> **Godot Comparison:** In Godot, you add a `CanvasLayer` node with a `Label` child, and update it in GDScript via `$Label.text = "HP: " + str(current)`.
+
+
 
 
 
