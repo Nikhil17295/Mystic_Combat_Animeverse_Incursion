@@ -192,6 +192,17 @@
 
 ---
 
+### Postmortem: Candidate Character Sprite Asset Clutter vs. In-Memory Dev Slicing
+- **Incident:** Rapidly prototyping and testing candidate anime spritesheets (e.g. testing walk cycles, jump frames, attack bounding boxes for unconfirmed roster characters) directly inside the Unity Editor generated dozens of unneeded `.png.meta` files and triggered full Unity asset database re-imports on every test.
+- **Root Cause:** Slicing tools were originally coupled directly to disk export paths (`Assets/Sprites/Fighters/{Name}/Frames/`). When developers just wanted to evaluate whether a candidate sheet was viable, copying files to disk cluttered the project repository.
+- **Resolution:**
+  1. Upgraded [`Tools/SpriteSlicer/index.html`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Tools/SpriteSlicer/index.html) and [`B:\Unity\GameDev_Toolbox\SpriteSlicer\index.html`](file:///B:/Unity/GameDev_Toolbox/SpriteSlicer/index.html) to decouple previewing from project disk storage.
+  2. Implemented HTML5 `URL.createObjectURL(file)` via the file picker and canvas drag-and-drop. Images are ingested 100% in browser RAM.
+  3. Replaced rigid static animation category buttons with a dynamic dictionary model and an interactive `➕ New Animation` creator, allowing developers to test arbitrary moves (`dash`, `taunt`, `fireball`).
+  4. Added a client-side `💾 Download Slices (JSON)` coordinate backup, allowing developers to save bounding boxes locally without polluting project folders until a character is officially approved for the roster.
+
+---
+
 ## 3. Team Best Practices Checklist
 
 1. **Always check the Console (`Ctrl + Shift + C`):** Any red error or yellow warning must be resolved immediately before moving to the next feature.

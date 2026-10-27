@@ -286,4 +286,35 @@ In competitive fighting games, the HUD cannot be a flimsy, miniature overlay. At
 - **Round Reset (`ResetForNewRound`):** Fighters snap back to spawn positions (`-2.2` and `+2.2`), velocities zeroed, states reset to Idle, and health/ghost bars immediately refilled to 100%.
 - **Round 3 Decider:** If P1 wins Round 1 and P2 wins Round 2, the match automatically advances to Round 3 (Final Round Match Point), where the winner takes the tournament.
 
+---
+
+## 13. General-Purpose Dev Sprite Slicer & Animation Playground (`Tools/SpriteSlicer/`)
+
+### Purpose & Architecture
+When developing a 2D fighting game, evaluating candidate sprite sheets (e.g. testing different anime characters) directly in Unity can pollute the Asset Database with duplicate meta files, unneeded textures, and editor re-import lag. 
+
+The interactive Sprite Slicer web application was upgraded into a **general-purpose dev testing tool & animation playground**:
+1. **Zero-Clutter In-Browser Loading:**
+   - Supports opening any image via the **"📁 Open Image from PC"** file dialog or dragging & dropping directly onto the canvas.
+   - Utilizes HTML5 `URL.createObjectURL(file)` to load textures 100% into browser memory (RAM).
+   - **Zero files are written, copied, or uploaded to `Assets/Sprites/`** during testing.
+2. **Dynamic Animation Tracks:**
+   - Rather than being locked to hardcoded categories, developers can click **"➕ New Animation"** and define custom tracks on the fly (e.g., `dash`, `taunt`, `fireball`, `teleport`).
+   - Animation tracks can be deleted (`✕`), frames can be cleared in bulk, and frame counts are visually badged on each tab.
+3. **Live 60 FPS Canvas Preview:**
+   - Real-time frame loop with variable FPS slider (2–24 FPS), frame pause/play toggle, and pixel-perfect rendering.
+4. **Offline Coordinate Backup (`.json`):**
+   - Developers can click **"💾 Download Slices (JSON)"** to export their exact frame coordinates `(x, y, w, h)` to disk without touching the Unity project.
+5. **Safe Project Export:**
+   - If a spritesheet is officially committed to the game project (e.g. Goku or Saitama), clicking **"⚡ EXPORT & APPLY TO UNITY GAME"** automatically crops, normalizes transparency, and exports sprite assets directly into `Assets/Sprites/Fighters/{Name}/Frames/`.
+
+### Godot vs. Unity Architectural Mapping
+| Concept | Godot Equivalent | Unity Equivalent | In Sprite Slicer Dev Playground |
+| :--- | :--- | :--- | :--- |
+| **Animation Container** | `SpriteFrames` Resource | `AnimationClip` / `AnimatorController` | `characterData[char].animations` dictionary |
+| **Custom Animation Track** | Adding track in `SpriteFrames` (`"idle"`, `"dash"`) | Creating `.anim` clip in Project window | Clicking `+ New Animation` and typing track name |
+| **Frame Region** | `AtlasTexture` Region `(Rect2)` | `Sprite.Create(rect, pivot)` / Sprite Editor slicing | Green bounding box `(x, y, w, h)` |
+| **Live Playback** | `AnimatedSprite2D` editor preview | `FighterAnimator.cs` `[ExecuteAlways]` | `<canvas id="previewCanvas">` preview loop |
+
+
 

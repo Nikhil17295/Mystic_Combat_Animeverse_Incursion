@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mystic Combat — Interactive Sprite Slicer & Animator</title>
+    <title>Mystic Combat — Sprite Slicer & Dev Animation Playground</title>
     <style>
         :root {
             --bg-dark: #12131a;
@@ -11,9 +11,12 @@
             --panel-border: #2e3247;
             --accent: #ff7700;
             --accent-glow: rgba(255, 119, 0, 0.4);
+            --blue: #2563eb;
+            --blue-glow: rgba(37, 99, 235, 0.4);
             --text-main: #f0f2f5;
             --text-dim: #9aa0b4;
             --success: #00e676;
+            --danger: #ef4444;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
@@ -31,29 +34,39 @@
         header {
             background: var(--panel-bg);
             border-bottom: 1px solid var(--panel-border);
-            padding: 10px 20px;
+            padding: 8px 18px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             z-index: 10;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .logo {
             font-weight: 800;
-            font-size: 1.15rem;
+            font-size: 1.05rem;
             letter-spacing: 0.5px;
             color: #fff;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            white-space: nowrap;
         }
         .logo span { color: var(--accent); }
 
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
         .char-selector {
             display: flex;
-            gap: 8px;
+            gap: 4px;
             background: #101118;
-            padding: 4px;
+            padding: 3px;
             border-radius: 8px;
             border: 1px solid var(--panel-border);
         }
@@ -61,18 +74,78 @@
             background: transparent;
             color: var(--text-dim);
             border: none;
-            padding: 6px 16px;
+            padding: 5px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             transition: all 0.15s;
         }
+        .char-btn:hover { color: #fff; }
         .char-btn.active {
             background: var(--accent);
             color: #fff;
             box-shadow: 0 0 10px var(--accent-glow);
         }
+        .char-btn.custom-active {
+            background: var(--blue);
+            color: #fff;
+            box-shadow: 0 0 10px var(--blue-glow);
+        }
+
+        .dropdown-box {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #101118;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--panel-border);
+        }
+        .dropdown-box select {
+            background: #1c1e29;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            outline: none;
+            cursor: pointer;
+            max-width: 220px;
+        }
+
+        .btn-open-file {
+            background: var(--blue);
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 0 10px var(--blue-glow);
+            transition: all 0.15s;
+        }
+        .btn-open-file:hover { background: #3b82f6; }
+
+        .btn-stop-server {
+            background: #dc2626;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+        .btn-stop-server:hover { background: #ef4444; }
 
         /* Main Workspace */
         .workspace {
@@ -97,12 +170,31 @@
             left: 0;
         }
 
+        /* Drag & Drop Visual Overlay */
+        .drop-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(37, 99, 235, 0.45);
+            border: 4px dashed #60a5fa;
+            backdrop-filter: blur(4px);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #fff;
+            z-index: 25;
+            pointer-events: none;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+
         /* Floating Tool Bar above Canvas */
         .canvas-toolbar {
             position: absolute;
             top: 15px;
             left: 20px;
-            background: rgba(28, 30, 41, 0.92);
+            background: rgba(28, 30, 41, 0.94);
             backdrop-filter: blur(8px);
             border: 1px solid var(--panel-border);
             border-radius: 8px;
@@ -118,13 +210,13 @@
             font-family: monospace;
             color: var(--accent);
             background: #101118;
-            padding: 4px 8px;
+            padding: 3px 8px;
             border-radius: 4px;
         }
 
         /* Right Sidebar Panel */
         .sidebar {
-            width: 380px;
+            width: 400px;
             background: var(--panel-bg);
             border-left: 1px solid var(--panel-border);
             display: flex;
@@ -133,17 +225,23 @@
         }
 
         .panel-section {
-            padding: 16px;
+            padding: 14px 16px;
             border-bottom: 1px solid var(--panel-border);
         }
 
+        .section-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
         .section-title {
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             text-transform: uppercase;
             font-weight: 700;
-            letter-spacing: 1px;
+            letter-spacing: 0.8px;
             color: var(--text-dim);
-            margin-bottom: 10px;
         }
 
         /* Live Preview */
@@ -157,6 +255,13 @@
             justify-content: center;
             position: relative;
             overflow: hidden;
+            background-image: 
+                linear-gradient(45deg, #12141d 25%, transparent 25%), 
+                linear-gradient(-45deg, #12141d 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #12141d 75%), 
+                linear-gradient(-45deg, transparent 75%, #12141d 75%);
+            background-size: 16px 16px;
+            background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
         }
         #previewCanvas {
             image-rendering: pixelated;
@@ -171,36 +276,95 @@
         }
 
         /* Animation Categories */
+        .anim-tabs-container {
+            max-height: 170px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            padding-right: 4px;
+        }
         .anim-tabs {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 6px;
-            margin-bottom: 12px;
         }
-        .anim-tab-btn {
+        .anim-tab-btn-wrapper {
+            display: flex;
+            align-items: center;
             background: #141620;
             border: 1px solid var(--panel-border);
-            color: var(--text-dim);
-            padding: 8px 4px;
             border-radius: 6px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-align: center;
+            overflow: hidden;
             transition: all 0.15s;
         }
-        .anim-tab-btn:hover { color: #fff; border-color: #4a5073; }
-        .anim-tab-btn.active {
-            background: #ff770022;
+        .anim-tab-btn-wrapper:hover { border-color: #4a5073; }
+        .anim-tab-btn-wrapper.active {
+            background: #ff770020;
             border-color: var(--accent);
-            color: var(--accent);
         }
+        .anim-tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            padding: 7px 6px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .anim-tab-btn-wrapper.active .anim-tab-btn {
+            color: var(--accent);
+            font-weight: 700;
+        }
+        .anim-tab-count {
+            font-size: 0.7rem;
+            background: #1f2335;
+            padding: 1px 5px;
+            border-radius: 4px;
+            color: var(--text-dim);
+            margin-right: 4px;
+        }
+        .anim-tab-delete {
+            background: transparent;
+            border: none;
+            color: #71768c;
+            padding: 4px 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: color 0.15s;
+        }
+        .anim-tab-delete:hover { color: var(--danger); }
 
-        /* Frame Action Tools */
+        /* Inline New Anim Input Row */
+        .new-anim-box {
+            display: none;
+            gap: 6px;
+            margin-bottom: 10px;
+            background: #141620;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid var(--accent);
+        }
+        .new-anim-box input {
+            flex: 1;
+            background: #0a0b10;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            outline: none;
+        }
+        .new-anim-box input:focus { border-color: var(--accent); }
+
+        /* Action Row (Split & Add) */
         .action-row {
             display: flex;
             gap: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
         .input-group {
             display: flex;
@@ -216,7 +380,7 @@
             background: transparent;
             border: none;
             color: #fff;
-            width: 40px;
+            width: 36px;
             text-align: center;
             font-weight: 700;
             font-size: 0.85rem;
@@ -226,7 +390,7 @@
             background: #2b3047;
             color: #fff;
             border: none;
-            padding: 8px 14px;
+            padding: 7px 12px;
             border-radius: 6px;
             font-size: 0.8rem;
             font-weight: 600;
@@ -239,15 +403,21 @@
             box-shadow: 0 0 10px var(--accent-glow);
         }
         .btn-primary:hover { background: #ff8c1a; }
+        .btn-secondary {
+            background: #1f2335;
+            border: 1px solid var(--panel-border);
+            color: var(--text-dim);
+        }
+        .btn-secondary:hover { color: #fff; border-color: #555; }
         .btn-success {
             background: var(--success);
             color: #000;
             font-weight: 700;
-            font-size: 0.95rem;
-            padding: 14px;
+            font-size: 0.9rem;
+            padding: 12px;
             width: 100%;
             border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 230, 118, 0.25);
         }
         .btn-success:hover { background: #26f08b; }
 
@@ -255,31 +425,25 @@
         .frame-list-container {
             flex: 1;
             overflow-y: auto;
-            padding: 16px;
+            padding: 12px 16px;
         }
         .frame-item {
             background: #141620;
             border: 1px solid var(--panel-border);
             border-radius: 6px;
-            padding: 8px 12px;
-            margin-bottom: 8px;
+            padding: 6px 10px;
+            margin-bottom: 6px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
         }
         .frame-item-left {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
-        .frame-thumb {
-            width: 32px;
-            height: 32px;
-            border: 1px solid #333;
-            background: #000;
-            image-rendering: pixelated;
-        }
+        .frame-item-left strong { color: var(--accent); }
         .delete-btn {
             background: transparent;
             border: none;
@@ -287,45 +451,69 @@
             cursor: pointer;
             font-weight: 700;
             font-size: 1rem;
-            padding: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
         }
+        .delete-btn:hover { background: rgba(255, 82, 82, 0.2); }
 
         /* Instructions Bar */
         .instructions {
             background: #101118;
-            padding: 10px 16px;
-            font-size: 0.75rem;
+            padding: 8px 14px;
+            font-size: 0.72rem;
             color: var(--text-dim);
-            line-height: 1.4;
+            line-height: 1.45;
             border-top: 1px solid var(--panel-border);
         }
         .instructions kbd {
             background: #232738;
             color: #fff;
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 1px 5px;
+            border-radius: 3px;
             font-family: monospace;
         }
     </style>
 </head>
 <body>
 
-    <!-- Header -->
+    <!-- Hidden Local File Input -->
+    <input type="file" id="localFileInput" accept="image/*" style="display:none;" onchange="handleLocalFileSelect(event)">
+
+    <!-- Top Header -->
     <header>
         <div class="logo">
-            <span>⚡ MYSTIC COMBAT</span> &bull; Sprite Slicer & Live Animator
+            <span>⚡ MYSTIC COMBAT</span> &bull; Sprite Slicer & Dev Animator
         </div>
-        <div style="display:flex; align-items:center; gap:12px;">
+
+        <div class="header-controls">
+            <!-- Character Selector -->
             <div class="char-selector">
                 <button class="char-btn active" id="btnCharGoku" onclick="selectCharacter('goku')">Goku</button>
                 <button class="char-btn" id="btnCharSaitama" onclick="selectCharacter('saitama')">Saitama</button>
+                <button class="char-btn" id="btnCharCustom" onclick="selectCharacter('custom')">🧪 Custom / Test</button>
             </div>
-            <div style="display:flex; align-items:center; gap:6px; background:#101118; padding:4px 8px; border-radius:8px; border:1px solid var(--panel-border);">
+
+            <!-- Custom Character Name Input (shown in custom mode) -->
+            <div id="customNameBox" style="display:none; align-items:center; gap:6px;">
+                <input type="text" id="customCharNameInput" placeholder="Character Name (e.g. Vegeta)" 
+                       oninput="onCustomNameChange(this.value)"
+                       style="background:#101118; border:1px solid var(--blue); color:#fff; padding:4px 8px; border-radius:6px; font-size:0.8rem; outline:none; width:150px;">
+            </div>
+
+            <!-- Preset Sheet Dropdown (for project fighters) -->
+            <div class="dropdown-box" id="sheetDropdownContainer">
                 <label for="sheetDropdown" style="font-size:0.75rem; color:var(--text-dim); font-weight:600;">SHEET:</label>
-                <select id="sheetDropdown" onchange="onSheetDropdownChange()" style="background:#1c1e29; color:#fff; border:1px solid #444; border-radius:4px; padding:4px 8px; font-size:0.8rem; outline:none; cursor:pointer;">
+                <select id="sheetDropdown" onchange="onSheetDropdownChange()">
                 </select>
             </div>
-            <button onclick="stopServer()" style="background:#dc2626; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.8rem; display:flex; align-items:center; gap:6px;" title="Shut down the local Python server">
+
+            <!-- Open Any Image from PC -->
+            <button class="btn-open-file" onclick="document.getElementById('localFileInput').click()" title="Open any image from PC into browser RAM (zero project clutter)">
+                📁 Open Image from PC
+            </button>
+
+            <!-- Stop Server Button -->
+            <button class="btn-stop-server" onclick="stopServer()" title="Shut down the local Python server">
                 🛑 Stop Server
             </button>
         </div>
@@ -335,14 +523,23 @@
     <div class="workspace">
         <!-- Viewport -->
         <div class="viewport" id="viewport">
+            <!-- Drop Overlay -->
+            <div class="drop-overlay" id="dropOverlay">
+                📥 DROP SPRITESHEET IMAGE HERE
+                <div style="font-size:0.9rem; font-weight:400; margin-top:8px; color:#e0e7ff;">
+                    Loads 100% in-browser RAM &bull; No files written to project
+                </div>
+            </div>
+
+            <!-- Floating Canvas Toolbar -->
             <div class="canvas-toolbar">
                 <span>Selection:</span>
                 <span class="coord-badge" id="coordBadge">None</span>
                 <span>Zoom: <strong id="zoomLevel">1.5x</strong></span>
-                <span style="color:#666;">|</span>
+                <span style="color:#4a5073;">|</span>
                 <span id="imageInfoBadge" style="font-size: 0.75rem; color: #88c0d0; font-family: monospace;">Loading...</span>
-                <span style="color:#666;">|</span>
-                <span style="font-size: 0.75rem; color:#888;">Pan: <kbd>Right-Click Drag</kbd> or <kbd>Space + Drag</kbd></span>
+                <span style="color:#4a5073;">|</span>
+                <span style="font-size: 0.75rem; color:#888;">Pan: <kbd>Right-Click</kbd> or <kbd>Space + Drag</kbd></span>
             </div>
             <canvas id="canvas"></canvas>
         </div>
@@ -351,7 +548,12 @@
         <div class="sidebar">
             <!-- Live Animation Preview -->
             <div class="panel-section">
-                <div class="section-title">Live Animation Preview</div>
+                <div class="section-header-row">
+                    <span class="section-title">Live Animation Preview</span>
+                    <button class="btn btn-secondary" id="btnTogglePlay" onclick="togglePreviewPlay()" style="padding:2px 8px; font-size:0.75rem;">
+                        ⏸ Pause
+                    </button>
+                </div>
                 <div class="preview-box">
                     <canvas id="previewCanvas" width="128" height="128"></canvas>
                 </div>
@@ -363,24 +565,32 @@
 
             <!-- Category Selector -->
             <div class="panel-section">
-                <div class="section-title">Current Animation Category</div>
-                <div class="anim-tabs" id="animTabs">
-                    <button class="anim-tab-btn active" onclick="setCategory('idle')">Idle</button>
-                    <button class="anim-tab-btn" onclick="setCategory('walk')">Walk</button>
-                    <button class="anim-tab-btn" onclick="setCategory('jump')">Jump</button>
-                    <button class="anim-tab-btn" onclick="setCategory('crouch')">Crouch</button>
-                    <button class="anim-tab-btn" onclick="setCategory('punch')">Light Punch</button>
-                    <button class="anim-tab-btn" onclick="setCategory('heavy')">Heavy Attack</button>
-                    <button class="anim-tab-btn" onclick="setCategory('skill')">Skill</button>
-                    <button class="anim-tab-btn" onclick="setCategory('ultimate')">Ultimate</button>
-                    <button class="anim-tab-btn" onclick="setCategory('meditate')">Meditate</button>
+                <div class="section-header-row">
+                    <span class="section-title">Animation Tracks</span>
+                    <button class="btn btn-secondary" onclick="showNewAnimInput()" style="padding:2px 8px; font-size:0.75rem; color:#00e676; border-color:#00e676;">
+                        ➕ New Animation
+                    </button>
+                </div>
+
+                <!-- Add Custom Animation Inline Form -->
+                <div class="new-anim-box" id="newAnimBox">
+                    <input type="text" id="newAnimInput" placeholder="Name (e.g. dash, taunt, beam)" onkeydown="if(event.key==='Enter') createNewAnimation()">
+                    <button class="btn btn-primary" onclick="createNewAnimation()" style="padding:4px 10px; font-size:0.75rem;">Add</button>
+                    <button class="btn btn-secondary" onclick="hideNewAnimInput()" style="padding:4px 8px; font-size:0.75rem;">✕</button>
+                </div>
+
+                <!-- Dynamic Animation Tabs -->
+                <div class="anim-tabs-container">
+                    <div class="anim-tabs" id="animTabs">
+                        <!-- Populated dynamically via renderAnimTabs() -->
+                    </div>
                 </div>
 
                 <!-- Split & Add Tool -->
                 <div class="action-row">
                     <div class="input-group">
-                        <span>Split into:</span>
-                        <input type="number" id="splitCount" value="4" min="1" max="16">
+                        <span>Split:</span>
+                        <input type="number" id="splitCount" value="4" min="1" max="32">
                         <span>frames</span>
                     </div>
                     <button class="btn btn-primary" onclick="addSelectedFrames()">+ Add to <span id="currentCatName">Idle</span></button>
@@ -389,27 +599,33 @@
 
             <!-- Added Frames List -->
             <div class="frame-list-container" id="frameList">
-                <div class="section-title" id="frameListTitle">Frames in Idle (0)</div>
+                <div class="section-header-row">
+                    <span class="section-title" id="frameListTitle">Frames in Track (0)</span>
+                    <button class="btn btn-secondary" onclick="clearCurrentCategoryFrames()" style="padding:2px 6px; font-size:0.7rem; color:#ff5252;">Clear All</button>
+                </div>
                 <div id="framesListInner"></div>
             </div>
 
-            <!-- Export to Unity -->
+            <!-- Export to Unity & Slices Tool -->
             <div class="panel-section" style="border-top: 1px solid var(--panel-border);">
-                <button class="btn btn-success" id="exportBtn" onclick="exportToGame()">
-                    ⚡ EXPORT & APPLY TO UNITY GAME
-                </button>
-                <div id="statusMsg" style="font-size:0.75rem; text-align:center; margin-top:8px; color:var(--text-dim);">
-                    Ready. Click & drag over frames to select.
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <button class="btn btn-success" id="exportBtn" onclick="exportToGame()">
+                        ⚡ EXPORT & APPLY TO UNITY GAME
+                    </button>
+                    <button class="btn btn-secondary" onclick="downloadSlicesJson()" style="font-size:0.75rem; padding:6px; display:flex; align-items:center; justify-content:center; gap:6px;" title="Download bounding boxes JSON for this character">
+                        💾 Download Slices (JSON)
+                    </button>
+                </div>
+                <div id="statusMsg" style="font-size:0.75rem; text-align:center; margin-top:8px; color:var(--text-dim); line-height:1.4;">
+                    Drag a box over spritesheet frames to select.
                 </div>
             </div>
 
             <div class="instructions">
-                <strong>How to use:</strong><br>
-                1. <strong>Select Category</strong> (e.g. <em>Idle</em>).<br>
-                2. <strong>Drag a box</strong> around the character animation frames.<br>
-                3. If you selected a row of 4 frames, set <strong>Split = 4</strong> and click <strong>+ Add</strong>.<br>
-                4. Watch the <strong>Live Preview</strong> animate instantly!<br>
-                5. Click <strong>Export & Apply</strong> to inject directly into Unity.
+                <strong>Dev Playground Tips:</strong><br>
+                &bull; <strong>Open any image</strong> via <em>Open Image from PC</em> or drag & drop (zero clutter in project).<br>
+                &bull; Click <strong>➕ New Animation</strong> to type custom names (e.g. <em>dash, taunt</em>).<br>
+                &bull; Drag box on sheet &rarr; set <strong>Split</strong> &rarr; click <strong>+ Add</strong> &rarr; preview immediately!
             </div>
         </div>
     </div>
@@ -420,11 +636,13 @@
         const previewCanvas = document.getElementById("previewCanvas");
         const pCtx = previewCanvas.getContext("2d");
         const viewport = document.getElementById("viewport");
+        const dropOverlay = document.getElementById("dropOverlay");
 
         // App State
         let currentCharacter = "goku";
         let currentCategory = "idle";
         let sheetImage = new Image();
+        let isPreviewPaused = false;
 
         // Canvas Transform
         let scale = 1.5;
@@ -441,9 +659,11 @@
         // Selected Bounding Box in image space
         let currentSelection = null; // {x, y, w, h}
 
-        // Stored Animations: { category: [ {x, y, w, h}, ... ] }
+        // Stored Character Data
         const characterData = {
             goku: {
+                name: "Goku",
+                isLocal: false,
                 sheets: [
                     { name: "Transparent JUS (Clean)", path: "Fighters/Goku/goku_transparent.png", bgColor: null },
                     { name: "Original JUS (Blue BG)", path: "Fighters/Goku/DS _ DSi - Jump Ultimate Stars - Fighters - Goku.png", bgColor: [128, 128, 255] }
@@ -467,6 +687,8 @@
                 }
             },
             saitama: {
+                name: "Saitama",
+                isLocal: false,
                 sheets: [
                     { name: "Arzeer JUS (Clean Transparent)", path: "Fighters/Saitama/saitama_jus__by_arzeer_de00xcg.png", bgColor: null },
                     { name: "XmayGrrr JUS (Purple BG)", path: "Fighters/Saitama/saitama_jus_sprites_by_xmaygrrr_d9oqas6.png", bgColor: [140, 70, 130] }
@@ -483,22 +705,71 @@
                     ultimate: [],
                     meditate: []
                 }
+            },
+            custom: {
+                name: "Candidate_Fighter",
+                isLocal: true,
+                sheets: [],
+                activeSheetIndex: 0,
+                animations: {
+                    idle: [],
+                    walk: [],
+                    dash: [],
+                    punch: [],
+                    kick: [],
+                    skill: []
+                }
             }
         };
 
         function selectCharacter(char) {
             currentCharacter = char;
+
             document.getElementById("btnCharGoku").classList.toggle("active", char === "goku");
             document.getElementById("btnCharSaitama").classList.toggle("active", char === "saitama");
+            
+            const btnCustom = document.getElementById("btnCharCustom");
+            btnCustom.classList.toggle("custom-active", char === "custom");
+
+            const customNameBox = document.getElementById("customNameBox");
+            const sheetDropdownContainer = document.getElementById("sheetDropdownContainer");
+
+            if (char === "custom") {
+                customNameBox.style.display = "flex";
+                document.getElementById("customCharNameInput").value = characterData.custom.name;
+            } else {
+                customNameBox.style.display = "none";
+            }
+
+            // If active category does not exist in this character, pick first available
+            const animKeys = Object.keys(characterData[char].animations);
+            if (!characterData[char].animations[currentCategory]) {
+                currentCategory = animKeys[0] || "idle";
+            }
 
             updateSheetDropdown();
+            renderAnimTabs();
             loadActiveSheet();
+        }
+
+        function onCustomNameChange(val) {
+            const clean = val.trim() || "Candidate_Fighter";
+            characterData.custom.name = clean;
+            document.getElementById("btnCharCustom").textContent = "🧪 " + clean;
         }
 
         function updateSheetDropdown() {
             const dropdown = document.getElementById("sheetDropdown");
+            const container = document.getElementById("sheetDropdownContainer");
             dropdown.innerHTML = "";
+
             const charObj = characterData[currentCharacter];
+            if (!charObj.sheets || charObj.sheets.length === 0) {
+                container.style.display = "none";
+                return;
+            }
+
+            container.style.display = "flex";
             charObj.sheets.forEach((s, idx) => {
                 const opt = document.createElement("option");
                 opt.value = idx;
@@ -517,17 +788,32 @@
 
         function loadActiveSheet() {
             const charObj = characterData[currentCharacter];
-            const sheet = charObj.sheets[charObj.activeSheetIndex];
             const badge = document.getElementById("imageInfoBadge");
+
+            if (!charObj.sheets || charObj.sheets.length === 0) {
+                badge.textContent = "No image loaded. Click 'Open Image from PC' or drag & drop!";
+                badge.style.color = "#ffaa00";
+                sheetImage = new Image();
+                render();
+                updateFrameListUI();
+                return;
+            }
+
+            const sheet = charObj.sheets[charObj.activeSheetIndex];
             badge.textContent = "Loading: " + sheet.name + "...";
             badge.style.color = "#ffaa00";
 
-            const encodedPath = encodeURI(sheet.path);
-            sheetImage.src = "/sprites/" + encodedPath;
+            if (sheet.isLocalBlob) {
+                sheetImage.src = sheet.blobUrl;
+            } else {
+                const encodedPath = encodeURI(sheet.path);
+                sheetImage.src = "/sprites/" + encodedPath;
+            }
 
             sheetImage.onload = () => {
-                badge.textContent = `✓ ${sheetImage.naturalWidth}x${sheetImage.naturalHeight}px (${sheet.name})`;
-                badge.style.color = "#00e676";
+                const modeText = sheet.isLocalBlob ? "RAM Only (No Project Clutter)" : "Project Asset";
+                badge.textContent = `✓ ${sheetImage.naturalWidth}x${sheetImage.naturalHeight}px (${sheet.name} — ${modeText})`;
+                badge.style.color = sheet.isLocalBlob ? "#60a5fa" : "#00e676";
                 panX = 40;
                 panY = 40;
                 render();
@@ -535,22 +821,191 @@
             };
 
             sheetImage.onerror = (err) => {
-                badge.textContent = "✗ Failed to load: /sprites/" + encodedPath;
+                badge.textContent = "✗ Failed to load: " + sheet.name;
                 badge.style.color = "#ff5252";
                 console.error("Image load error:", err);
             };
         }
 
+        // ==========================================
+        // Local File Ingestion (Pure RAM / In-Memory)
+        // ==========================================
+        function handleLocalFileSelect(event) {
+            const file = event.target.files && event.target.files[0];
+            if (file) {
+                loadLocalImageFile(file);
+            }
+            event.target.value = ""; // Reset file input
+        }
+
+        function loadLocalImageFile(file) {
+            if (!file.type.startsWith("image/")) {
+                alert("Please select a valid image file (PNG, JPG, WebP, etc.).");
+                return;
+            }
+
+            const blobUrl = URL.createObjectURL(file);
+            const baseName = file.name.replace(/\.[^/.]+$/, "");
+
+            // Add to custom sheets
+            const sheetEntry = {
+                name: file.name,
+                isLocalBlob: true,
+                blobUrl: blobUrl,
+                file: file
+            };
+
+            characterData.custom.name = baseName;
+            characterData.custom.sheets.unshift(sheetEntry);
+            characterData.custom.activeSheetIndex = 0;
+
+            selectCharacter("custom");
+            document.getElementById("statusMsg").style.color = "#60a5fa";
+            document.getElementById("statusMsg").textContent = `Loaded "${file.name}" into browser memory! Zero files written to project disk.`;
+        }
+
+        // Drag & Drop Listeners on Viewport
+        viewport.addEventListener("dragenter", (e) => {
+            e.preventDefault();
+            dropOverlay.style.display = "flex";
+        });
+        viewport.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            dropOverlay.style.display = "flex";
+        });
+        viewport.addEventListener("dragleave", (e) => {
+            if (e.relatedTarget === null || !viewport.contains(e.relatedTarget)) {
+                dropOverlay.style.display = "none";
+            }
+        });
+        viewport.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropOverlay.style.display = "none";
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                loadLocalImageFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // ==========================================
+        // Dynamic Animation Categories
+        // ==========================================
+        function renderAnimTabs() {
+            const container = document.getElementById("animTabs");
+            container.innerHTML = "";
+
+            const animations = characterData[currentCharacter].animations;
+            const catNames = Object.keys(animations);
+
+            catNames.forEach(cat => {
+                const count = animations[cat].length;
+                const wrapper = document.createElement("div");
+                wrapper.className = "anim-tab-btn-wrapper" + (cat === currentCategory ? " active" : "");
+
+                const btn = document.createElement("button");
+                btn.className = "anim-tab-btn";
+                btn.innerHTML = `<span class="anim-tab-count">${count}</span> ${capitalize(cat)}`;
+                btn.title = `Switch to ${cat} (${count} frames)`;
+                btn.onclick = () => setCategory(cat);
+
+                const delBtn = document.createElement("button");
+                delBtn.className = "anim-tab-delete";
+                delBtn.innerHTML = "&times;";
+                delBtn.title = `Delete "${cat}" track`;
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteCategory(cat);
+                };
+
+                wrapper.appendChild(btn);
+                wrapper.appendChild(delBtn);
+                container.appendChild(wrapper);
+            });
+
+            document.getElementById("currentCatName").textContent = capitalize(currentCategory);
+        }
+
         function setCategory(cat) {
             currentCategory = cat;
-            document.querySelectorAll(".anim-tab-btn").forEach(btn => {
-                btn.classList.toggle("active", btn.textContent.toLowerCase().includes(cat));
-            });
-            document.getElementById("currentCatName").textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+            renderAnimTabs();
             updateFrameListUI();
         }
 
-        // Resize Canvas to fit viewport
+        function showNewAnimInput() {
+            const box = document.getElementById("newAnimBox");
+            box.style.display = "flex";
+            const input = document.getElementById("newAnimInput");
+            input.value = "";
+            input.focus();
+        }
+
+        function hideNewAnimInput() {
+            document.getElementById("newAnimBox").style.display = "none";
+        }
+
+        function createNewAnimation() {
+            const input = document.getElementById("newAnimInput");
+            const raw = input.value.trim().toLowerCase();
+            if (!raw) return;
+
+            const clean = raw.replace(/[^a-z0-9_]/g, "_");
+            const anims = characterData[currentCharacter].animations;
+
+            if (anims[clean]) {
+                setCategory(clean);
+                hideNewAnimInput();
+                return;
+            }
+
+            anims[clean] = [];
+            currentCategory = clean;
+            hideNewAnimInput();
+            renderAnimTabs();
+            updateFrameListUI();
+        }
+
+        function deleteCategory(cat) {
+            const anims = characterData[currentCharacter].animations;
+            const count = anims[cat]?.length || 0;
+
+            if (count > 0) {
+                if (!confirm(`Are you sure you want to delete animation "${cat}" and its ${count} frame(s)?`)) {
+                    return;
+                }
+            }
+
+            delete anims[cat];
+            const remaining = Object.keys(anims);
+            if (remaining.length === 0) {
+                anims["idle"] = [];
+                currentCategory = "idle";
+            } else if (currentCategory === cat) {
+                currentCategory = remaining[0];
+            }
+
+            renderAnimTabs();
+            updateFrameListUI();
+            render();
+        }
+
+        function clearCurrentCategoryFrames() {
+            const list = characterData[currentCharacter].animations[currentCategory] || [];
+            if (list.length === 0) return;
+            if (!confirm(`Clear all ${list.length} frames in "${currentCategory}"?`)) return;
+
+            characterData[currentCharacter].animations[currentCategory] = [];
+            renderAnimTabs();
+            updateFrameListUI();
+            render();
+        }
+
+        function capitalize(str) {
+            if (!str) return "";
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // ==========================================
+        // Canvas Interactions (Pan, Zoom, Slicing)
+        // ==========================================
         function resize() {
             canvas.width = viewport.clientWidth;
             canvas.height = viewport.clientHeight;
@@ -558,7 +1013,6 @@
         }
         window.addEventListener("resize", resize);
 
-        // Pan & Zoom
         viewport.addEventListener("wheel", (e) => {
             e.preventDefault();
             const zoomFactor = e.deltaY < 0 ? 1.2 : 0.833;
@@ -567,12 +1021,11 @@
 
             panX = mouseX - (mouseX - panX) * zoomFactor;
             panY = mouseY - (mouseY - panY) * zoomFactor;
-            scale = Math.max(0.2, Math.min(10.0, scale * zoomFactor));
+            scale = Math.max(0.1, Math.min(15.0, scale * zoomFactor));
             document.getElementById("zoomLevel").textContent = scale.toFixed(1) + "x";
             render();
         });
 
-        // Mouse Down
         viewport.addEventListener("mousedown", (e) => {
             if (e.button === 1 || e.button === 2 || e.spaceKey || e.shiftKey) {
                 isPanning = true;
@@ -591,7 +1044,6 @@
             }
         });
 
-        // Mouse Move
         window.addEventListener("mousemove", (e) => {
             if (isPanning) {
                 panX = e.clientX - panStartX;
@@ -616,7 +1068,6 @@
             }
         });
 
-        // Mouse Up
         window.addEventListener("mouseup", (e) => {
             if (isPanning) isPanning = false;
             if (isSelecting) {
@@ -627,7 +1078,6 @@
 
         viewport.addEventListener("contextmenu", e => e.preventDefault());
 
-        // Render Canvas
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -681,7 +1131,7 @@
             ctx.restore();
         }
 
-        // Add Selection to Animation
+        // Add Selection to Current Category
         function addSelectedFrames() {
             if (!currentSelection || currentSelection.w <= 4 || currentSelection.h <= 4) {
                 alert("Please drag a box around the character frames on the image first!");
@@ -703,19 +1153,21 @@
 
             currentSelection = null;
             document.getElementById("coordBadge").textContent = "Added!";
+            renderAnimTabs();
             updateFrameListUI();
             render();
         }
 
         function removeFrame(idx) {
             characterData[currentCharacter].animations[currentCategory].splice(idx, 1);
+            renderAnimTabs();
             updateFrameListUI();
             render();
         }
 
         function updateFrameListUI() {
             const list = characterData[currentCharacter].animations[currentCategory] || [];
-            document.getElementById("frameListTitle").textContent = `Frames in ${currentCategory} (${list.length})`;
+            document.getElementById("frameListTitle").textContent = `Frames in ${capitalize(currentCategory)} (${list.length})`;
             const container = document.getElementById("framesListInner");
             container.innerHTML = "";
 
@@ -733,9 +1185,17 @@
             });
         }
 
-        // Live Animation Loop
+        // ==========================================
+        // Live Preview Loop
+        // ==========================================
         let previewIndex = 0;
         let previewLastTime = 0;
+
+        function togglePreviewPlay() {
+            isPreviewPaused = !isPreviewPaused;
+            document.getElementById("btnTogglePlay").textContent = isPreviewPaused ? "▶ Play" : "⏸ Pause";
+        }
+
         function animatePreview(time) {
             requestAnimationFrame(animatePreview);
 
@@ -750,30 +1210,70 @@
             pCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 
             if (list.length > 0 && sheetImage.complete && sheetImage.naturalWidth > 0) {
-                previewIndex = (previewIndex + 1) % list.length;
-                const f = list[previewIndex];
+                if (!isPreviewPaused) {
+                    previewIndex = (previewIndex + 1) % list.length;
+                }
+                const f = list[previewIndex] || list[0];
 
-                // Scale to fit preview box centered
-                const scaleFactor = Math.min(100 / f.w, 100 / f.h);
-                const drawW = f.w * scaleFactor;
-                const drawH = f.h * scaleFactor;
-                const drawX = (previewCanvas.width - drawW) / 2;
-                const drawY = (previewCanvas.height - drawH) / 2;
+                if (f && f.w > 0 && f.h > 0) {
+                    const scaleFactor = Math.min(100 / f.w, 100 / f.h);
+                    const drawW = f.w * scaleFactor;
+                    const drawH = f.h * scaleFactor;
+                    const drawX = (previewCanvas.width - drawW) / 2;
+                    const drawY = (previewCanvas.height - drawH) / 2;
 
-                pCtx.imageSmoothingEnabled = false;
-                pCtx.drawImage(sheetImage, f.x, f.y, f.w, f.h, drawX, drawY, drawW, drawH);
+                    pCtx.imageSmoothingEnabled = false;
+                    pCtx.drawImage(sheetImage, f.x, f.y, f.w, f.h, drawX, drawY, drawW, drawH);
+                }
             }
         }
         requestAnimationFrame(animatePreview);
 
-        // Export Directly to Project
+        // ==========================================
+        // Export & Slices JSON Download
+        // ==========================================
+        function downloadSlicesJson() {
+            const charObj = characterData[currentCharacter];
+            const dataToExport = {
+                character: charObj.name || currentCharacter,
+                isLocal: charObj.isLocal,
+                exportDate: new Date().toISOString(),
+                animations: charObj.animations
+            };
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
+            const dlAnchor = document.createElement("a");
+            const charName = (charObj.name || currentCharacter).toLowerCase().replace(/[^a-z0-9_]/g, "_");
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", `${charName}_slices.json`);
+            dlAnchor.click();
+
+            document.getElementById("statusMsg").style.color = "var(--success)";
+            document.getElementById("statusMsg").textContent = `✓ Downloaded "${charName}_slices.json" successfully!`;
+        }
+
         async function exportToGame() {
             const status = document.getElementById("statusMsg");
+            const charObj = characterData[currentCharacter];
+
+            if (!charObj.sheets || charObj.sheets.length === 0) {
+                status.style.color = "#ffaa00";
+                status.textContent = "No spritesheet loaded to export!";
+                return;
+            }
+
+            const activeSheet = charObj.sheets[charObj.activeSheetIndex];
+
+            // If it's a pure in-browser RAM blob
+            if (activeSheet.isLocalBlob) {
+                status.style.color = "#60a5fa";
+                status.textContent = `ℹ️ Dev Playground Mode: "${activeSheet.name}" is loaded purely in browser RAM (no project clutter). To save, click "💾 Download Slices (JSON)". When confirmed for the game, place the file in Assets/Sprites/ to export directly into Unity!`;
+                return;
+            }
+
             status.style.color = "#ff7700";
             status.textContent = "Exporting frames to Unity project...";
 
-            const charObj = characterData[currentCharacter];
-            const activeSheet = charObj.sheets[charObj.activeSheetIndex];
             const payload = {
                 character: currentCharacter,
                 sheetPath: activeSheet.path,
@@ -801,6 +1301,9 @@
             }
         }
 
+        // ==========================================
+        // Clean Server Shutdown
+        // ==========================================
         async function stopServer() {
             if (!confirm("Are you sure you want to stop the Sprite Slicer server?")) return;
             try {
@@ -809,8 +1312,8 @@
             document.body.innerHTML = `
                 <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#12131a; color:#f0f2f5; font-family:sans-serif; text-align:center;">
                     <h1 style="color:#00e676; margin-bottom:12px;">✓ Server Stopped</h1>
-                    <p style="color:#9aa0b4; font-size:1.1rem; max-width:500px; line-height:1.5;">
-                        The Sprite Slicer server has been shut down cleanly.<br>You can now safely close this browser tab.
+                    <p style="color:#9aa0b4; font-size:1.1rem; max-width:520px; line-height:1.5;">
+                        The Sprite Slicer dev playground server has been shut down cleanly.<br>You can now safely close this browser tab.
                     </p>
                 </div>
             `;
