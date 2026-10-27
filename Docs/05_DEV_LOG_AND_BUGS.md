@@ -281,6 +281,108 @@
 
 ---
 
+### Bug 14: Alphabetical Audio Collision & Simultaneous Double Music Playback
+- **Symptom:** When opening the game in the Main Menu, the combat battle music played alongside the title music, or two background tracks played simultaneously.
+- **Root Cause:**
+  1. `Directory.GetFiles()` returns filesystem entries in alphabetical order. Because `Double Dragon 2 - The Revenge (NES) Music - Final Battle 2.mp3` begins with uppercase 'D', while `double_dragon_ii_title.mp3` began with lowercase 'd' (or due to ASCII collation), unconstrained discovery loops `*.mp3` selected the combat battle track as `titleMusicClip`.
+  2. Main menu music was not explicitly stopped before scene transitions (`StartGameMode`), risking overlap if scene unload timings staggered.
+  3. Lack of strict state gating: combat BGM could trigger if state was uninitialized or additively loaded.
+- **Solution:**
+  1. Filter disk searches in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) and [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) specifically for files containing `"title"` (`double_dragon_ii_title.mp3`), guaranteeing that battle tracks are never loaded as menu music.
+  2. Added `musicSource.Stop()` in `MainMenuController.StartGameMode()` and `OnDestroy()` so title music cuts instantly when entering the arena.
+  3. Hardened [`MatchAudioController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs): battle music only plays when `MatchState == RoundInProgress` and `GameManager.GameState != MainMenu`.
+  4. Streamlined battle music to a single unified track (`Double Dragon 2 - Final Battle 2`) across all 3 rounds to eliminate abrupt music cuts in Round 3.
+  5. Implemented live Inspector volume sliders (`[SerializeField] [Range(0f, 1f)]`) updated in real time in `Update()`, with combat BGM set to `0.50`, victory fanfare to `0.85`, and title music to `0.70`.
+
+---
+
+### Bug 15: Audio Cutoff in Fast Combo Chains & Looping Channel Contention
+- **Symptom:** In fighting games, firing rapid 3-hit punch combos abruptly truncated the sound effect of previous punches, causing a jarring "stuttering audio" sensation. Additionally, attempting to channel Ki meditation abruptly stopped landing sounds or whiff audio.
+- **Root Cause:**
+  1. Setting `audioSource.clip = clip; audioSource.Play();` replaces the currently playing audio buffer immediately. Any sound already in progress is brutally silenced.
+  2. Forcing a single `AudioSource` to handle both transient one-shot sounds (punches, jumps, impacts) and sustained looping sounds (Ki meditation aura hum) creates channel contention where one sound always cancels the other.
+- **Solution:**
+  1. Standardized all transient sound playback on `AudioSource.PlayOneShot(clip, volume)`. `PlayOneShot` is non-destructive and allocates virtual audio voices, enabling overlapping punch tails and impact crunches.
+  2. Implemented a dual-channel architecture in [`FighterAudio.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs):
+     - `sfxSource`: Dedicated to one-shots (whiffs, hits, jumps, land, dash, red zone heartbeat).
+     - `auraSource`: Dedicated secondary child GameObject with its own `AudioSource` strictly managing the seamless looping Ki meditation aura hum (`sfx_ki_charge_loop.wav`).
+
+---
+
+### Bug 16: Input-Bound Audio Desync & Fragile Runtime Path Guessing
+- **Symptom:** Pressing the jump key (`W`) while falling or in mid-air played the jump sound repeatedly. Mashing punch keys while in hit-stun or recovery played whoosh sounds even though no attack occurred. Character swapping was fragile, and runtime path guessing (`UnityWebRequest`) could load incorrect sounds behind the scenes.
+- **Root Cause:**
+  1. Triggering audio directly on raw keypresses (`if (inputHandler.JumpPressed) fighterAudio.PlayJump()`) tightly couples audio to user input instead of the physical state of the character.
+  2. Bypassing Inspector serialization with disk-scraping runtime coroutines (`EnsureAudioClipsLoaded`) was opaque and error-prone.
+  3. Lack of character audio profiles: Goku and Saitama shared identical hard-coded sounds rather than unique combat audio sets.
+- **Solution:**
+  1. **State-Driven Audio:** Moved all sound triggers out of `HandleGroundedTransitions()` into `FighterController.TransitionTo(FighterState newState)` and the grounded landing check. Audio only executes when the state machine enters the state.
+  2. **Organized SFX Library:** Extracted over 50 audio clips into `Assets/Audio/SFX_Library/` (`Anime_Powers`, `Arcade_Bells`, `Hits_Punches`, `Swishes_Whiffs`) with full Inspector waveform auditioning.
+  3. **Modular Character Audio Profiles:** Rebuilt `FighterAudio.cs` with explicit serialized `AudioClip` fields and character voiceover slots (`voiceAttackGruntClip`, `voiceHurtClip`, `voiceSkillClip`, `voiceUltimateClip`). Goku and Saitama now have distinct serialized audio profiles on their respective prefabs.
+
+---
+
+### Bug 17: Simultaneous Bell/Music Clutter, Missing K.O. Audio Pause, and Premature Skill Placeholders
+- **Symptom:** At round start, the tournament bell and combat music fired simultaneously, drowning out the opening gong. On round K.O., battle BGM kept running continuously during defeat. Pressing Skill (`E`) or Ultimate (`Q`) played generic punch swooshes before unique VFX/animations were built.
+- **Root Cause:**
+  1. `MatchAudioController.HandleRoundStart()` called `PlayBattleMusic()` immediately without waiting for the bell audio to ring out.
+  2. `HandleRoundEnd()` only dipped volume rather than stopping/pausing the battle track, leaving round transitions anticlimactic.
+  3. `FighterAudio.PlaySkillAttack()` and `PlayUltimateAttack()` fell back to `PlayHeavyWhiff()` when clips were unassigned.
+- **Solution:**
+  1. Boosted `bellVolume` to `1.0` and implemented an asynchronous coroutine delay (`musicStartDelayAfterBell = 0.85f`). The bell strikes into silence, echoes, and then the BGM kicks in from `0:00`.
+  2. Added `musicSource.Stop()` immediately on `HandleRoundEnd()` so the K.O. gong resonates over silence. When the next round starts after position reset, the BGM starts fresh from the beginning.
+  3. Blanked out `skillAttackClip`, `ultimateAttackClip`, `skillHitClip`, and `ultimateHitClip` (`None`) on all character prefabs, and updated `FighterAudio.cs` to cleanly remain silent until custom VFX + SFX are designed.
+
+---
+
+### Bug 18: The 1-Second Pre-Bell BGM Blip & Unwanted Vocal Grunts on Basic Attacks
+- **Symptom:** At match start, battle music played for 1 second, then abruptly stopped, the round bell rang, and music restarted from `0:00`. Additionally, basic punches and attacks triggered unwanted character vocal grunts instead of pure martial arts sound effects.
+- **Root Cause:**
+  1. `MatchAudioController.Start()` contained an eager `PlayBattleMusic()` invocation that fired immediately on frame 1, while `HandleRoundStart()` was running its $0.85\text{s}$ delay coroutine.
+  2. `FighterController.TransitionTo()` and `FighterAudio.PlayLightHit()` were triggering voice grunts on normal jabs and hits.
+- **Solution:**
+  1. Removed `PlayBattleMusic()` from `Start()` in [`MatchAudioController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs). Battle music is now strictly initiated by `HandleRoundStart()` after the bell echoes into silence.
+  2. Removed vocal grunts from basic attacks and hits in [`FighterController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs) and [`FighterAudio.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs), reserving voice acting strictly for signature special dialogue quotes.
+  3. Added `crouchClip` for stance transition sound effects.
+  4. Sourced authentic Dragon Ball Super Saiyan aura (`dbz_super_saiyan_aura.mp3`), clean boots landing impact (`jumpland_clean.wav`), real martial arts light punch impact (`light_punch_real.mp3`), and signature voice lines (`goku_voice_kamehameha.mp3`, `goku_voice_kaioken.mp3`, `saitama_voice_serious_punch.mp3`).
+
+---
+
+### Bug 19: Auditory Fatigue from Ki Aura Hum & Combat Stalling in Anime Voice Lines
+- **Symptom:**
+  1. Holding the meditate key (`G`/`M`) to regenerate Ki produced an overpowering Super Saiyan aura hum (`dbz_super_saiyan_aura.mp3`) that masked punch impacts and fatigued the player's ears.
+  2. Goku's Kamehameha audio clip had an excessive 2.4-second trailing reverb/silence tail after the shout *"HA!"*, lasting over 6.5 seconds and stalling combat flow.
+  3. Saitama had no voice acting when unleashing his signature *Consecutive Normal Punches* (`E`) or *Serious Punch* (`Q`).
+- **Root Cause:**
+  1. Default `kiAuraVolume` was set to `0.75f` (75%), which is too aggressive for a continuous looping layer.
+  2. Raw anime audio rips contain full scene background tails and cinematic pauses meant for television pacing rather than real-time fighting game combat.
+- **Solution:**
+  1. Reduced `kiAuraVolume` from `0.75f` down to `0.45f` (exactly 60% of original loudness) across [`FighterAudio.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs), [`Goku.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Goku.prefab), and [`Saitama.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Saitama.prefab).
+  2. Sliced Goku's Kamehameha at 4.2s (end of *"HA!"*), added a 50ms linear fadeout, and sped up playback to $1.25\times$ ($3.36\text{s}$) to match dynamic beam execution speeds.
+  3. Sourced and processed authentic anime voice lines for Saitama:
+     - `saitama_voice_consecutive_punches.wav` ($2.20\text{s}$ clean *"Renzoku Futsuu no Panchi"* shout).
+     - `saitama_voice_serious_punch.wav` ($3.17\text{s}$ at $1.20\times$ speed, *"Serious Series: Serious Punch"*).
+  4. Wired clips directly to `voiceSkillClip` and `voiceUltimateClip` on `Goku.prefab` and `Saitama.prefab`.
+
+---
+
+### Bug 20: 15-Second Spoken Dialogue Bleed on Light Punches & Input Overrides from Secondary Keys
+- **Symptom:**
+  1. Hitting an opponent with a Light Attack (`F` / `H`) caused random spoken voices to play in the background instead of a pure martial arts knuckle slap.
+  2. Pressing `Space` triggered P1 jumps unexpectedly, and pressing Arrow keys overrode P2 movement and corrupted directional state.
+- **Root Cause:**
+  1. `light_punch_real.mp3` was inadvertently downloaded from an online meme soundboard clip that was 15.65 seconds long and had talking dialogue in the background.
+  2. `PlayerInputHandler.cs` mapped `Space` as an alternate P1 jump key alongside `W`, and mapped Arrow keys (`UpArrow`, `DownArrow`, `LeftArrow`, `RightArrow`) as alternate P2 movement keys alongside `I/J/K/L`, creating severe input cross-talk and overriding player inputs.
+- **Solution:**
+  1. Completely retired and deleted `light_punch_real.mp3`.
+  2. Assigned [`arcade_hit_01.ogg`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Audio/SFX_Library/Hits_Punches/arcade_hit_01.ogg) (a snappy $0.27	ext{s}$ foley punch impact with zero voice interference) to `lightHitClip` on both [`Goku.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Goku.prefab) and [`Saitama.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Saitama.prefab).
+  3. Cleaned up legacy unused audio files in `Assets/Audio/SFX/`.
+  4. Updated [`PlayerInputHandler.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Input/PlayerInputHandler.cs):
+     - Removed `Space` key: P1 Jump is strictly **`W`**.
+     - Removed all 4 Arrow Keys: P2 Movement is strictly **`I/J/K/L`** (`I` = Jump, `K` = Crouch, `J` = Left, `L` = Right).
+
+---
+
 ### Postmortem: The "Double Delta" Physics Velocity Pitfall
 - **Incident:** A developer attempts to make movement frame-rate independent by writing `rb.linearVelocity = new Vector2(speed * Time.deltaTime, 0)`, but the character crawls at an imperceptible snail's pace.
 - **Root Cause:** In physics simulation, velocity is already expressed in **units per second**. Unity's 2D physics engine (`Box2D`) automatically integrates velocity over time by multiplying it by `Time.fixedDeltaTime` ($0.02\text{s}$) in its internal solver loop. Multiplying by `Time.deltaTime` in user code applies delta time twice ($5 \times 0.02 \times 0.02 = 0.002\text{ m/tick}$), effectively nullifying movement.

@@ -25,7 +25,7 @@ namespace MysticCombat.Editor
     public static class SceneSetupTool
     {
         private const int GROUND_LAYER = 6;
-        private const string BAKE_VERSION_KEY = "MysticCombat_GrandHUD_Bake_v17";
+        private const string BAKE_VERSION_KEY = "MysticCombat_GrandHUD_Bake_v22";
 
         static SceneSetupTool()
         {
@@ -222,6 +222,11 @@ namespace MysticCombat.Editor
                 camObj.tag = "MainCamera";
             }
 
+            if (cam.GetComponent<AudioListener>() == null)
+            {
+                cam.gameObject.AddComponent<AudioListener>();
+            }
+
             cam.orthographic = true;
             cam.orthographicSize = 3.2f;
             cam.transform.position = new Vector3(0f, -1.2f, -10f);
@@ -351,6 +356,12 @@ namespace MysticCombat.Editor
             hitbox.Setup(fighter.transform, 10, 5f, 6f);
             fc.SetHitbox(hitbox);
 
+            // Fighter Audio Component (State-driven authentic audio: whiffs, visceral hits, ki meditation hum)
+            FighterAudio fa = SetupFighterAudio(fighter, "Goku");
+            SerializedObject fcSo = new SerializedObject(fc);
+            fcSo.FindProperty("fighterAudio").objectReferenceValue = fa;
+            fcSo.ApplyModifiedProperties();
+
             // Connect as live Prefab
             string prefabDir = "Assets/Prefabs/Fighters";
             if (!Directory.Exists(prefabDir)) Directory.CreateDirectory(prefabDir);
@@ -421,6 +432,12 @@ namespace MysticCombat.Editor
             hitbox.Setup(fighter.transform, 10, 5f, 6f);
             fc.SetHitbox(hitbox);
 
+            // Fighter Audio Component (State-driven authentic audio: whiffs, visceral hits, ki meditation hum)
+            FighterAudio fa = SetupFighterAudio(fighter, "Saitama");
+            SerializedObject fcSo = new SerializedObject(fc);
+            fcSo.FindProperty("fighterAudio").objectReferenceValue = fa;
+            fcSo.ApplyModifiedProperties();
+
             // Connect as live Prefab
             string prefabDir = "Assets/Prefabs/Fighters";
             if (!Directory.Exists(prefabDir)) Directory.CreateDirectory(prefabDir);
@@ -448,7 +465,96 @@ namespace MysticCombat.Editor
                 );
             }
 
+            // Setup MatchAudioController (Unified Battle Theme across all 3 rounds & 3s Victory Fanfare)
+            MatchAudioController mac = mm.GetComponent<MatchAudioController>();
+            if (mac == null)
+            {
+                mac = mm.gameObject.AddComponent<MatchAudioController>();
+            }
+
+            AudioClip battleBgm = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Music/Double Dragon 2 - The Revenge (NES) Music - Final Battle 2.mp3");
+            AudioClip winJingle = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Music/Double Dragon 3 - The Sacred Stone (NES) Music - Mission Clear.mp3");
+            AudioClip roundStartBell = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX/sfx_round_start_bell.ogg");
+            if (roundStartBell == null) roundStartBell = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX/sfx_round_start_bell.wav");
+            AudioClip koBell = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX/sfx_ko_bell.ogg");
+            if (koBell == null) koBell = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX/sfx_ko_bell.wav");
+
+            SerializedObject macSo = new SerializedObject(mac);
+            macSo.FindProperty("matchManager").objectReferenceValue = mm;
+            macSo.FindProperty("battleMusic").objectReferenceValue = battleBgm;
+            macSo.FindProperty("victoryJingle").objectReferenceValue = winJingle;
+            macSo.FindProperty("roundStartBellClip").objectReferenceValue = roundStartBell;
+            macSo.FindProperty("koBellClip").objectReferenceValue = koBell;
+            macSo.FindProperty("battleMusicVolume").floatValue = 0.50f;
+            macSo.FindProperty("victoryJingleVolume").floatValue = 0.85f;
+            macSo.FindProperty("bellVolume").floatValue = 1.0f;
+            macSo.FindProperty("musicStartDelayAfterBell").floatValue = 0.85f;
+            macSo.ApplyModifiedProperties();
+
             return mm;
+        }
+
+        private static FighterAudio SetupFighterAudio(GameObject fighter, string characterName)
+        {
+            FighterAudio fa = fighter.GetComponent<FighterAudio>();
+            if (fa == null)
+            {
+                fa = fighter.AddComponent<FighterAudio>();
+            }
+
+            SerializedObject so = new SerializedObject(fa);
+
+            // Common / Shared Agility Clips
+            AudioClip jumpClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Swishes_Whiffs/swish_01.wav");
+            AudioClip landClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/jumpland_clean.wav");
+            AudioClip crouchClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Swishes_Whiffs/swish_05.wav");
+            AudioClip dashClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/teleport_dash.wav");
+            AudioClip kiAuraClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/dbz_super_saiyan_aura.mp3");
+            AudioClip redZoneClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/punch_foley_punch_1.wav");
+
+            so.FindProperty("jumpClip").objectReferenceValue = jumpClip;
+            so.FindProperty("landClip").objectReferenceValue = landClip;
+            so.FindProperty("crouchClip").objectReferenceValue = crouchClip;
+            so.FindProperty("dashClip").objectReferenceValue = dashClip;
+            so.FindProperty("kiChargeLoopClip").objectReferenceValue = kiAuraClip;
+            so.FindProperty("redZoneWarningClip").objectReferenceValue = redZoneClip;
+
+            if (characterName == "Goku")
+            {
+                // Goku Audio Profile: Martial arts swishes, real martial arts light punch, and heavy smash
+                so.FindProperty("lightWhiffClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Swishes_Whiffs/swish_13.wav");
+                so.FindProperty("heavyWhiffClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Swishes_Whiffs/swish_09.wav");
+                so.FindProperty("skillAttackClip").objectReferenceValue = null;
+                so.FindProperty("ultimateAttackClip").objectReferenceValue = null;
+                so.FindProperty("lightHitClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/arcade_hit_01.ogg");
+                so.FindProperty("heavyHitClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/arcade_hit_04.ogg");
+                so.FindProperty("skillHitClip").objectReferenceValue = null;
+                so.FindProperty("ultimateHitClip").objectReferenceValue = null;
+                so.FindProperty("voiceSkillClip").objectReferenceValue = null;
+                so.FindProperty("voiceUltimateClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/goku_voice_kamehameha.wav");
+            }
+            else // Saitama
+            {
+                // Saitama Audio Profile: Fast flurry swishes, crisp punch smack, and normal punch smash
+                so.FindProperty("lightWhiffClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Swishes_Whiffs/swish_11.wav");
+                so.FindProperty("heavyWhiffClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Swishes_Whiffs/swish_06.wav");
+                so.FindProperty("skillAttackClip").objectReferenceValue = null;
+                so.FindProperty("ultimateAttackClip").objectReferenceValue = null;
+                so.FindProperty("lightHitClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/arcade_hit_01.ogg");
+                so.FindProperty("heavyHitClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/saitama_normal_punch.mp3");
+                so.FindProperty("skillHitClip").objectReferenceValue = null;
+                so.FindProperty("ultimateHitClip").objectReferenceValue = null;
+                so.FindProperty("voiceSkillClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/saitama_voice_consecutive_punches.wav");
+                so.FindProperty("voiceUltimateClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/saitama_voice_serious_punch.wav");
+            }
+
+            so.FindProperty("sfxVolume").floatValue = 1.0f;
+            so.FindProperty("whiffVolume").floatValue = 0.65f;
+            so.FindProperty("impactVolume").floatValue = 1.0f;
+            so.FindProperty("voiceVolume").floatValue = 0.9f;
+            so.FindProperty("kiAuraVolume").floatValue = 0.45f;
+            so.ApplyModifiedProperties();
+            return fa;
         }
 
         private static GameObject SetupHUD(GameObject goku, GameObject saitama, MatchManager mm)

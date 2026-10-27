@@ -359,6 +359,118 @@ The start page delivers an authentic 90s retro arcade brawler experience directl
    - **Title Screen BGM Player:** Built-in looping audio architecture in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) (`musicSource` + `titleMusicClip`) with automated discovery in `Assets/Audio/Music/`.
    - Fullscreen cosmic multiverse backdrop ([`menu_bg_multiverse.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/UI/MainMenu/menu_bg_multiverse.png)) showcasing deep space stars, nebulae, and dimensional rift colors.
 
+---
+
+## 15. Dynamic Combat Audio Architecture & Real-Time Inspector Volume Mixing (`MatchAudioController.cs`)
+
+### The Problem
+In fighting games, abrupt mid-match music changes between rounds can feel disjointed and break combat immersion. Furthermore, if combat background music is mixed at full volume (1.0), it drowns out critical tactical gameplay audio cues: punch and kick impacts, hurt grunts, whiff sounds, Ki meditation charging, and character voice clips. Additionally, developers and tournament organizers need the ability to balance audio levels in real time without restarting the scene or recompiling code.
+
+### How It Is Implemented
+- Located in: [`MatchAudioController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs) attached to the `MatchManager` GameObject in [`SampleScene.unity`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scenes/SampleScene.unity).
+- **Event-Driven Observer Pattern:** Subscribes to `MatchManager.OnRoundStart`, `MatchManager.OnRoundEnd`, and `MatchManager.OnMatchOver`.
+
+### Audio Flow & Tournament Flow
+1. **Continuous Tournament Combat Theme (All 3 Rounds):**
+   - Plays **`Double Dragon 2 - Final Battle 2.mp3`** on loop across Rounds 1, 2, and 3.
+   - High-energy, driving 8-bit drumline provides seamless combat momentum across the entire match without abrupt track changes, maintaining franchise consistency with the main menu title screen.
+2. **Subtle KO Round-End Volume Dip:**
+   - On `OnRoundEnd`, an asynchronous coroutine (`FadeVolume`) smoothly dips the battle music volume to $50\%$ over $0.4\text{s}$ during the dramatic K.O. pause, emphasizing the defeat impact before returning to full battle volume when the next round commences.
+3. **Match Over (3-Second Victory Fanfare):**
+   - When the final round K.O. lands and `OnMatchOver` fires:
+     - The combat music is immediately halted (`musicSource.Stop()`).
+     - Plays **`Double Dragon 3 - Mission Clear.mp3`** (~3 seconds) via a dedicated secondary `AudioSource` at full celebratory presence (`0.85`) as the official victory fanfare while the winning fighter celebrates!
+
+### Round Sequencing & Bell Pacing Architecture
+- **Round Start:**
+  1. The round start bell rings at full volume (`bellVolume = 1.0f`).
+  2. The battle music does NOT play immediately; it waits for a dramatic $0.85\text{s}$ pause while the gong resonates across the arena.
+  3. The combat BGM kicks in with full energy from the very start (`time = 0.0s`).
+- **Round Defeat (K.O.):**
+  1. The final blow triggers `HandleRoundEnd()`.
+  2. The battle BGM is **immediately halted** (`musicSource.Stop()`).
+  3. The K.O. bell rings out alone over the arena silence, providing maximum dramatic weight to the knockout.
+- **Between Rounds:**
+  1. Fighters reset to their spawn positions.
+  2. The next round start bell rings.
+  3. After the $0.85\text{s}$ delay, the battle BGM restarts fresh from `0:00`.
+- **Menu & Combat Isolation:** Battle music is strictly barred from ever playing in the Main Menu (`GameManager.Instance.CurrentState != GameState.MainMenu`).
+- **Round-Start Gating:** Battle music only begins when round combat actually starts (`matchManager.CurrentMatchState == MatchState.RoundInProgress`).
+- **Scene Exit Handshake:** In [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs), the title music (`double_dragon_ii_title.mp3`) is explicitly stopped upon selecting a game mode (`StartGameMode`) and during `OnDestroy()`, ensuring zero track bleed or simultaneous playback.
+
+### Live Inspector Volume Sliders (Godot `@export_range` vs Unity `[Range]`)
+Both [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) and [`MatchAudioController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs) expose real-time Inspector sliders:
+- **Title Music:** `[SerializeField] [Range(0f, 1f)] private float musicVolume = 0.70f;`
+- **Combat BGM:** `[SerializeField] [Range(0f, 1f)] private float battleMusicVolume = 0.50f;`
+- **Victory Fanfare:** `[SerializeField] [Range(0f, 1f)] private float victoryJingleVolume = 0.85f;`
+
+By synchronizing `musicSource.volume` in `Update()`, developers, sound engineers, and evaluators can drag the volume sliders in the Unity Inspector live during Play mode and hear instant volume changes without restarting the match!
+
+---
+
+## 16. State-Driven Fighter Audio System & SFX Library (`FighterAudio.cs`)
+
+### The Problem
+Fighting games feel lifeless and floaty without immediate acoustic feedback. However, binding audio directly to raw button presses (`Input.GetKeyDown`) creates severe bugs: airborne mashing spams jump sounds, and players in hit-stun fire phantom punch whooshes. Furthermore, hardcoding audio to "P1" or "Goku" prevents character swapping and breaks CPU AI / replay systems.
+
+### The Solution: State-Driven, Fighter-General Audio Architecture
+1. **Decoupled from Player Slots & Input:**
+   - Audio is triggered **only when the character's state machine enters a state** (`TransitionTo(newState)`).
+   - Works identically whether the fighter is driven by P1 keyboard, P2 controller, CPU AI, or network replay.
+2. **Character-Specific Audio Profiles:**
+   - [`FighterAudio.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs) is a modular component attached to each fighter prefab (`Goku.prefab`, `Saitama.prefab`).
+   - Every fighter has individual, serialized `AudioClip` slots visible in the Inspector:
+     - **Agility & Movement:** `crouchClip` (`swish_05.wav`), `jumpClip` (`sfx_jump.wav`), `landClip` (`jumpland_clean.wav`), `dashClip` (`sfx_dash.wav`)
+     - **Attack Whiffs:** `lightWhiffClip` (`swish_01.wav`), `heavyWhiffClip` (`swish_04.wav`)
+     - **Hit Impacts:** `lightHitClip` (`arcade_hit_01.ogg`), `heavyHitClip` (`arcade_hit_04.ogg` / `saitama_normal_punch.mp3`)
+     - **Special Attacks & Hits (Blanked until Custom VFX):** `skillAttackClip`, `ultimateAttackClip`, `skillHitClip`, `ultimateHitClip` (`None`)
+     - **Energy & Exhaustion:** `kiChargeLoopClip` (`dbz_super_saiyan_aura.mp3` at 60% volume / `0.45`), `redZoneWarningClip` (`sfx_redzone_warning.wav`)
+     - **Signature Voice Lines & Dialogue (Dialogue Specials Only):**
+       - **Goku Ultimate Finisher (`voiceUltimateClip`):** `goku_voice_kamehameha.wav` ($3.36\text{s}$ at $1.25\times$ speed, trimmed dead-air tail).
+       - **Saitama Special Skill (`voiceSkillClip`):** `saitama_voice_consecutive_punches.wav` ($2.20\text{s}$, *"Renzoku Futsuu no Panchi"*).
+       - **Saitama Ultimate Finisher (`voiceUltimateClip`):** `saitama_voice_serious_punch.wav` ($3.17\text{s}$ at $1.20\times$ speed, *"Serious Series: Serious Punch"*).
+       - Basic attacks and reactions strictly use pure martial arts sound effects with zero voice clutter.
+3. **Character Customization (Goku vs Saitama):**
+   - **Goku:** Authentic DBZ Super Saiyan Ki charging aura loop (`dbz_super_saiyan_aura.mp3`), crisp crisp arcade martial arts punch impacts (`arcade_hit_01.ogg`), clean boots landing impact (`jumpland_clean.wav`), and heavy arcade impact (`arcade_hit_04.ogg`).
+   - **Saitama:** Real Saitama punch hit impact (`saitama_normal_punch.mp3`), clean boots landing impact (`jumpland_clean.wav`), stance crouch sound (`swish_05.wav`), and Ki aura loop (`dbz_super_saiyan_aura.mp3`).
+
+### Multi-Tier Hit Impact Scaling (`HitboxController.cs`)
+Inside [`HitboxController.cs.ResolveHit()`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/HitboxController.cs#L240-L270), the impact audio dynamically scales with damage:
+- **$\text{Damage} \ge 40$ (Ultimate):** Plays `ultimateHitClip` (or falls back if unassigned).
+- **$20 \le \text{Damage} < 40$ (Skill):** Plays `skillHitClip` (or falls back if unassigned).
+- **$15 \le \text{Damage} < 20$ (Heavy Attack):** Plays `heavyHitClip` (e.g., `saitama_normal_punch.mp3` or `arcade_hit_04.ogg`).
+- **$\text{Damage} < 15$ (Light Attack):** Plays `lightHitClip` (`arcade_hit_01.ogg`).
+
+### Curated SFX Library (`Assets/Audio/SFX_Library/`)
+Over 50 audio clips are organized into four dedicated folders for in-Editor auditioning:
+1. `Assets/Audio/SFX_Library/Hits_Punches/`: 18 distinct arcade hits (`impact_hit_01.ogg` through `18.ogg`) + real martial arts light punch (`light_punch_real.mp3`) + Saitama normal punch impact (`saitama_normal_punch.mp3`).
+2. `Assets/Audio/SFX_Library/Swishes_Whiffs/`: 13 martial arts air displacements (`swish_01.wav` through `13.wav`).
+3. `Assets/Audio/SFX_Library/Anime_Powers/`: Authentic DBZ Super Saiyan aura loop (`dbz_super_saiyan_aura.mp3`), clean boots landing (`jumpland_clean.wav`), DBZ teleport dash (`dbz_teleport_dash.mp3`), and iconic anime dialogue quotes (`goku_voice_kamehameha.mp3`, `goku_voice_kaioken.mp3`, `saitama_voice_serious_punch.mp3`).
+4. `Assets/Audio/SFX_Library/Arcade_Bells/`: Tournament match start gongs and KO bells (`gong_01.ogg`, `gong_02.ogg`, `bell_01.ogg`–`03.ogg`).
+
+Any clip can be auditioned via the Inspector's built-in waveform player and drag-and-dropped into any fighter prefab without touching code.
+
+---
+
+## 17. Round Sequencing & Bell Pacing Architecture (`MatchAudioController.cs`)
+
+### The Problem
+In standard video game implementations, music and sound effects often start simultaneously. If the battle soundtrack and the round opening bell play at frame 0, the bell is masked and drowned out by guitars and drums. Furthermore, if music plays during round defeat, the emotional weight of a K.O. is completely lost.
+
+### The Solution: Paced Round Audio Flow
+1. **Round 1 Start:**
+   - The round bell strikes at maximum volume (`bellVolume = 1.0`) into complete silence.
+   - An asynchronous delay coroutine waits $0.85\text{s}$ for the bell's metallic resonance to echo.
+   - The battle music track (`musicSource`) then starts playing fresh from `0:00`.
+   - **Bug Fix:** Removed premature `PlayBattleMusic()` in `Start()` that previously generated a 1-second pre-bell music blip.
+2. **Round Defeat (K.O.):**
+   - On `OnRoundEnd`, `musicSource.Stop()` immediately terminates combat music.
+   - The heavy tournament K.O. gong reverberates alone over total silence.
+3. **Round Reset & Round 2 Start:**
+   - Fighters reset to their neutral starting positions.
+   - The round bell rings into silence.
+   - After the $0.85\text{s}$ delay, battle music restarts cleanly from the very beginning (`0:00`).
+
 
 
 

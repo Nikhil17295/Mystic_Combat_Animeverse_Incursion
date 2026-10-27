@@ -71,7 +71,8 @@ namespace MysticCombat.UI
         [Header("Music / BGM")]
         [SerializeField] private AudioSource musicSource;
         [SerializeField] private AudioClip titleMusicClip;
-        [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.75f;
+        [Tooltip("Title screen background music volume. Adjustable live in Inspector during Play mode.")]
+        [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.70f;
 
         [Header("Options & Controls Modal")]
         [SerializeField] private GameObject optionsPanel;
@@ -209,6 +210,20 @@ namespace MysticCombat.UI
             AnimateActiveSelection();
             AnimatePushStartPrompt();
             HandleNavigationInput();
+
+            // Enable live real-time slider adjustments in the Inspector during play
+            if (musicSource != null && musicSource.isPlaying)
+            {
+                musicSource.volume = musicVolume;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (musicSource != null)
+            {
+                musicSource.Stop();
+            }
         }
 
         #endregion
@@ -409,6 +424,12 @@ namespace MysticCombat.UI
         private void StartGameMode(GameManager.GameMode mode)
         {
             Debug.Log($"<color=#00e676>[MainMenuController]</color> Launching Mode: {mode}");
+
+            // Immediately cut title music so it never bleeds or overlaps with battle music
+            if (musicSource != null)
+            {
+                musicSource.Stop();
+            }
 
             if (GameManager.Instance != null)
             {
@@ -737,25 +758,17 @@ namespace MysticCombat.UI
             string targetPath = null;
             AudioType audioType = AudioType.MPEG;
 
+            // Strictly filter for title theme track so battle music is never accidentally picked
             foreach (var file in files)
             {
+                string fileName = System.IO.Path.GetFileName(file).ToLower();
                 string ext = System.IO.Path.GetExtension(file).ToLower();
-                if (ext == ".mp3")
+                if (fileName.Contains("title") && (ext == ".mp3" || ext == ".wav" || ext == ".ogg"))
                 {
                     targetPath = file;
-                    audioType = AudioType.MPEG;
-                    break;
-                }
-                else if (ext == ".wav")
-                {
-                    targetPath = file;
-                    audioType = AudioType.WAV;
-                    break;
-                }
-                else if (ext == ".ogg")
-                {
-                    targetPath = file;
-                    audioType = AudioType.OGGVORBIS;
+                    if (ext == ".mp3") audioType = AudioType.MPEG;
+                    else if (ext == ".wav") audioType = AudioType.WAV;
+                    else if (ext == ".ogg") audioType = AudioType.OGGVORBIS;
                     break;
                 }
             }

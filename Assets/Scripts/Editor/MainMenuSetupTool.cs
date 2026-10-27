@@ -25,7 +25,7 @@ namespace MysticCombat.Editor
     {
         private const string MAIN_MENU_SCENE_PATH = "Assets/Scenes/MainMenuScene.unity";
         private const string COMBAT_SCENE_PATH = "Assets/Scenes/SampleScene.unity";
-        private const string MAIN_MENU_BAKE_KEY = "MysticCombat_MainMenu_Bake_v7";
+        private const string MAIN_MENU_BAKE_KEY = "MysticCombat_MainMenu_Bake_v8";
 
         static MainMenuSetupTool()
         {
@@ -305,23 +305,23 @@ namespace MysticCombat.Editor
             so.FindProperty("mysticMandala").objectReferenceValue = null;
             so.FindProperty("pushStartPrompt").objectReferenceValue = pushStartTmp;
 
-            // Auto-detect Title Screen BGM in Assets/Audio/Music
-            AudioClip titleMusic = null;
-            string musicDir = "Assets/Audio/Music";
-            if (Directory.Exists(musicDir))
+            // Explicitly link authentic Double Dragon II Title Screen BGM
+            AudioClip titleMusic = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Music/double_dragon_ii_title.mp3");
+            if (titleMusic == null)
             {
-                string[] musicFiles = Directory.GetFiles(musicDir, "*.*", SearchOption.TopDirectoryOnly);
-                foreach (string mf in musicFiles)
+                string musicDir = "Assets/Audio/Music";
+                if (Directory.Exists(musicDir))
                 {
-                    string ext = Path.GetExtension(mf).ToLower();
-                    if (ext == ".mp3" || ext == ".wav" || ext == ".ogg")
+                    string[] musicFiles = Directory.GetFiles(musicDir, "*.*", SearchOption.TopDirectoryOnly);
+                    foreach (string mf in musicFiles)
                     {
-                        string normPath = mf.Replace("\\", "/");
-                        titleMusic = AssetDatabase.LoadAssetAtPath<AudioClip>(normPath);
-                        if (titleMusic != null)
+                        string fileName = Path.GetFileName(mf).ToLower();
+                        string ext = Path.GetExtension(mf).ToLower();
+                        if (fileName.Contains("title") && (ext == ".mp3" || ext == ".wav" || ext == ".ogg"))
                         {
-                            Debug.Log($"<color=#00e676>[MainMenuSetupTool]</color> Linked title music track: {normPath}");
-                            break;
+                            string normPath = mf.Replace("\\", "/");
+                            titleMusic = AssetDatabase.LoadAssetAtPath<AudioClip>(normPath);
+                            if (titleMusic != null) break;
                         }
                     }
                 }
@@ -329,7 +329,9 @@ namespace MysticCombat.Editor
             if (titleMusic != null)
             {
                 so.FindProperty("titleMusicClip").objectReferenceValue = titleMusic;
+                Debug.Log($"<color=#00e676>[MainMenuSetupTool]</color> Linked title music track: {titleMusic.name}");
             }
+            so.FindProperty("musicVolume").floatValue = 0.70f;
 
             SerializedProperty itemsProp = so.FindProperty("menuItems");
             itemsProp.ClearArray();

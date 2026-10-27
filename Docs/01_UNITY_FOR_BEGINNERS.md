@@ -479,6 +479,115 @@ Depending on the context, Unity provides 3 distinct display channels:
    ```
 > **Godot Comparison:** In Godot, you add a `CanvasLayer` node with a `Label` child, and update it in GDScript via `$Label.text = "HP: " + str(current)`.
 
+---
+
+## 20. How Audio Works in Unity (Ears vs Speakers vs Sound Tapes)
+
+Sound in Unity revolves around three essential building blocks:
+
+```
+┌─────────────────┐        ┌──────────────────┐        ┌───────────────────┐
+│    AudioClip    │ -----> │   AudioSource    │ -----> │   AudioListener   │
+│ (The Audio Tape)│        │  (The Loudspeaker)│       │(The Player's Ears)│
+└─────────────────┘        └──────────────────┘        └───────────────────┘
+```
+
+1. **`AudioClip` (The Sound File):**
+   - The actual audio file imported on disk (`.wav`, `.mp3`, `.ogg`).
+   - *Analogy:* A cassette tape or record sitting on a shelf. By itself, it produces zero noise until put into a player.
+
+2. **`AudioSource` (The Loudspeaker):**
+   - A component attached to any GameObject in the scene that plays audio into the world.
+   - You can have dozens of `AudioSource` components simultaneously (e.g. one on Goku, one on Saitama, one on the Camera for BGM).
+
+3. **`AudioListener` (The Player's Ears):**
+   - The virtual microphone that receives sounds from all active `AudioSource` components and pipes them to your physical PC speakers or headphones.
+   - **Golden Rule:** There must be **exactly ONE** `AudioListener` active in the scene (almost always attached to the `Main Camera`). If missing, your game will be 100% silent!
+
+### Two Different Ways to Play Sounds in Code:
+
+```csharp
+// 1. One-Shot Playback (For quick, overlapping Sound Effects: punches, jumps, impacts)
+// Multiple punches fired in rapid succession will NOT cut each other off!
+audioSource.PlayOneShot(punchHitClip, 1.0f);
+
+// 2. State Playback (For continuous Background Music or looping Ki Meditation Aura)
+audioSource.clip = battleMusicClip;
+audioSource.loop = true;
+audioSource.Play();
+```
+
+> **Godot Comparison:**
+> - In Godot, an `AudioStreamPlayer` or `AudioStreamPlayer2D` node plays an `AudioStream` resource.
+> - In Godot, there is no explicit `AudioListener` component needed for 2D—the engine automatically routes 2D audio listeners to the active viewport camera. In Unity, the `AudioListener` component must explicitly exist on the camera.
+
+---
+
+## 21. State-Driven Audio vs Input-Bound Audio (Fighting Game Audio Decoupling)
+
+A common rookie pitfall in fighting game development is triggering sound effects whenever the player presses an input key:
+
+```csharp
+// ❌ ROOKIE MISTAKE: Triggering audio on raw button press
+if (Input.GetKeyDown(KeyCode.W))
+{
+    audioSource.PlayOneShot(jumpSound);
+}
+```
+
+### Why Raw Key-Press Audio is Buggy:
+1. **Airborne Key Mashing:** If the player mashes `W` while falling or in mid-air, the jump sound replays continuously even though the fighter cannot jump again.
+2. **Hit-Stun / Frozen Desync:** If the player is frozen, knocked down, or reeling in hit-stun, pressing attack keys will fire punch whooshes even though no punch can physically occur.
+3. **Breaks AI & Network Replays:** If the character is controlled by a CPU AI bot, a second player (P2), or a network netcode replay, they do not trigger keyboard inputs, leaving the character completely silent!
+
+### The Solution: State-Driven Audio Architecture
+Audio should be triggered **exclusively by state changes** inside the character's State Machine:
+
+```csharp
+// ✅ PROPER FIGHTING GAME PATTERN: State-Driven Audio
+private void TransitionTo(FighterState newState)
+{
+    if (CurrentState == newState) return;
+    FighterState oldState = CurrentState;
+    CurrentState = newState;
+
+    switch (newState)
+    {
+        case FighterState.Jumping:
+            fighterAudio?.PlayJump(); // Only plays when jump physically executes!
+            break;
+        case FighterState.LightAttack:
+            fighterAudio?.PlayLightWhiff();
+            break;
+        case FighterState.Meditating:
+            fighterAudio?.StartKiMeditationAura(); // Starts continuous loop
+            break;
+    }
+
+    // Landing sound: Triggered when airborne state transitions back to ground
+    if ((oldState == FighterState.Falling || oldState == FighterState.Jumping) &&
+        (newState == FighterState.Idle || newState == FighterState.Walking))
+    {
+        fighterAudio?.PlayLand();
+    }
+}
+```
+
+> **Godot Comparison:**
+> In Godot, you attach an `AnimationPlayer` or `StateMachine` node. When the state changes to `"Jump"` or an animation event is fired, the node emits a signal that triggers `$AudioStreamPlayer2D.play()`. Input in `_unhandled_input()` only requests state transitions, never audio directly.
+
+---
+
+## 22. Auditioning & Swapping Sounds in the Unity Inspector
+
+Unity includes a built-in waveform player for every imported audio clip:
+1. In the **Project Window**, navigate to `Assets/Audio/SFX_Library/`.
+2. Select any `.wav` or `.ogg` file.
+3. Look at the bottom-right corner of the **Inspector Window**—a waveform viewer with a **Play button** ($\blacktriangleright$) will appear.
+4. Click **Play** to listen to the audio directly in the Editor without running the game!
+5. To change a fighter's sound, select their prefab in `Assets/Prefabs/Fighters/` (or in the scene Hierarchy) and simply drag-and-drop the chosen audio clip into the corresponding slot on the `FighterAudio` component.
+
+
 
 
 

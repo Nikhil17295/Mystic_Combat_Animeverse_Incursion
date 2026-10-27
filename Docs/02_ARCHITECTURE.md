@@ -73,6 +73,7 @@ Instead of a giant 2,000-line `Player.cs`, responsibilities are strictly separat
 | **`EnergySystem`** | Stores Ki (0–100), handles meditation, manages 5-second Red Zone timer. | Does not draw UI or move the player. |
 | **`HUDController`** | Updates UI bars and text. | Does not store or modify game variables. |
 | **`MainMenuController`** | Manages start screen navigation, mode selection, audio feedback, and options. | Does not execute in-match fight logic. |
+| **`MatchAudioController`** | Manages in-match battle BGM escalation (Rounds 1/2 vs Match Point) and victory fanfare triggers via `MatchManager` events. | Does not handle damage calculation or character state transitions. |
 | **`GameManager`** | Persists across scenes, stores chosen `GameMode` (Vs CPU / Local PvP) and selected character IDs. | Does not handle per-frame combat ticks. |
 
 ### Decision 3: Event-Driven Communication (Observer Pattern)
@@ -220,5 +221,68 @@ To prevent state bleed-through between rounds, each round starts completely fres
 3. **State Machine Reset:** Current fighter state transitions to `FighterState.Idle`, attack cooldown timers reset to $0$, and active hitboxes are deactivated with cleared target lists.
 4. **Vitals & UI Synchronization:** Health resets to $100$ and Ki resets; `HUDController.ResetHealthBarsInstantly()` clears trailing damage ghost bars immediately.
 5. **Round 3 Decider:** If the score reaches 1–1, Round 3 automatically initiates as the Final Round Match Point.
+
+---
+
+## 14. Audio Architecture & Combat SFX Pipeline
+
+Mystic Combat implements a decoupled, state-driven audio pipeline separating tournament match music from per-character combat audio profiles:
+
+```mermaid
+graph TD
+    subgraph Match Flow ["Match Flow Audio (MatchAudioController)"]
+        MatchManager["MatchManager.cs"]
+        RoundStart["OnRoundStart"]
+        RoundEnd["OnRoundEnd"]
+        MatchOver["OnMatchOver"]
+        
+        StartBell["1. Loud Round Bell (Vol=1.0)"]
+        Delay["2. 0.85s Dramatic Pause"]
+        BGM["3. Battle BGM (from 0:00)"]
+        KOBell["1. KO Bell + Stop BGM"]
+        Fanfare["Victory Fanfare (Double Dragon 3)"]
+        
+        MatchManager --> RoundStart --> StartBell --> Delay --> BGM
+        MatchManager --> RoundEnd --> KOBell
+        MatchManager --> MatchOver --> Fanfare
+    end
+
+    subgraph Fighter Combat Audio ["Fighter Audio Pipeline (FighterAudio.cs)"]
+        FC["FighterController.cs<br/>(Fighter State Machine)"]
+        Hitbox["HitboxController.cs<br/>(Damage Connection)"]
+        
+        FA["FighterAudio.cs<br/>(OneShot + Looping Aura Sources)"]
+        
+        FC -->|TransitionTo(Jumping)| FA
+        FC -->|TransitionTo(LightAttack/HeavyAttack)| FA
+        FC -->|TransitionTo(Skill/Ultimate)| FA
+        FC -->|TransitionTo(Meditating)| FA
+        FC -->|Transition (Falling -> Grounded)| FA
+        Hitbox -->|ResolveHit (Light/Heavy/Skill/Ult Damage)| FA
+    end
+```
+
+### Key Architectural Pillars:
+1. **State-Driven Audio (Input-Decoupled):**
+   - Audio is NEVER triggered from raw button presses (`Input.GetKeyDown`).
+   - Sounds execute exclusively on state entry in `FighterController.TransitionTo(newState)`.
+   - Landing sounds execute when ground check confirms transition from airborne to grounded.
+   - This ensures full compatibility across **P1, P2, CPU AI, Network Netcode, and Replay systems** without code duplication.
+2. **Fighter-General Audio Profiles (Multi-Character Extensibility):**
+   - [`FighterAudio.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs) is a modular, character-agnostic component attached to any fighter entity.
+   - Every character prefab (`Goku.prefab`, `Saitama.prefab`, or future fighters like `Naruto` or `Vegeta`) exposes individual serialized `AudioClip` slots in the Inspector:
+     - Common agility: `jumpClip`, `landClip`, `dashClip`
+     - Attack whiffs: `lightWhiffClip`, `heavyWhiffClip`
+     - Special skills: `skillAttackClip`, `ultimateAttackClip`
+     - Hit reactions: `lightHitClip`, `heavyHitClip`, `skillHitClip`, `ultimateHitClip`
+     - Aura & exhaustion: `kiChargeLoopClip`, `redZoneWarningClip`
+     - Character voiceovers: `voiceSkillClip`, `voiceUltimateClip`
+3. **Decoupled Sound Channels:**
+   - **One-Shot Polyphonic Channel (`AudioSource.PlayOneShot`):** Plays whiffs, crunchy hit impacts, jumps, and signature dialogue lines with zero latency and zero cutoff during rapid combos.
+   - **Looping Channel (`AudioSource.Play` with `loop = true`):** A dedicated child `AudioSource` playing `kiChargeLoopClip` continuously during meditation, tuned to 60% volume (`0.45f`) to prevent acoustic fatigue, automatically halted on state exit.
+4. **Dialogue Synchronization for Fast-Paced Combat:**
+   - Voice lines are trimmed to remove dead-air reverb tails and accelerated ($1.20\times - 1.25\times$) so that verbal calls (e.g., Goku's *"Kamehameha"* at $3.36\text{s}$, Saitama's *"Consecutive Normal Punches"* at $2.20\text{s}$ and *"Serious Punch"* at $3.17\text{s}$) match the rapid execution speeds of modern fighting game specials without desyncing from gameplay.
+5. **Curated SFX Library (`Assets/Audio/SFX_Library/`):**
+   - Over 50 studio foley hits, anime power blasts, swishes, and tournament gongs organized in four categories (`Anime_Powers`, `Arcade_Bells`, `Hits_Punches`, `Swishes_Whiffs`), ready for one-click auditioning and drag-and-drop assignment in the Unity Inspector.
 
 
