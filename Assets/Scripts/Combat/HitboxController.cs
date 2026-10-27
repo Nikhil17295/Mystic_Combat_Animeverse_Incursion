@@ -243,6 +243,33 @@ namespace MysticCombat.Combat
                 targetRb.linearVelocity = new Vector2(facingDir * knockback, 3.2f);
             }
 
+            // 5. Play Visceral Hit Impact Audio Feedback
+            FighterAudio targetAudio = target.GetComponent<FighterAudio>();
+            if (targetAudio == null && target.parent != null)
+            {
+                targetAudio = target.parent.GetComponent<FighterAudio>();
+            }
+
+            if (targetAudio != null)
+            {
+                if (damage >= 40)
+                {
+                    targetAudio.PlayUltimateHit();
+                }
+                else if (damage >= 20)
+                {
+                    targetAudio.PlaySkillHit();
+                }
+                else if (damage >= 15)
+                {
+                    targetAudio.PlayHeavyHit();
+                }
+                else
+                {
+                    targetAudio.PlayLightHit();
+                }
+            }
+
             Debug.Log($"<color=#00e676>[COMBAT HIT RESOLVED]</color> {owner?.name} -> {target.name} | Damage: {damage} | New HP: {targetHealth.CurrentHealth}/{targetHealth.MaxHealth} | Attacker Ki: +{kiGainOnHit}");
         }
 

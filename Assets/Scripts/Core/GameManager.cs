@@ -38,7 +38,7 @@ namespace MysticCombat.Core
 
         #endregion
 
-        #region Game State Enum
+        #region Game State & Mode Enums
 
         /// <summary>
         /// High-level game states.
@@ -51,16 +51,26 @@ namespace MysticCombat.Core
             Results
         }
 
+        /// <summary>
+        /// Game play modes supported by Mystic Combat.
+        /// </summary>
+        public enum GameMode
+        {
+            VsCpu,
+            LocalPvP
+        }
+
         #endregion
 
         #region Fields
 
-        [Header("Game State")]
+        [Header("Game State & Mode")]
         [SerializeField] private GameState currentState = GameState.MainMenu;
+        [SerializeField] private GameMode currentGameMode = GameMode.VsCpu;
 
         [Header("Character Selections")]
-        [SerializeField] private string p1SelectedCharacterId;
-        [SerializeField] private string p2SelectedCharacterId;
+        [SerializeField] private string p1SelectedCharacterId = "goku";
+        [SerializeField] private string p2SelectedCharacterId = "saitama";
 
         #endregion
 
@@ -70,6 +80,15 @@ namespace MysticCombat.Core
         /// The current high-level game state.
         /// </summary>
         public GameState CurrentState => currentState;
+
+        /// <summary>
+        /// The currently selected game mode (Vs CPU or 2P Local PvP).
+        /// </summary>
+        public GameMode CurrentGameMode
+        {
+            get => currentGameMode;
+            set => currentGameMode = value;
+        }
 
         /// <summary>
         /// The character ID selected by Player 1.
@@ -120,6 +139,16 @@ namespace MysticCombat.Core
         {
             currentState = newState;
             Debug.Log($"[GameManager] State changed to: {newState}");
+        }
+
+        /// <summary>
+        /// Sets the active game mode (Vs CPU or 2P Local PvP).
+        /// </summary>
+        /// <param name="mode">The target game mode.</param>
+        public void SetGameMode(GameMode mode)
+        {
+            currentGameMode = mode;
+            Debug.Log($"[GameManager] Game mode set to: {mode}");
         }
 
         /// <summary>

@@ -192,6 +192,218 @@
 
 ---
 
+### Postmortem: Candidate Character Sprite Asset Clutter vs. In-Memory Dev Slicing
+- **Incident:** Rapidly prototyping and testing candidate anime spritesheets (e.g. testing walk cycles, jump frames, attack bounding boxes for unconfirmed roster characters) directly inside the Unity Editor generated dozens of unneeded `.png.meta` files and triggered full Unity asset database re-imports on every test.
+- **Root Cause:** Slicing tools were originally coupled directly to disk export paths (`Assets/Sprites/Fighters/{Name}/Frames/`). When developers just wanted to evaluate whether a candidate sheet was viable, copying files to disk cluttered the project repository.
+- **Resolution:**
+  1. Upgraded [`Tools/SpriteSlicer/index.html`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Tools/SpriteSlicer/index.html) and [`B:\Unity\GameDev_Toolbox\SpriteSlicer\index.html`](file:///B:/Unity/GameDev_Toolbox/SpriteSlicer/index.html) to decouple previewing from project disk storage.
+  2. Implemented HTML5 `URL.createObjectURL(file)` via the file picker and canvas drag-and-drop. Images are ingested 100% in browser RAM.
+  3. Replaced rigid static animation category buttons with a dynamic dictionary model and an interactive `➕ New Animation` creator, allowing developers to test arbitrary moves (`dash`, `taunt`, `fireball`).
+  4. Added a client-side `💾 Download Slices (JSON)` coordinate backup, allowing developers to save bounding boxes locally without polluting project folders until a character is officially approved for the roster.
+
+### Bug 7: UI Font and Sprite Importer Configuration for Main Menu
+- **Symptom:** Raw `.ttf` fonts and downloaded high-res `.png` textures dropped into `Assets/` cannot be directly assigned to UI `Image` or TextMeshPro components in Unity unless imported as Sprite (2D and UI) and converted to TMP Font Assets.
+- **Root Cause:** By default, Unity imports new 2D images as `TextureType.Default` (standard 3D diffuse texture) rather than `TextureType.Sprite`. Similarly, TextMeshPro requires an SDF Font Asset rather than a raw TrueType font to render high-contrast arcade drop shadows and vertex gradients.
+- **Solution:** 
+  1. Built automated texture configuration in [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) to ensure `menu_bg_multiverse.png` is imported as `Sprite (2D and UI)` with Bilinear filtering and no mipmaps.
+  2. Created procedural fallback and automated `TMP_FontAsset.CreateFontAsset(font)` generation to preserve 16-bit arcade typography without manual editor clicks.
+  3. Generated procedural 8-bit navigation and selection sound waves (`AudioClip.Create`) in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) to eliminate missing asset sound bugs.
+
+---
+
+### Bug 8: Sibling Namespace Collision with `UnityEngine.Input` (`error CS0234`)
+- **Symptom:** Compiler throws `error CS0234: The type or namespace name 'GetKeyDown' does not exist in the namespace 'MysticCombat.Input'`.
+- **Root Cause:** In C#, code declared inside `namespace MysticCombat.UI` resolves sibling namespaces within `MysticCombat` first. Since our project has a namespace `MysticCombat.Input` (containing `PlayerInputHandler.cs`), bare calls to `Input.GetKeyDown(...)` resolved `Input` to the namespace `MysticCombat.Input` instead of the static class `UnityEngine.Input`.
+- **Solution:** Fully qualify all Unity input calls as `UnityEngine.Input.GetKeyDown(...)` and `UnityEngine.Input.GetAxisRaw(...)` inside [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs).
+
+---
+
+### Bug 9: Invisible TextMeshPro Text from Incomplete Sub-Asset Serialization (`m_Material: {fileID: 0}`)
+- **Symptom:** TextMeshPro objects in the scene exist in the Hierarchy with text strings assigned, but render completely invisible in both Scene and Game views.
+- **Root Cause:** Generating a `TMP_FontAsset` via script without explicitly creating its Distance Field Material and adding it as a child sub-asset (`AssetDatabase.AddObjectToAsset`) causes Unity to serialize an empty ~3 KB asset file where `m_Material` is saved as `{fileID: 0}`. Without a material and font atlas texture, the renderer draws zero vertices.
+- **Solution:** 
+  1. Configured [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) to assign a valid `TextMeshPro/Distance Field` material, bind the atlas texture, and serialize both as sub-assets.
+  2. Implemented guaranteed fallback to `LiberationSans SDF.asset` if any custom TrueType font fails to build an atlas, ensuring text is never invisible.
+
+---
+
+### Bug 10: Empty Character Table & Story Intro Screen Blocking Menu
+- **Symptom:** Playing `MainMenuScene.unity` appeared stuck on a dark screen without showing the title marquee or menu options.
+- **Root Cause:**
+  1. Dynamic `TMP_FontAsset` generation created font assets with an empty character table (`m_Unicode: 95` only). Text with unbaked characters drew as blank spaces.
+  2. The Story Intro overlay was enabled on startup by default, covering the entire screen with a 96% opacity dark veil for ~10 seconds while waiting for text lines that were invisible due to the font issue.
+  3. `UnityEngine.UI.Shadow` components attached to TextMeshPro objects threw internal component warnings.
+- **Solution:**
+  1. Swapped all primary UI text to Unity's pre-baked `LiberationSans SDF.asset` (with bold uppercase styling, high letter spacing, and vertex gradients), guaranteeing 100% of characters render visibly with zero missing glyphs.
+  2. Set `playIntroOnStart = false` and deactivated the story overlay by default, ensuring the Title Marquee and 4 arcade options are immediately visible and playable upon pressing Play.
+  3. Removed legacy `Shadow` components from TextMeshPro objects.
+
+---
+
+### Bug 11: Main Menu UI Element Overlap & Negative Anchor Coordinate Collision
+- **Symptom:** In `MainMenuScene.unity`, the bottom edge of the massive Title Logo collided directly with the top option (`1 PLAYER VS CPU`), obscuring the text. Additionally, flat monochromatic white text looked modern and non-arcade.
+- **Root Cause:**
+  1. Logo with height $546\text{px}$ positioned at $y = +160\text{px}$ had its bottom boundary at $160 - 273 = -113\text{px}$. The button group at $y = -180\text{px}$ had its first child offset by $+70\text{px}$, placing it at $-180 + 70 = -110\text{px}$, resulting in a $3\text{px}$ negative overlap.
+  2. Unity's standard `TextMeshProUGUI.color` applies a single uniform tint, preventing the multi-color top-to-bottom character gradients characteristic of 90s Capcom / Technos CPS-1 arcade games.
+- **Solution:**
+  1. Recalculated coordinate bounds in [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs):
+     - Logo: $y = +195\text{px}$, height $502\text{px}$ $\rightarrow$ bottom edge at $-56\text{px}$.
+     - Button group: $y = -225\text{px}$, first item at $+45\text{px}$ $\rightarrow$ item 0 at $-180\text{px}$.
+     - Creates a pristine $124\text{px}$ void clearance gap.
+  2. Implemented 4-corner `VertexGradient` structures in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) using electric cyan/diamond silver/violet for inactive items and radiant sun gold/white/amber/crimson for active items, paired with dynamic color shimmer cycling.
+  3. Added an automated title music discovery routine scanning `Assets/Audio/Music/` for `.mp3`, `.wav`, or `.ogg` tracks.
+
+---
+
+### Bug 12: Silent Title Screen Due to AssetDatabase Refresh Race & Serialization Timing
+- **Symptom:** After downloading the audio file into `Assets/Audio/Music/`, pressing Play in the scene resulted in silence with no background music playing.
+- **Root Cause:**
+  1. Files added to the filesystem externally are not recognized by Unity's in-memory `AssetDatabase` until `AssetDatabase.Refresh()` is executed. In the initial bake pass, the scene file saved `titleMusicClip: {fileID: 0}` because the file was not yet in the editor index at the moment the scene was serialized.
+  2. When hitting Play without re-baking, `MainMenuController` observed `titleMusicClip == null` and had no fallback mechanism to load the audio directly off disk.
+- **Solution:**
+  1. Implemented a dual-layer audio architecture in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs):
+     - *Primary:* Plays serialized `titleMusicClip` if assigned in Inspector / scene.
+     - *Fallback:* If `titleMusicClip == null`, automatically launches `LoadTitleMusicFromDisk()` coroutine using `UnityWebRequestMultimedia.GetAudioClip("file://...")`, dynamically streaming the MP3 directly off disk at runtime.
+  2. Serialized the direct asset GUID pointer (`{fileID: 8300000, guid: 99bbb0ea7d6b41cb8b7b33a81f6bab3d, type: 3}`) directly into [`MainMenuScene.unity`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scenes/MainMenuScene.unity).
+  3. Added `AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport)` to [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) to ensure editor indexes are always synchronized with the filesystem.
+
+---
+
+### Bug 13: Total Hardware Audio Silence Due to Missing `AudioListener`
+- **Symptom:** In `MainMenuScene.unity`, neither background music nor procedural 8-bit sound effects (navigation blips, select confirm punch) produced any audible sound through the speakers, despite `AudioSource.isPlaying` returning true.
+- **Root Cause:**
+  1. In Unity, the `AudioListener` component acts as the virtual microphone/ears in the scene. Without exactly one active `AudioListener` in the scene, the Unity FMOD audio engine routes zero audio packets to the operating system's sound device.
+  2. Scenes generated via `EditorSceneManager.NewScene(NewSceneSetup.EmptyScene)` lack default camera rigs. When `MainMenuSetupTool.SetupCamera()` created the `Main Camera`, it attached a `Camera` component but omitted `camObj.AddComponent<AudioListener>()`.
+- **Solution:**
+  1. Added `camObj.AddComponent<AudioListener>()` in [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs).
+  2. Serialized `AudioListener` (`!u!81 &462071808`) on `Main Camera` directly in [`MainMenuScene.unity`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scenes/MainMenuScene.unity).
+  3. Implemented dynamic self-healing in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) during `Awake()`: if `Object.FindAnyObjectByType<AudioListener>() == null`, it dynamically attaches an `AudioListener` to the camera or canvas and sets `AudioListener.volume = 1f; AudioListener.pause = false;`.
+
+---
+
+### Bug 14: Alphabetical Audio Collision & Simultaneous Double Music Playback
+- **Symptom:** When opening the game in the Main Menu, the combat battle music played alongside the title music, or two background tracks played simultaneously.
+- **Root Cause:**
+  1. `Directory.GetFiles()` returns filesystem entries in alphabetical order. Because `Double Dragon 2 - The Revenge (NES) Music - Final Battle 2.mp3` begins with uppercase 'D', while `double_dragon_ii_title.mp3` began with lowercase 'd' (or due to ASCII collation), unconstrained discovery loops `*.mp3` selected the combat battle track as `titleMusicClip`.
+  2. Main menu music was not explicitly stopped before scene transitions (`StartGameMode`), risking overlap if scene unload timings staggered.
+  3. Lack of strict state gating: combat BGM could trigger if state was uninitialized or additively loaded.
+- **Solution:**
+  1. Filter disk searches in [`MainMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) and [`MainMenuSetupTool.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs) specifically for files containing `"title"` (`double_dragon_ii_title.mp3`), guaranteeing that battle tracks are never loaded as menu music.
+  2. Added `musicSource.Stop()` in `MainMenuController.StartGameMode()` and `OnDestroy()` so title music cuts instantly when entering the arena.
+  3. Hardened [`MatchAudioController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs): battle music only plays when `MatchState == RoundInProgress` and `GameManager.GameState != MainMenu`.
+  4. Streamlined battle music to a single unified track (`Double Dragon 2 - Final Battle 2`) across all 3 rounds to eliminate abrupt music cuts in Round 3.
+  5. Implemented live Inspector volume sliders (`[SerializeField] [Range(0f, 1f)]`) updated in real time in `Update()`, with combat BGM set to `0.50`, victory fanfare to `0.85`, and title music to `0.70`.
+
+---
+
+### Bug 15: Audio Cutoff in Fast Combo Chains & Looping Channel Contention
+- **Symptom:** In fighting games, firing rapid 3-hit punch combos abruptly truncated the sound effect of previous punches, causing a jarring "stuttering audio" sensation. Additionally, attempting to channel Ki meditation abruptly stopped landing sounds or whiff audio.
+- **Root Cause:**
+  1. Setting `audioSource.clip = clip; audioSource.Play();` replaces the currently playing audio buffer immediately. Any sound already in progress is brutally silenced.
+  2. Forcing a single `AudioSource` to handle both transient one-shot sounds (punches, jumps, impacts) and sustained looping sounds (Ki meditation aura hum) creates channel contention where one sound always cancels the other.
+- **Solution:**
+  1. Standardized all transient sound playback on `AudioSource.PlayOneShot(clip, volume)`. `PlayOneShot` is non-destructive and allocates virtual audio voices, enabling overlapping punch tails and impact crunches.
+  2. Implemented a dual-channel architecture in [`FighterAudio.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs):
+     - `sfxSource`: Dedicated to one-shots (whiffs, hits, jumps, land, dash, red zone heartbeat).
+     - `auraSource`: Dedicated secondary child GameObject with its own `AudioSource` strictly managing the seamless looping Ki meditation aura hum (`sfx_ki_charge_loop.wav`).
+
+---
+
+### Bug 16: Input-Bound Audio Desync & Fragile Runtime Path Guessing
+- **Symptom:** Pressing the jump key (`W`) while falling or in mid-air played the jump sound repeatedly. Mashing punch keys while in hit-stun or recovery played whoosh sounds even though no attack occurred. Character swapping was fragile, and runtime path guessing (`UnityWebRequest`) could load incorrect sounds behind the scenes.
+- **Root Cause:**
+  1. Triggering audio directly on raw keypresses (`if (inputHandler.JumpPressed) fighterAudio.PlayJump()`) tightly couples audio to user input instead of the physical state of the character.
+  2. Bypassing Inspector serialization with disk-scraping runtime coroutines (`EnsureAudioClipsLoaded`) was opaque and error-prone.
+  3. Lack of character audio profiles: Goku and Saitama shared identical hard-coded sounds rather than unique combat audio sets.
+- **Solution:**
+  1. **State-Driven Audio:** Moved all sound triggers out of `HandleGroundedTransitions()` into `FighterController.TransitionTo(FighterState newState)` and the grounded landing check. Audio only executes when the state machine enters the state.
+  2. **Organized SFX Library:** Extracted over 50 audio clips into `Assets/Audio/SFX_Library/` (`Anime_Powers`, `Arcade_Bells`, `Hits_Punches`, `Swishes_Whiffs`) with full Inspector waveform auditioning.
+  3. **Modular Character Audio Profiles:** Rebuilt `FighterAudio.cs` with explicit serialized `AudioClip` fields and character voiceover slots (`voiceAttackGruntClip`, `voiceHurtClip`, `voiceSkillClip`, `voiceUltimateClip`). Goku and Saitama now have distinct serialized audio profiles on their respective prefabs.
+
+---
+
+### Bug 17: Simultaneous Bell/Music Clutter, Missing K.O. Audio Pause, and Premature Skill Placeholders
+- **Symptom:** At round start, the tournament bell and combat music fired simultaneously, drowning out the opening gong. On round K.O., battle BGM kept running continuously during defeat. Pressing Skill (`E`) or Ultimate (`Q`) played generic punch swooshes before unique VFX/animations were built.
+- **Root Cause:**
+  1. `MatchAudioController.HandleRoundStart()` called `PlayBattleMusic()` immediately without waiting for the bell audio to ring out.
+  2. `HandleRoundEnd()` only dipped volume rather than stopping/pausing the battle track, leaving round transitions anticlimactic.
+  3. `FighterAudio.PlaySkillAttack()` and `PlayUltimateAttack()` fell back to `PlayHeavyWhiff()` when clips were unassigned.
+- **Solution:**
+  1. Boosted `bellVolume` to `1.0` and implemented an asynchronous coroutine delay (`musicStartDelayAfterBell = 0.85f`). The bell strikes into silence, echoes, and then the BGM kicks in from `0:00`.
+  2. Added `musicSource.Stop()` immediately on `HandleRoundEnd()` so the K.O. gong resonates over silence. When the next round starts after position reset, the BGM starts fresh from the beginning.
+  3. Blanked out `skillAttackClip`, `ultimateAttackClip`, `skillHitClip`, and `ultimateHitClip` (`None`) on all character prefabs, and updated `FighterAudio.cs` to cleanly remain silent until custom VFX + SFX are designed.
+
+---
+
+### Bug 18: The 1-Second Pre-Bell BGM Blip & Unwanted Vocal Grunts on Basic Attacks
+- **Symptom:** At match start, battle music played for 1 second, then abruptly stopped, the round bell rang, and music restarted from `0:00`. Additionally, basic punches and attacks triggered unwanted character vocal grunts instead of pure martial arts sound effects.
+- **Root Cause:**
+  1. `MatchAudioController.Start()` contained an eager `PlayBattleMusic()` invocation that fired immediately on frame 1, while `HandleRoundStart()` was running its $0.85\text{s}$ delay coroutine.
+  2. `FighterController.TransitionTo()` and `FighterAudio.PlayLightHit()` were triggering voice grunts on normal jabs and hits.
+- **Solution:**
+  1. Removed `PlayBattleMusic()` from `Start()` in [`MatchAudioController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs). Battle music is now strictly initiated by `HandleRoundStart()` after the bell echoes into silence.
+  2. Removed vocal grunts from basic attacks and hits in [`FighterController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs) and [`FighterAudio.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs), reserving voice acting strictly for signature special dialogue quotes.
+  3. Added `crouchClip` for stance transition sound effects.
+  4. Sourced authentic Dragon Ball Super Saiyan aura (`dbz_super_saiyan_aura.mp3`), clean boots landing impact (`jumpland_clean.wav`), real martial arts light punch impact (`light_punch_real.mp3`), and signature voice lines (`goku_voice_kamehameha.mp3`, `goku_voice_kaioken.mp3`, `saitama_voice_serious_punch.mp3`).
+
+---
+
+### Bug 19: Auditory Fatigue from Ki Aura Hum & Combat Stalling in Anime Voice Lines
+- **Symptom:**
+  1. Holding the meditate key (`G`/`M`) to regenerate Ki produced an overpowering Super Saiyan aura hum (`dbz_super_saiyan_aura.mp3`) that masked punch impacts and fatigued the player's ears.
+  2. Goku's Kamehameha audio clip had an excessive 2.4-second trailing reverb/silence tail after the shout *"HA!"*, lasting over 6.5 seconds and stalling combat flow.
+  3. Saitama had no voice acting when unleashing his signature *Consecutive Normal Punches* (`E`) or *Serious Punch* (`Q`).
+- **Root Cause:**
+  1. Default `kiAuraVolume` was set to `0.75f` (75%), which is too aggressive for a continuous looping layer.
+  2. Raw anime audio rips contain full scene background tails and cinematic pauses meant for television pacing rather than real-time fighting game combat.
+- **Solution:**
+  1. Reduced `kiAuraVolume` from `0.75f` down to `0.45f` (exactly 60% of original loudness) across [`FighterAudio.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs), [`Goku.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Goku.prefab), and [`Saitama.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Saitama.prefab).
+  2. Sliced Goku's Kamehameha at 4.2s (end of *"HA!"*), added a 50ms linear fadeout, and sped up playback to $1.25\times$ ($3.36\text{s}$) to match dynamic beam execution speeds.
+  3. Sourced and processed authentic anime voice lines for Saitama:
+     - `saitama_voice_consecutive_punches.wav` ($2.20\text{s}$ clean *"Renzoku Futsuu no Panchi"* shout).
+     - `saitama_voice_serious_punch.wav` ($3.17\text{s}$ at $1.20\times$ speed, *"Serious Series: Serious Punch"*).
+  4. Wired clips directly to `voiceSkillClip` and `voiceUltimateClip` on `Goku.prefab` and `Saitama.prefab`.
+
+---
+
+### Bug 20: 15-Second Spoken Dialogue Bleed on Light Punches & Input Overrides from Secondary Keys
+- **Symptom:**
+  1. Hitting an opponent with a Light Attack (`F` / `H`) caused random spoken voices to play in the background instead of a pure martial arts knuckle slap.
+  2. Pressing `Space` triggered P1 jumps unexpectedly, and pressing Arrow keys overrode P2 movement and corrupted directional state.
+- **Root Cause:**
+  1. `light_punch_real.mp3` was inadvertently downloaded from an online meme soundboard clip that was 15.65 seconds long and had talking dialogue in the background.
+  2. `PlayerInputHandler.cs` mapped `Space` as an alternate P1 jump key alongside `W`, and mapped Arrow keys (`UpArrow`, `DownArrow`, `LeftArrow`, `RightArrow`) as alternate P2 movement keys alongside `I/J/K/L`, creating severe input cross-talk and overriding player inputs.
+- **Solution:**
+  1. Completely retired and deleted `light_punch_real.mp3`.
+  2. Assigned [`arcade_hit_01.ogg`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Audio/SFX_Library/Hits_Punches/arcade_hit_01.ogg) (a snappy $0.27	ext{s}$ foley punch impact with zero voice interference) to `lightHitClip` on both [`Goku.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Goku.prefab) and [`Saitama.prefab`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Prefabs/Fighters/Saitama.prefab).
+  3. Cleaned up legacy unused audio files in `Assets/Audio/SFX/`.
+  4. Updated [`PlayerInputHandler.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Input/PlayerInputHandler.cs):
+     - Removed `Space` key: P1 Jump is strictly **`W`**.
+     - Removed all 4 Arrow Keys: P2 Movement is strictly **`I/J/K/L`** (`I` = Jump, `K` = Crouch, `J` = Left, `L` = Right).
+
+---
+
+### Postmortem: The "Double Delta" Physics Velocity Pitfall
+- **Incident:** A developer attempts to make movement frame-rate independent by writing `rb.linearVelocity = new Vector2(speed * Time.deltaTime, 0)`, but the character crawls at an imperceptible snail's pace.
+- **Root Cause:** In physics simulation, velocity is already expressed in **units per second**. Unity's 2D physics engine (`Box2D`) automatically integrates velocity over time by multiplying it by `Time.fixedDeltaTime` ($0.02\text{s}$) in its internal solver loop. Multiplying by `Time.deltaTime` in user code applies delta time twice ($5 \times 0.02 \times 0.02 = 0.002\text{ m/tick}$), effectively nullifying movement.
+- **Resolution:**
+  - When setting Rigidbody velocities, assign speeds directly in meters/second: `rb.linearVelocity = new Vector2(speed, rb.linearVelocity.y);`.
+  - Reserve `Time.deltaTime` exclusively for direct `Transform` translations (`transform.position += dir * speed * Time.deltaTime`) and custom countdown timers.
+
+---
+
+### Postmortem: The Missing Inspector Variables & Child Selection Mistake
+- **Incident:** A teammate opens Unity, selects a fighter in the Hierarchy, but cannot find the `moveSpeed`, `jumpForce`, or combat tuning fields in the Inspector, assuming serialized fields failed to compile.
+- **Root Cause:** 
+  1. In Unity, GameObjects follow a multi-component stack architecture rather than Godot's "One Node = One Script" model. A fighter has 8 distinct components (`Transform`, `SpriteRenderer`, `Rigidbody2D`, `BoxCollider2D`, etc.). `FighterController` is positioned lower in the stack, requiring scrolling or collapsing earlier components.
+  2. Additionally, selecting child GameObjects (`Hitbox`, `Hurtbox`, `GroundCheckPoint`) displays only that child's isolated trigger colliders, not the root controller.
+- **Resolution:**
+  1. Always select the root entity (`Fighter_P1_Goku` or `Fighter_P2_Saitama`) in the Hierarchy.
+  2. Collapse standard engine components (`Transform`, `SpriteRenderer`, `Rigidbody2D`) to bring gameplay logic to the top.
+  3. Utilize the Inspector Search bar (`Ctrl + F` or typing `speed` into the 🔍 field) to instantly isolate target variables.
+
+---
+
 ## 3. Team Best Practices Checklist
 
 1. **Always check the Console (`Ctrl + Shift + C`):** Any red error or yellow warning must be resolved immediately before moving to the next feature.

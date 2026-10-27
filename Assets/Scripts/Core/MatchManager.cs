@@ -121,6 +121,10 @@ namespace MysticCombat.Core
         private void Awake()
         {
             ResolveFighters();
+            if (GetComponent<MatchAudioController>() == null)
+            {
+                gameObject.AddComponent<MatchAudioController>();
+            }
         }
 
         private void Start()

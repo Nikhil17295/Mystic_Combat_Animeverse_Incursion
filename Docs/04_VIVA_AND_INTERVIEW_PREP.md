@@ -255,6 +255,141 @@
 
 ---
 
+### Q28: What is `[SerializeField]` in Unity, and why is it preferred over making variables `public`?
+**Answer:**
+> *"In C#, making a variable `public` exposes it in the Unity Inspector, but it violates Object-Oriented Programming (OOP) encapsulation because any external script can inadvertently overwrite it during runtime.
+> `[SerializeField] private` achieves the best of both worlds:
+> 1. It keeps the variable strictly `private` in code, protecting it from external tampering.
+> 2. It instructs Unity's serializer to save the value to the scene/prefab file and draw an editable UI field in the Inspector.
+> In Godot, this is the direct equivalent of the `@export` keyword."*
+
+---
+
+### Q29: Why does Unity separate `Update()` and `FixedUpdate()`? What happens if physics runs on variable `Time.deltaTime`?
+**Answer:**
+> *"`Update()` executes once per render frame, which fluctuates based on GPU load and display refresh rates (e.g., 30 FPS vs. 144 FPS).
+> `FixedUpdate()` executes on a rock-solid, deterministic time step (default 50 ticks/sec or `0.02s`).
+> If physics ran inside `Update()` with variable delta time, sudden lag spikes would cause 'tunneling'—a high-speed projectile moving at 100 m/s would jump 20 meters in a single lag frame and pass completely through solid walls without triggering collision detection. A fixed time step guarantees identical, reproducible physics simulation on all hardware."*
+
+---
+
+### Q30: Why shouldn't you multiply `Rigidbody2D.linearVelocity` by `Time.deltaTime`?
+**Answer:**
+> *"Velocity in physics is defined as distance per second (meters/second).
+> Unity's physics engine (`Box2D`) automatically integrates velocity over time by multiplying it by `Time.fixedDeltaTime` under the hood.
+> If a developer writes `rb.linearVelocity = new Vector2(speed * Time.deltaTime, 0)`, they are multiplying by delta time twice (the 'Double Delta' error), which shrinks the character's movement velocity down to an imperceptible crawl."*
+
+---
+
+### Q31: Why do we append the `f` suffix to decimal numbers in Unity C# (e.g. `5.5f`)?
+**Answer:**
+> *"In C#, any literal decimal number (such as `5.5`) is treated as a 64-bit `double` by default.
+> However, game engines, graphics cards (GPUs), and physics systems (`Vector2`, `Vector3`, `Time.deltaTime`) operate on 32-bit single-precision `float` numbers because GPUs process 32-bit floats twice as fast with half the memory footprint.
+> Appending `f` explicitly instructs the compiler to treat the number as a 32-bit float, avoiding implicit type conversion errors."*
+
+---
+
+### Q32: How is text rendered in modern Unity, and how does TextMeshPro differ from legacy UI Text?
+**Answer:**
+> *"Legacy Unity UI Text relied on rasterized bitmap fonts, which blur and pixelate when scaled or viewed on high-resolution displays.
+> Modern Unity uses TextMeshPro (TMP), which renders text using Signed Distance Field (SDF) vector shaders. SDF fonts remain mathematically razor-sharp at any zoom level, screen resolution, or perspective angle, while supporting GPU-accelerated vertex gradients, drop shadows, and glowing outlines at zero runtime texture allocation overhead."*
+
+---
+
+### Q33: Can you explain your character's architecture in 60 seconds?
+**Answer:**
+> *"Our fighter architecture follows a clean 4-stage pipeline that separates input, logic, animation, and combat:
+> 1. **The Senses (`PlayerInputHandler.cs`):** Polls raw hardware keys for P1 (WASD) and P2 (IJKL) and exposes clean input flags.
+> 2. **The Brain (`FighterController.cs`):** Acts as the central state machine. It evaluates physics conditions (grounded checks, knockback, Red Zone exhaustion) and updates fighter state.
+> 3. **The Artist (`FighterAnimator.cs`):** Reactively monitors the controller's current state and animates calibrated sprite flipbooks (idle at 5 FPS, punch at 9 FPS, flurry at 14 FPS).
+> 4. **The Combat Layer (`HitboxController.cs` & `HurtboxController.cs`):** Activates collision triggers during attack frames. When a hitbox overlaps an opponent's hurtbox, it fires events that apply damage, physics knockback impulse, and Ki generation without coupling the two fighters directly."*
+
+---
+
+### Q34: How did you design and implement the Retro Arcade Main Menu, and how does the game ensure authentic 90s aesthetic without compromising modern UI responsiveness?
+**Answer:**
+> *"We fused Technos Japan's 1988 Double Dragon II arcade aesthetic with the Doctor Strange cosmic multiverse theme:
+> 1. **Handcrafted Title Logo & Alpha Cutout:** An extruded metallic chrome 'MYSTIC COMBAT' title with embedded Doctor Strange gold mandala, alpha-keyed to zero transparency to float seamlessly across the cosmic multiverse backdrop without boxy borders.
+> 2. **Arcade Entrance Coroutine:** On launch, the title logo performs an elastic punch impact ($1.35\times \rightarrow 0.94\times \rightarrow 1.0\times$) accompanied by an 8-bit sound confirmation, followed by a staggered cascade of the 4 menu options ($0.06\text{s}$ interval).
+> 3. **Multi-Color Vertex Gradients:** Instead of flat modern monochromatic text, options render with GPU-accelerated 4-corner TextMeshPro vertex gradients (active: Radiant Gold/White to Blazing Amber/Crimson with dynamic shimmer; inactive: Electric Cyan/Silver to Neon Violet/Indigo).
+> 4. **Automated BGM Pipeline:** Built-in looping audio architecture in `MainMenuController.cs` that dynamically discovers and streams audio tracks placed in `Assets/Audio/Music/`."*
+
+---
+
+### Q35: How does the combat audio architecture work, and how did you prevent audio bleed between the menu and arena?
+**Answer:**
+> *"Combat audio is managed by `MatchAudioController.cs` observing `MatchManager` events:
+> 1. **Seamless Tournament Theme:** All 3 rounds play 'Double Dragon 2 - Final Battle 2' continuously, eliminating abrupt mid-match jarring track switches and keeping arcade combat flow steady.
+> 2. **3-Second Victory Fanfare:** On final match victory (`OnMatchOver`), combat BGM stops and 'Double Dragon 3 - Mission Clear' triggers for 3 seconds while the victor celebrates.
+> 3. **Strict State Isolation:** Battle music only triggers when round combat begins (`RoundInProgress`) and is strictly barred if `GameManager.GameState == MainMenu`. Additionally, `MainMenuController.cs` cuts the title music (`double_dragon_ii_title.mp3`) immediately when launching combat (`StartGameMode`) or unloading, preventing simultaneous double music.
+> 4. **Bell-First Dramatic Sequencing:** At round start, the tournament bell strikes alone at full volume (`1.0`). Battle BGM waits a deliberate $0.85\text{s}$ pause for the bell to ring out before kicking in fresh from `0:00`. On round defeat/K.O., battle BGM halts instantly so the K.O. gong echoes over arena silence."*
+
+---
+
+### Q36: How do you achieve real-time live audio volume mixing in the Unity Inspector during Play mode, and how does it compare to Godot?
+**Answer:**
+> *"In Unity, we declare serialized volume fields bounded with range sliders:
+> `[SerializeField] [Range(0f, 1f)] private float battleMusicVolume = 0.50f;`
+> In `Update()`, we evaluate:
+> `if (musicSource != null && musicSource.isPlaying) musicSource.volume = battleMusicVolume;`
+>
+> **Godot vs Unity Analogy:**
+> - In Godot, you write `@export_range(0.0, 1.0) var battle_music_volume: float = 0.50` on an `AudioStreamPlayer` node.
+> - In Unity, we use `[SerializeField] [Range(0f, 1f)]` on an `AudioSource` component.
+>
+> **Why this matters for judges:**
+> Audio balancing cannot be judged accurately from a static editor view. By linking the slider in `Update()`, judges and audio testers can drag the slider in the Inspector during live gameplay to find the sweet spot (e.g. 0.50 for combat BGM vs 1.0 for punches/kicks) without restarting or recompiling."*
+
+---
+
+### Q37: How did you design the combat sound effects architecture, and how does your hit audio scale with attack damage?
+**Answer:**
+> *"Every fighter has a dedicated `FighterAudio.cs` component with two separate audio sources:
+> 1. **One-Shot Source:** Uses `AudioSource.PlayOneShot()` so rapid attack combos never cut off previous audio tails.
+> 2. **Looping Channeling Source:** Plays a seamless 110Hz harmonic aura hum while holding the Meditation key, stopping smoothly upon release.
+> 3. **Dynamic Impact Scaling:** When `HitboxController.cs` resolves an attack hit, it checks the strike's damage value and fires proportional audio:
+>    - Light attacks (<15 damage): Snappy knuckle slap crack (`sfx_hit_light.wav`).
+>    - Heavy attacks (15–19 damage): Deep crunchy bass crunch (`sfx_hit_heavy.wav`).
+>    - Skill attacks (20–39 damage): Energy-blast resonant zap (`sfx_hit_skill.wav`).
+>    - Ultimates (40+ damage): Cinematic sub-bass explosion (`sfx_hit_ultimate.wav`).
+> 4. **Audio Balancing Hierarchy:** SFX are mixed at 1.0 (100%), while background music is mixed at 0.50 (50%), ensuring punches, jumps, and Ki charging cut through cleanly without drowning in the soundtrack."*
+
+---
+
+
+---
+
+### Q38: Why is binding audio triggers to raw button presses an anti-pattern in fighting games, and how does your state-driven architecture solve this across P1, P2, and CPU AI?
+**Answer:**
+> *"Triggering audio on raw input events (e.g. `if (Input.GetKeyDown(KeyCode.W)) PlayJump()`) is a classic rookie anti-pattern for three reasons:
+> 1. **Input Spamming:** Pressing `W` repeatedly while already airborne would trigger multiple jump sounds mid-air.
+> 2. **State & Hit-Stun Desync:** Pressing attack keys while frozen or knocked down would play punch swishes even though the character cannot physically execute the move.
+> 3. **AI & Multi-Player Failure:** CPU bots, second players, or replay systems do not generate keyboard input events, making characters silent.
+>
+> **Our Solution: State-Driven Fighter Audio:**
+> Audio is triggered strictly inside `FighterController.TransitionTo(newState)` upon state entry, and landing audio is tied to ground detection transitions. Furthermore, `FighterAudio.cs` is attached to character prefabs with serialized `AudioClip` slots, allowing each character (Goku, Saitama, Naruto, Vegeta) to have their own unique audio profile, dialogue quotes, and grunts regardless of whether they are P1, P2, or a CPU bot."*
+
+---
+
+### Q39: Why can't you use raw anime audio clips directly in a fighting game, and how did you balance continuous aura loops vs one-shot punch impacts?
+**Answer:**
+> *"There are two major audio pitfalls when porting anime assets into a real-time fighting game:
+> 1. **Cinematic Dead-Air & Pacing Desync:** Anime episodes feature dramatic pauses and 2-to-3-second reverb tails meant for TV screen pacing. In a fast fighting game, a 6.5-second Kamehameha or a 9-second Serious Punch creates sluggish gameplay. We trimmed the dead-air tails right after the vocal shout and resampled the playback to $1.20\times - 1.25\times$ speed (~3.1–3.3s), ensuring the audio matches the crisp strike animation.
+> 2. **Acoustic Masking & Ear Fatigue:** Continuous looping sounds (like Ki meditation charging) naturally tire the player's auditory cortex if played at full volume. We balanced the continuous Ki aura loop at 45% (`0.45`), background music at 50% (`0.50`), and instantaneous impact strikes at 100% (`1.0`). This ensures punches retain visceral physical weight while charging feels ambient rather than deafening."*
+
+---
+
+### Q40: How do you prevent input conflicts and ghost keypresses in local 2-player fighting games?
+**Answer:**
+> *"In local single-keyboard multiplayer games, multiple key bindings for the same action (e.g. binding both `W` and `Space` to P1 Jump, or binding both `I/J/K/L` and `Arrow Keys` to P2 movement) frequently cause input cross-talk and ghost state transitions. For example, pressing Arrow keys for custom user macros can inadvertently move P2, and tapping `Space` while attempting an attack can cause accidental jump-takeoffs.
+> 
+> **Our Solution: Dedicated Key Isolation (`PlayerInputHandler.cs`):**
+> 1. **P1 Layout:** Strict `W/A/S/D` for movement (`W` exclusively for Jump, `Space` removed) + `F/C/E/Q/X` for combat.
+> 2. **P2 Layout:** Strict `I/J/K/L` for movement (`I` exclusively for Jump, Arrow keys removed) + `H/N/U/O/M` for combat.
+> This guarantees 100% key isolation with zero accidental input overrides."*
+
+---
+
 ## 3. Live Demo Checklist for Judges
 
 When demonstrating the game to evaluators:

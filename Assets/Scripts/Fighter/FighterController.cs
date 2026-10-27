@@ -26,6 +26,9 @@ namespace MysticCombat.Fighter
         [Tooltip("Attack hitbox controller attached to this fighter.")]
         [SerializeField] private HitboxController attackHitbox;
 
+        [Tooltip("Fighter audio controller for authentic combat sound effects.")]
+        [SerializeField] private FighterAudio fighterAudio;
+
         [Header("Ground Check")]
         [Tooltip("Transform positioned at the fighter's feet for ground detection.")]
         [SerializeField] private Transform groundCheckPoint;
@@ -83,8 +86,39 @@ namespace MysticCombat.Fighter
             bodyCollider = GetComponent<BoxCollider2D>();
             energySystem = GetComponent<EnergySystem>();
 
+            if (fighterAudio == null)
+            {
+                fighterAudio = GetComponent<FighterAudio>();
+                if (fighterAudio == null)
+                {
+                    fighterAudio = gameObject.AddComponent<FighterAudio>();
+                }
+            }
+
             rb.gravityScale = gravityScale;
             rb.freezeRotation = true;
+        }
+
+        private void OnEnable()
+        {
+            if (energySystem != null)
+            {
+                energySystem.OnRedZoneEnter -= HandleRedZoneEnter;
+                energySystem.OnRedZoneEnter += HandleRedZoneEnter;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (energySystem != null)
+            {
+                energySystem.OnRedZoneEnter -= HandleRedZoneEnter;
+            }
+        }
+
+        private void HandleRedZoneEnter()
+        {
+            fighterAudio?.PlayRedZoneWarning();
         }
 
         private void Start()
@@ -451,7 +485,54 @@ namespace MysticCombat.Fighter
         private void TransitionTo(FighterState newState)
         {
             if (CurrentState == newState) return;
+
+            FighterState oldState = CurrentState;
             CurrentState = newState;
+
+            // --- State-Entry Audio Triggers (State-Driven Architecture) ---
+            switch (newState)
+            {
+                case FighterState.Jumping:
+                    fighterAudio?.PlayJump();
+                    break;
+
+                case FighterState.Crouching:
+                    fighterAudio?.PlayCrouch();
+                    break;
+
+                case FighterState.LightAttack:
+                    fighterAudio?.PlayLightWhiff();
+                    break;
+
+                case FighterState.HeavyAttack:
+                    fighterAudio?.PlayHeavyWhiff();
+                    break;
+
+                case FighterState.Skill:
+                    fighterAudio?.PlaySkillAttack();
+                    break;
+
+                case FighterState.Ultimate:
+                    fighterAudio?.PlayUltimateAttack();
+                    break;
+
+                case FighterState.Meditating:
+                    fighterAudio?.StartKiMeditationAura();
+                    break;
+            }
+
+            // --- Landing Audio Trigger (Airborne to Grounded) ---
+            if ((oldState == FighterState.Falling || oldState == FighterState.Jumping) &&
+                (newState == FighterState.Idle || newState == FighterState.Walking || newState == FighterState.Exhausted))
+            {
+                fighterAudio?.PlayLand();
+            }
+
+            // --- State-Exit Audio Triggers ---
+            if (oldState == FighterState.Meditating && newState != FighterState.Meditating)
+            {
+                fighterAudio?.StopKiMeditationAura();
+            }
         }
 
         #endregion
