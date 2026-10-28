@@ -26,17 +26,17 @@
     "kiGainOnHit": 8
   },
   "skill": {
-    "name": "Kamehameha",
-    "type": "projectile",
-    "kiCost": 20,
-    "damage": 20,
-    "speed": 10.0,
-    "lifetime": 2.0,
-    "startupFrames": 10,
-    "recoveryFrames": 15
+    "name": "None",
+    "type": "none",
+    "kiCost": 0,
+    "damage": 0,
+    "speed": 0.0,
+    "lifetime": 0.0,
+    "startupFrames": 0,
+    "recoveryFrames": 0
   },
   "ultimate": {
-    "name": "Spirit Bomb",
+    "name": "Kamehameha",
     "kiCost": 80,
     "damage": 45,
     "hitboxSize": { "x": 3.0, "y": 3.0 },

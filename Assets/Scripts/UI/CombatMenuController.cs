@@ -8,6 +8,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 using TMPro;
 using MysticCombat.Core;
+using MysticCombat.Systems;
 
 namespace MysticCombat.UI
 {
@@ -202,7 +203,7 @@ namespace MysticCombat.UI
 
             if (selectedPauseIndex != prev)
             {
-                PlaySound(navigateSfx, 0.45f);
+                PlaySound(navigateSfx, 0.22f);
                 UpdatePauseSelectionVisuals();
             }
 
@@ -380,7 +381,7 @@ namespace MysticCombat.UI
 
             if (selectedResultsIndex != prev)
             {
-                PlaySound(navigateSfx, 0.45f);
+                PlaySound(navigateSfx, 0.22f);
                 UpdateResultsSelectionVisuals();
             }
 
@@ -651,7 +652,7 @@ namespace MysticCombat.UI
                 EventTrigger.Entry entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
                 entry.callback.AddListener((_) => {
                     selectedPauseIndex = index;
-                    PlaySound(navigateSfx, 0.45f);
+                    PlaySound(navigateSfx, 0.22f);
                     UpdatePauseSelectionVisuals();
                 });
                 trigger.triggers.Add(entry);
@@ -858,7 +859,7 @@ namespace MysticCombat.UI
                 EventTrigger.Entry entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
                 entry.callback.AddListener((_) => {
                     selectedResultsIndex = index;
-                    PlaySound(navigateSfx, 0.45f);
+                    PlaySound(navigateSfx, 0.22f);
                     UpdateResultsSelectionVisuals();
                 });
                 trigger.triggers.Add(entry);
@@ -953,10 +954,8 @@ namespace MysticCombat.UI
 
         private void GenerateProceduralAudio()
         {
-            int sampleRate = 44100;
-
-            // 1. Navigation Blip (Square 580 Hz, 0.04s)
-            navigateSfx = CreateToneClip("MenuNav", 0.04f, (t) => Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 580f * t)));
+            // 1. Navigation Blip (Square 580 Hz, 0.04s with smooth decay envelope)
+            navigateSfx = CreateToneClip("MenuNav", 0.04f, (t) => Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 580f * t)) * (1f - (t / 0.04f)));
 
             // 2. Select Chime (Sine 880 -> 1200 Hz ascending sweep, 0.12s)
             selectSfx = CreateToneClip("MenuSelect", 0.12f, (t) => {
@@ -1004,7 +1003,8 @@ namespace MysticCombat.UI
         {
             if (menuAudioSource != null && clip != null)
             {
-                menuAudioSource.PlayOneShot(clip, volume);
+                float sfxMaster = InputSettingsManager.SFXVolume;
+                menuAudioSource.PlayOneShot(clip, volume * sfxMaster);
             }
         }
 

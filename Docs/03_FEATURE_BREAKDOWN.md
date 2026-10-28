@@ -655,6 +655,228 @@ The AI transitions dynamically between 5 macro postures:
 - **`healthMultiplier` & `damageMultiplier`:** Scaled to $1.4\times$ and $1.25\times$ on Extreme difficulty for tournament boss battles.
 - **Character Select Integration:** Players can press `[TAB]` on the Character Select Screen when in `Vs CPU` mode to cycle dynamically between `[ CPU: EASY ]`, `[ CPU: HARD ]`, and `[ CPU: EXTREME ]`.
 
+---
+
+## 23. Runtime Fighter Deployment Pipeline (`PrototypeBootstrap.cs`)
+
+### Overview
+To enable free character selection across all combinations without baking characters into `SampleScene.unity`, [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs) functions as the **Runtime Fighter Deployer**.
+
+### Execution Pipeline (Scene Load):
+1. **Scene Sweep:** Detects and immediately flags for destruction any static or legacy fighters left in the scene (`Fighter_P1*`, `Fighter_P2*`), setting them inactive instantly to prevent lifecycle race conditions.
+2. **Session Identification:** Reads `P1SelectedCharacterId` and `P2SelectedCharacterId` from `GameManager.Instance`.
+3. **Resource Prefab Instantiation:**
+   - Calls `Resources.Load<GameObject>("Prefabs/Fighters/" + charName)`.
+   - Spawns Player 1 at $(-2.2, -3.0, 0)$ as `Fighter_P1`.
+   - Spawns Player 2 at $(+2.2, -3.0, 0)$ as `Fighter_P2`.
+4. **Input Decoupling Injection:**
+   - `Fighter_P1`: Injected with `PlayerInputHandler` (`PlayerIndex.P1`).
+   - `Fighter_P2`:
+     - If `CurrentGameMode == GameMode.VsCpu`: Removes human input and attaches the character-specific brain (`GokuBrain` or `SaitamaBrain`), configured to `CurrentCpuDifficulty`.
+     - If `CurrentGameMode == GameMode.LocalPvP`: Injected with `PlayerInputHandler` (`PlayerIndex.P2`).
+5. **Opponent Auto-Facing:** Cross-wires `fc1.opponent = fc2.transform` and `fc2.opponent = fc1.transform`.
+6. **Direct Reference Injection:** Calls `MatchManager.SetFighterReferences()` and `HUDController.SetFighterReferences()`, binding health and Ki systems directly and eliminating all brittle `GameObject.Find()` calls.
+7. **Mirror Match Resolution:** If `p1Char == p2Char`, Player 2 receives an alternate palette tint on its `SpriteRenderer` (Cool Cyan for Goku or Solar Amber for Saitama).
+
+---
+
+## 24. Interactive Options & Controls Modal, Combined Local Duel Table & Audio Mixer
+
+### Overview & Philosophy
+The **Options & Controls** screen transforms the previously static placeholder into a full-featured, interactive configuration hub for sound mixing and dynamic key rebinding. It solves the classic PC local multiplayer dilemma by cleanly separating **Single Player** input freedom from **1v1 Local Duel** shared keyboard management.
+
+### Feature Specifications
+1. **Direct Top Audio Sliders:**
+   - Positioned prominently across the top of the modal window for immediate access without switching tabs.
+   - **Music BGM Slider:** Ranges from $0\%$ to $100\%$, updating title music and match BGM volume live as the slider is dragged.
+   - **SFX Sound Slider:** Adjusts hit, attack, and UI impact audio volume.
+   - Live percentage readouts (`70%`, `100%`) update dynamically on every value change.
+2. **Profile Selection Tabs:**
+   - `[ 👤 SINGLE PLAYER (Vs CPU & Future LAN) ]`: Active tab highlighted with glowing gold border and navy fill.
+   - `[ ⚔️ 1v1 LOCAL DUEL (Shared Keyboard) ]`: Inactive tab displayed in muted slate styling.
+3. **Single Player Profile (9 Customizable Actions):**
+   - Configured for solo play against the CPU and future LAN networked gameplay where each player has their own machine.
+   - Full keyboard freedom across all 9 actions: `Move Left`, `Move Right`, `Jump`, `Crouch / Guard`, `Light Attack`, `Heavy Attack`, `Special Skill`, `Ultimate Move`, `Ki Meditate`.
+   - Canonical Defaults: `WASD` for movement, `F` (Light), `C` (Heavy), `E` (Skill), `Q` (Ultimate), `X` (Meditate).
+4. **1v1 Local Duel Combined Table (18 Customizable Keys):**
+   - Designed specifically for two human players sharing a single keyboard on one PC.
+   - **3-Column Unified Layout:**
+     `[ FIGHTER ACTION ] | [ PLAYER 1 (LEFT SIDE) ] | [ PLAYER 2 (RIGHT SIDE) ]`
+   - Keeps both players' mappings side-by-side on 9 rows, allowing instant comparison and preventing key collisions.
+   - Canonical Defaults:
+     - Player 1 (Left Half): `A` / `D` / `W` / `S` (Movement) + `F` (Light), `C` (Heavy), `E` (Skill), `Q` (Ult), `X` (Ki).
+     - Player 2 (Right Half): `J` / `L` / `I` / `K` (Movement) + `H` (Light), `N` (Heavy), `U` (Skill), `O` (Ult), `M` (Ki).
+5. **Interactive Key Rebinding Mechanism:**
+   - Clicking any button sets that slot into **Listening Mode**: button text changes to `[ PRESS KEY ]` with an animated gold/white pulse.
+   - In `Update()`, `OptionsMenuController` scans `Keyboard.current.allKeys` for `wasPressedThisFrame`.
+   - The first pressed key is bound to the slot, formatted cleanly (e.g. arrow keys render as `←`, `→`, `↑`, `↓`), and written to `PlayerPrefs`.
+   - Pressing `[Escape]` cancels rebinding cleanly without modifying the existing key.
+6. **Reset to Defaults & Persistence:**
+   - **`[ ↺ RESET TO DEFAULTS ]`**: Reverts volume sliders to $70\% / 100\%$ and restores all 27 key assignments (9 SP + 18 Duel) to their original factory defaults.
+   - **`[ ✔ SAVE & CLOSE (ESC) ]`**: Commits all modified keys and volume values to disk via `PlayerPrefs.Save()` and dismisses the modal.
+
+---
+
+## 25. Large-Scale High-Visibility Typography & Arcade Navigation Hierarchy
+
+### Overview & Visual Philosophy
+To ensure maximum readability across varying monitor distances and resolutions, the Controls & Options architecture was redesigned with an **$80\%$ font size scale-up** and a clean **3-screen hierarchy**.
+
+### Key System Details
+1. **Window Dimensions:** Expanded to $1440 \times 880\text{px}$ on standard 1080p reference canvas.
+2. **Typography Scaling:**
+   - Screen Title: $36\text{pt}$ Bold Arcade Gold (`#FFD54F`).
+   - Screen Subtitles: $20\text{pt}$ Metallic Cyan (`#90CAF9`).
+   - Volume Labels & Menu Buttons: $24\text{pt}\text{–}25\text{pt}$ Bold.
+   - Action Titles: $23\text{pt}$ High-Contrast White.
+   - Bound Key Buttons: $24\text{pt}$ Bold.
+   - Volume Percentage Readouts: $26\text{pt}$ Bold.
+3. **Screen Hierarchy Flow:**
+   - **Main Hub:** Contains the Music & SFX sliders, the two sub-menu launcher buttons (`[ 👤 CONFIGURE SINGLE PLAYER KEYS » ]` and `[ ⚔️ CONFIGURE 1v1 LOCAL DUEL KEYS » ]`), and side-by-side bottom buttons.
+   - **Single Player Sub-Screen:** Devotes the full window to 9 large action rows with ample spacing ($54\text{px}$ row height).
+   - **1v1 Local Duel Sub-Screen:** Devotes the full $1440\text{px}$ window to the 3-column combined table (`ACTION` | `PLAYER 1` | `PLAYER 2`), allowing side-by-side comparison with zero visual crowding.
+4. **Obvious Arcade Navigation System:**
+   - **`►` Cursor Prefixing:** Automatically attaches to the focused element's label text (`►  MUSIC BGM`, `►  MOVE LEFT`).
+   - **Pulsing Neon Gold Outline:** Dynamically blends between Solar Gold and Pure White using `Mathf.Sin(Time.unscaledTime * 7f)`.
+   - **Dual-Axis Input:**
+     - Vertical (`W/S` or `Up/Down`): Moves item focus with a $0.20\text{s}$ repeat gate.
+     - Horizontal (`A/D` or `Left/Right`): Nudges sliders $\pm 5\%$ in Main Hub, or toggles between P1 and P2 columns in the Local Duel table.
+     - Action (`Enter/Space`): Activates buttons or initiates key listening mode.
+     - Back/Cancel (`Escape`): Cancels active rebind, returns to Main Hub from sub-screens, or saves and exits to Title from the Main Hub.
+   - **Mouse Integration:** Hovering moves the cursor and outline immediately to that item; clicking triggers it directly.
+
+---
+
+## 26. Runtime Dynamic Character Deployer & Match Lifecycle Synchronization
+
+### Overview
+To completely eliminate hardcoded combatants from the stage and support true arbitrary fighter matchups (Goku vs. Saitama, Saitama vs. Goku, Goku vs. Goku mirror, Saitama vs. Saitama mirror), Mystic Combat employs a dedicated runtime deployment manager: [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs).
+
+### Core Deployer Responsibilities
+1. **Prefab Resolution from Resources:**
+   - Character prefabs are maintained in `Assets/Resources/Prefabs/Fighters/` (`Goku.prefab`, `Saitama.prefab`).
+   - `DeployFighter()` dynamically instantiates the correct prefab based on `GameManager.Instance.P1SelectedCharacterId` and `P2SelectedCharacterId`.
+2. **Decoupled Input Provider Assignment (`IFighterInput`):**
+   - **Player 1:** Assigned `PlayerInputHandler` bound to Player 1 key mappings.
+   - **Player 2 (Human vs. Human):** Assigned `PlayerInputHandler` bound to Player 2 key mappings.
+   - **Player 2 (Human vs. CPU):** In `GameMode.VsCpu`, the deployer removes `PlayerInputHandler` and attaches the character-specific HFSM brain (`GokuBrain` or `SaitamaBrain`), configuring its reaction times, mistake chances, and stat multipliers via `GameManager.Instance.CurrentCpuDifficulty`.
+3. **Mirror Match Alternate Visual Palette:**
+   - If Player 1 and Player 2 select the same character (e.g. Goku vs. Goku), Player 2 is assigned an alternate anime color tint:
+     - Goku P2 Alternate: Cool Cyan / Ice Gi (`#B2D9FF`).
+     - Saitama P2 Alternate: Solar Amber Suit (`#FFD9B2`).
+4. **Cross-Fighter Target Wiring:**
+   - Automatically cross-links each fighter's `opponent` transform (`fc1.opponent = fc2.transform; fc2.opponent = fc1.transform;`) so characters naturally face each other and track spacing distances.
+5. **Direct Reference Injection into Systems:**
+   - Automatically pushes references into both `MatchManager.SetFighterReferences()` and `HUDController.SetFighterReferences()`, bypassing scene search queries.
+6. **Scene Lifecycle Auto-Bootstrap:**
+   - Hooks both `SceneManager.sceneLoaded` and `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]`.
+   - Uses `SceneManager.MoveGameObjectToScene` to guarantee new instances are parented to `SampleScene` regardless of transition timing.
+
+---
+
+## 27. Audio Mixing Tuning, Kamehameha Voice Calibration & Dynamic SFX Scaling
+
+### Overview
+To ensure an authentic, balanced retro arcade audio landscape, audio playback levels across the UI, combat arena, and fighter vocals were calibrated to prevent audio clipping, ear fatigue, and volume dominance.
+
+### Key Adjustments Implemented:
+
+1. **Default Background Music (BGM) Set to 100%:**
+   - In [`InputSettingsManager.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Systems/InputSettingsManager.cs), updated `DEFAULT_MUSIC_VOL = 1.00f;`.
+   - In `LoadAllSettings()`, incorporated an automatic migration routine: if stored volume in `PlayerPrefs` was the old default (`0.70f`) or uninitialized, it automatically upgrades to `1.00f`, granting maximum headroom immediately.
+   - Updated serialized defaults in `MainMenuController.cs` and `MainMenuSetupTool.cs` (bake key `v16`).
+
+2. **Pause & Victory Menu Navigation SFX Volume Halved:**
+   - In [`CombatMenuController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CombatMenuController.cs):
+     - Reduced navigation sound volume from `0.45f` down to `0.22f` ($51\%$ volume drop) across keyboard inputs and mouse hover callbacks.
+     - Implemented an amplitude decay envelope in procedural audio synthesis:
+       `Mathf.Sign(Mathf.Sin(frequency * t)) * (1f - (t / 0.04f))`
+       which eliminates the harsh high-frequency click on audio cutoffs.
+     - Coupled playback to master `InputSettingsManager.SFXVolume`.
+
+3. **Goku's Kamehameha Corrected as Ultimate (`Q`) & Volume Calibrated:**
+   - In [`FighterAudio.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs) and [`SceneSetupTool.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/SceneSetupTool.cs):
+     - Goku has no special skill; his `voiceSkillClip` is `null`.
+     - Goku's signature Ultimate (Ki: 80, `Q` / `O`) is **Kamehameha**, animated via `ultimate_0..9` and voiced via `voiceUltimateClip` (`goku_voice_kamehameha.wav`).
+     - Calibrated Goku's `voiceUltimateMultiplier` down to `0.50f` to compensate for the extreme digital mastering gain of `goku_voice_kamehameha.wav` (Peak `0.906`, RMS `0.262`).
+     - In `PlayVoiceSound()`, added a hard safety ceiling: `tunedVolume = Mathf.Min(tunedVolume, 0.50f);` whenever the Kamehameha clip triggers, preventing ear-piercing audio peaks.
+
+4. **Saitama Skill & Ultimate Vocal Shouts Amplified:**
+   - In [`FighterAudio.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs):
+     - Increased Saitama's `voiceSkillMultiplier` to **`2.20f`** so "Consecutive Normal Punches" cuts through loud impact sounds.
+     - Increased Saitama's `voiceUltimateMultiplier` to **`2.50f`** so "Serious Punch" rings out with climactic anime weight.
+
+5. **Single-Pass Master Audio Bus Scaling:**
+   - Kept one-shot audio sources unscaled (`volume = 1.0f`) and applied `InputSettingsManager.SFXVolume` as the final scale factor inside `PlaySound()` and `PlayVoiceSound()`, avoiding double-multiplication bugs.
+   - Looping meditation aura scales via `kiAuraVolume * sfxVolume * InputSettingsManager.SFXVolume`.
+
+---
+
+## 28. Standardized Animation Baselines, Dynamic Hurtbox Sizing & Tactical AI Rhythm
+
+### Overview
+This feature update resolves visual animation bouncing, aligns physical combat colliders with on-screen actions, and upgrades CPU Bot combat behavior from random input spam into tactical arcade martial arts.
+
+### 1. Goku 128x128 Animation Baseline Standardization
+- **Root Problem:** While standard Goku frames were $128 \times 128\text{px}$, `skill_0..3` were sliced at $90 \times 79\text{px}$ with varying bottom padding ($14\text{–}20\text{px}$), causing Goku's sprite pivot to lift him $20\text{px}$ above the arena floor whenever Kamehameha fired.
+- **Resolution:**
+  - Standardized all 44 Goku animation frames (`crouch`, `idle`, `walk`, `punch`, `heavy`, `skill`, `ultimate`, `meditate`, `jump`) onto uniform **$128 \times 128\text{px}$** canvases.
+  - Locked ground foot contact baseline to `y = 104` ($23\text{px}$ bottom padding) and stance center to $x = 64$.
+  - In [`FighterAnimator.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterAnimator.cs), `pivot = new Vector2(0.5f, 23f / 128f)` now applies universally, completely eliminating visual bouncing.
+
+### 2. Dynamic Hurtbox Sizing on Crouch
+- In [`FighterController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs), when transitioning into `FighterState.Crouching`:
+  - The `Hurtbox` `BoxCollider2D.size` dynamically scales down from $1.8\text{m}$ to $0.95\text{m}$, with `offset` lowered to $0.48\text{m}$.
+  - Exiting crouch restores the standing $1.8\text{m}$ box.
+  - This allows ducking fighters to physically evade high-altitude melee attacks.
+
+### 3. Extended Kamehameha Beam Hitbox Reach
+- Goku's Skill attack was expanded from a tiny $1.3\text{m}$ box into an authentic full-screen beam:
+  `hitboxOffset = new Vector2(2.1f, 0.9f)`, `hitboxSize = new Vector2(3.6f, 0.85f)`.
+- In [`HitboxController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/HitboxController.cs), `ConfigureAttack()` synchronizes both internal fields and the physical `hitboxCollider.offset` and `hitboxCollider.size`.
+- The beam now cleanly strikes targets standing across the stage at mid/long distance ($0.3\text{m}\text{–}3.9\text{m}$).
+
+### 4. Tactical HFSM & Humanized Cadence
+- In [`CpuFighterBrain.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/CpuFighterBrain.cs):
+  - **Jump Cooldown Gate:** Added `jumpCooldownTimer` ($2.0\text{s}\text{–}3.2\text{s}$), stopping the 60 FPS pogo-sticking bug.
+  - **Relative Footsies Spacing:** Neutral spacing oscillation now steps forward and back relative to the opponent (`dirToOpponent`), creating believable boxing footsies.
+  - **Corner & Wall Awareness:** Near boundary walls ($|x| > 7.2\text{m}$), the bot refuses to walk into the wall; it either initiates an escape jump-over or fights out with aggressive rushdown.
+  - **Attack Cadence:** Regulated by `attackCooldownTimer` ($0.25\text{s}\text{–}0.50\text{s}$), allowing natural attack pacing and combo hit-confirmation.
+
+---
+
+## 29. Combat BGM First-Round Self-Healing & Scene Guarding
+
+### Overview
+Ensures that the arena combat soundtrack (*Double Dragon 2 - Final Battle 2*) begins playing seamlessly from 0:00 on Round 1 under all scene-loading conditions, eliminating silent opening rounds.
+
+### Key Enhancements Implemented
+1. **Scene-Context Guarding:**
+   - In [`MatchAudioController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs), replaced the brittle `CurrentState == GameState.MainMenu` flag check with `gameObject.scene.name == "MainMenuScene"`.
+   - This prevents battle music from playing in the Main Menu, while ensuring that launching directly into `SampleScene` in the Editor never erroneously silences combat music.
+2. **First-Round State Self-Healing:**
+   - In `MatchAudioController.Start()`:
+     ```csharp
+     if (matchManager != null && matchManager.CurrentMatchState == MatchManager.MatchState.RoundInProgress)
+     {
+         if (musicSource != null && !musicSource.isPlaying)
+         {
+             PlayBattleMusic(resetToStart: true);
+         }
+     }
+     ```
+   - If `OnRoundStart(1)` fired before `MatchAudioController` finished its subscription during scene load, `Start()` immediately detects the in-progress round and kicks off the battle track with zero frame delay.
+3. **Continuous Playback Failsafe:**
+   - In `Update()`, if `matchManager.CurrentMatchState == RoundInProgress` and `!musicSource.isPlaying`, the controller initiates playback automatically.
+4. **Explicit State Setting in MatchManager:**
+   - In [`MatchManager.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchManager.cs), `StartMatch()` explicitly sets `GameManager.Instance.SetState(GameState.InMatch)` to keep game state synchronized across the engine.
+
+
+
+
+
+
+
 
 
 

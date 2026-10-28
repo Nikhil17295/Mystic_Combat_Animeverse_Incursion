@@ -149,6 +149,13 @@ namespace MysticCombat.Combat
             kiGainOnHit = kiGain;
             hitboxOffset = offset;
             hitboxSize = size;
+
+            if (hitboxCollider == null) hitboxCollider = GetComponent<BoxCollider2D>();
+            if (hitboxCollider != null)
+            {
+                hitboxCollider.offset = offset;
+                hitboxCollider.size = size;
+            }
         }
 
         public void Activate()

@@ -130,7 +130,14 @@ namespace MysticCombat.Core
         private void Start()
         {
             ResolveFighters();
-            StartMatch();
+            if (p1Health != null && p2Health != null && currentMatchState == MatchState.WaitingToStart)
+            {
+                StartMatch();
+            }
+            else if (currentMatchState == MatchState.WaitingToStart)
+            {
+                Debug.Log("<color=#ffaa00>[MatchManager]</color> Waiting for fighters to be deployed before starting match...");
+            }
         }
 
         private void Update()
@@ -138,6 +145,10 @@ namespace MysticCombat.Core
             if (p1Health == null || p2Health == null || !IsInActiveScene(p1Health) || !IsInActiveScene(p2Health))
             {
                 ResolveFighters();
+                if (currentMatchState == MatchState.WaitingToStart && p1Health != null && p2Health != null)
+                {
+                    StartMatch();
+                }
             }
 
             if (currentMatchState == MatchState.RoundInProgress)
@@ -158,37 +169,32 @@ namespace MysticCombat.Core
 
         /// <summary>
         /// Auto-discovers fighters in the scene if not explicitly serialized or if pointing to assets on disk.
+        /// Searches for Fighter_P1* and Fighter_P2* regardless of character identity!
         /// </summary>
         public void ResolveFighters()
         {
             bool p1Invalid = !IsInActiveScene(p1Health) || !IsInActiveScene(p1Energy);
             bool p2Invalid = !IsInActiveScene(p2Health) || !IsInActiveScene(p2Energy);
 
-            if (p1Invalid)
+            if (p1Invalid || p2Invalid)
             {
-                p1Health = null;
-                p1Energy = null;
-                p1Controller = null;
-                GameObject goku = GameObject.Find("Fighter_P1_Goku");
-                if (goku != null)
+                var allFighters = FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude);
+                foreach (var fc in allFighters)
                 {
-                    p1Health = goku.GetComponent<HealthSystem>();
-                    p1Energy = goku.GetComponent<EnergySystem>();
-                    p1Controller = goku.GetComponent<Fighter.FighterController>();
-                }
-            }
-
-            if (p2Invalid)
-            {
-                p2Health = null;
-                p2Energy = null;
-                p2Controller = null;
-                GameObject saitama = GameObject.Find("Fighter_P2_Saitama");
-                if (saitama != null)
-                {
-                    p2Health = saitama.GetComponent<HealthSystem>();
-                    p2Energy = saitama.GetComponent<EnergySystem>();
-                    p2Controller = saitama.GetComponent<Fighter.FighterController>();
+                    if (fc == null) continue;
+                    string n = fc.gameObject.name;
+                    if (p1Invalid && (n == "Fighter_P1" || n.StartsWith("Fighter_P1_")))
+                    {
+                        p1Health = fc.GetComponent<HealthSystem>();
+                        p1Energy = fc.GetComponent<EnergySystem>();
+                        p1Controller = fc;
+                    }
+                    else if (p2Invalid && (n == "Fighter_P2" || n.StartsWith("Fighter_P2_")))
+                    {
+                        p2Health = fc.GetComponent<HealthSystem>();
+                        p2Energy = fc.GetComponent<EnergySystem>();
+                        p2Controller = fc;
+                    }
                 }
             }
 
@@ -201,6 +207,11 @@ namespace MysticCombat.Core
             {
                 p2Health.OnDeath -= HandleP2Death;
                 p2Health.OnDeath += HandleP2Death;
+            }
+
+            if (currentMatchState == MatchState.WaitingToStart && p1Health != null && p2Health != null)
+            {
+                StartMatch();
             }
         }
 
@@ -230,6 +241,11 @@ namespace MysticCombat.Core
                 p2Health.OnDeath -= HandleP2Death;
                 p2Health.OnDeath += HandleP2Death;
             }
+
+            if (currentMatchState == MatchState.WaitingToStart && p1Health != null && p2Health != null)
+            {
+                StartMatch();
+            }
         }
 
         /// <summary>
@@ -240,6 +256,11 @@ namespace MysticCombat.Core
             p1RoundWins = 0;
             p2RoundWins = 0;
             currentRound = 0;
+
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.SetState(GameManager.GameState.InMatch);
+            }
 
             Debug.Log("[MatchManager] Match started!");
             StartRound();

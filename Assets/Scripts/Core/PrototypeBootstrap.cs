@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using MysticCombat.Fighter;
 using MysticCombat.Input;
 using MysticCombat.Systems;
@@ -37,15 +38,57 @@ namespace MysticCombat.Core
 
         #endregion
 
-        #region Runtime Auto-Bootstrap
+        #region State & Execution Control
+
+        private bool hasDeployedInCurrentScene = false;
+
+        #endregion
+
+        #region Runtime Auto-Bootstrap & Scene Watching
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void InitializeGlobalSceneWatcher()
+        {
+            SceneManager.sceneLoaded -= OnGlobalSceneLoaded;
+            SceneManager.sceneLoaded += OnGlobalSceneLoaded;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void AutoBootstrap()
+        private static void OnInitialSceneLoad()
         {
-            if (FindAnyObjectByType<PrototypeBootstrap>() == null)
+            Scene activeScene = SceneManager.GetActiveScene();
+            CheckAndDeployScene(activeScene);
+        }
+
+        private static void OnGlobalSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            CheckAndDeployScene(scene);
+        }
+
+        private static void CheckAndDeployScene(Scene scene)
+        {
+            // Do not deploy fighters inside the Main Menu!
+            if (!scene.IsValid() || scene.name == "MainMenuScene") return;
+
+            // When entering a combat scene, ensure PrototypeBootstrap exists and deploys fighters
+            if (scene.name == "SampleScene" || Object.FindAnyObjectByType<MatchManager>() != null || GameObject.Find("Arena") != null)
             {
-                GameObject bootObj = new GameObject("[PrototypeBootstrap]");
-                bootObj.AddComponent<PrototypeBootstrap>();
+                SceneManager.SetActiveScene(scene);
+
+                PrototypeBootstrap deployer = null;
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    deployer = root.GetComponentInChildren<PrototypeBootstrap>(true);
+                    if (deployer != null) break;
+                }
+
+                if (deployer == null)
+                {
+                    GameObject bootObj = new GameObject("[PrototypeBootstrap]");
+                    SceneManager.MoveGameObjectToScene(bootObj, scene);
+                    deployer = bootObj.AddComponent<PrototypeBootstrap>();
+                }
+                deployer.DeployMatchFighters();
             }
         }
 
@@ -55,7 +98,29 @@ namespace MysticCombat.Core
 
         private void Start()
         {
-            Debug.Log("[PrototypeBootstrap] Initializing Mystic Combat Arcade View...");
+            // If spawned in MainMenuScene, do not deploy fighters
+            if (gameObject.scene.name == "MainMenuScene")
+            {
+                return;
+            }
+
+            DeployMatchFighters();
+        }
+
+        #endregion
+
+        #region Match Deployment
+
+        public void DeployMatchFighters()
+        {
+            if (hasDeployedInCurrentScene) return;
+
+            // Never deploy inside Main Menu
+            if (gameObject.scene.name == "MainMenuScene") return;
+
+            hasDeployedInCurrentScene = true;
+
+            Debug.Log("<color=#00e676>[PrototypeBootstrap]</color> Deploying fighters for combat arena...");
 
             SetupLayers();
             EnsureArena();
@@ -70,11 +135,12 @@ namespace MysticCombat.Core
                 : "saitama";
 
             // Clean up pre-existing baked fighters in scene to guarantee correct characters spawn
-            GameObject[] existingFighters = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            GameObject[] existingFighters = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include);
             foreach (var go in existingFighters)
             {
-                if (go != null && (go.name.StartsWith("Fighter_P1_") || go.name.StartsWith("Fighter_P2_")))
+                if (go != null && (go.name.StartsWith("Fighter_P1") || go.name.StartsWith("Fighter_P2")))
                 {
+                    go.SetActive(false);
                     Destroy(go);
                 }
             }
@@ -82,8 +148,8 @@ namespace MysticCombat.Core
             string p1Name = "Fighter_P1_" + char.ToUpper(p1Char[0]) + p1Char.Substring(1);
             string p2Name = "Fighter_P2_" + char.ToUpper(p2Char[0]) + p2Char.Substring(1);
 
-            GameObject fighter1 = CreateFighter(p1Name, p1SpawnPosition, PlayerInputHandler.PlayerIndex.P1, p1Char);
-            GameObject fighter2 = CreateFighter(p2Name, p2SpawnPosition, PlayerInputHandler.PlayerIndex.P2, p2Char);
+            GameObject fighter1 = DeployFighter(p1Name, p1SpawnPosition, PlayerInputHandler.PlayerIndex.P1, p1Char);
+            GameObject fighter2 = DeployFighter(p2Name, p2SpawnPosition, PlayerInputHandler.PlayerIndex.P2, p2Char);
 
             // Mirror Match Support (Player 2 Alternate Palette)
             if (p1Char == p2Char)
@@ -123,6 +189,18 @@ namespace MysticCombat.Core
                 fighter2.GetComponent<EnergySystem>()
             );
 
+            // Wire HUDController if present
+            HUDController hud = FindAnyObjectByType<HUDController>();
+            if (hud != null)
+            {
+                hud.SetFighterReferences(
+                    fighter1.GetComponent<HealthSystem>(),
+                    fighter2.GetComponent<HealthSystem>(),
+                    fighter1.GetComponent<EnergySystem>(),
+                    fighter2.GetComponent<EnergySystem>()
+                );
+            }
+
             // Ensure CombatMenuController is active and ready on HUD_Canvas
             CombatMenuController menuCtrl = Object.FindAnyObjectByType<CombatMenuController>();
             if (menuCtrl == null)
@@ -139,7 +217,7 @@ namespace MysticCombat.Core
             }
 
             Debug.Log("=================================================================");
-            Debug.Log("[PrototypeBootstrap] >>> FIGHTING GAME PROTOTYPE READY <<<");
+            Debug.Log($"[PrototypeBootstrap] >>> FIGHTING MATCH READY: P1 ({p1Char}) vs P2 ({p2Char}) <<<");
             Debug.Log("=================================================================");
             Debug.Log("P1 (Goku):    [A/D] Move | [W / Space] Jump | [S] Crouch");
             Debug.Log("              [F] Light | [C] Heavy | [E] Skill | [Q] Ult | [X] Meditate");
@@ -150,9 +228,98 @@ namespace MysticCombat.Core
 
         #endregion
 
-        #region Fighter Creation
+        #region Fighter Deployment & Creation
 
-        private GameObject CreateFighter(string fighterName, Vector3 spawnPos, PlayerInputHandler.PlayerIndex playerIndex, string characterId)
+        private GameObject DeployFighter(string fighterName, Vector3 spawnPos, PlayerInputHandler.PlayerIndex playerIndex, string characterId)
+        {
+            string prefabName = characterId == "goku" ? "Goku" : "Saitama";
+            GameObject prefab = Resources.Load<GameObject>($"Prefabs/Fighters/{prefabName}");
+            GameObject fighter = null;
+
+            if (prefab != null)
+            {
+                fighter = Instantiate(prefab, spawnPos, Quaternion.identity);
+                fighter.name = fighterName;
+            }
+            else
+            {
+                fighter = CreateFighterProcedural(fighterName, spawnPos, characterId);
+            }
+
+            if (fighter.scene != gameObject.scene)
+            {
+                SceneManager.MoveGameObjectToScene(fighter, gameObject.scene);
+            }
+
+            FighterController fc = fighter.GetComponent<FighterController>();
+            if (fc == null) fc = fighter.AddComponent<FighterController>();
+
+            // Input Provider Assignment (Decoupled: Human Keyboard vs Tactical CPU HFSM)
+            bool isCpu = (playerIndex == PlayerInputHandler.PlayerIndex.P2) &&
+                         (GameManager.Instance == null || GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu);
+
+            if (isCpu)
+            {
+                PlayerInputHandler existingInput = fighter.GetComponent<PlayerInputHandler>();
+                if (existingInput != null) Destroy(existingInput);
+
+                CpuDifficulty diff = (GameManager.Instance != null) ? GameManager.Instance.CurrentCpuDifficulty : CpuDifficulty.Easy;
+                CpuFighterBrain brain = characterId == "goku"
+                    ? (CpuFighterBrain)fighter.AddComponent<GokuBrain>()
+                    : (CpuFighterBrain)fighter.AddComponent<SaitamaBrain>();
+
+                brain.Configure(diff);
+                fc.SetInputHandler(brain);
+                Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} from {prefabName}.prefab as CPU ({diff})!");
+            }
+            else
+            {
+                PlayerInputHandler inputHandler = fighter.GetComponent<PlayerInputHandler>();
+                if (inputHandler == null) inputHandler = fighter.AddComponent<PlayerInputHandler>();
+                inputHandler.playerIndex = playerIndex;
+                fc.SetInputHandler(inputHandler);
+                Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} from {prefabName}.prefab for Player {playerIndex}!");
+            }
+
+            fc.SetGroundLayer(1 << GROUND_LAYER);
+
+            Transform gc = fighter.transform.Find("GroundCheck");
+            if (gc != null) fc.SetGroundCheckPoint(gc);
+
+            FighterAudio fa = fighter.GetComponent<FighterAudio>();
+            if (fa != null) fa.EnsureClipsLoaded();
+
+            // Load and apply data from JSON (Data-Driven Architecture)
+            HealthSystem health = fighter.GetComponent<HealthSystem>();
+            EnergySystem energy = fighter.GetComponent<EnergySystem>();
+            CharacterData data = CharacterDataLoader.Load(characterId);
+            if (data != null)
+            {
+                fc.ApplyStats(data.moveSpeed, data.jumpForce, data.gravityScale);
+                if (health != null) health.Initialize(data.maxHealth);
+                if (energy != null)
+                {
+                    if (data.redZone != null)
+                    {
+                        energy.Initialize(100f, data.redZone.threshold, data.redZone.duration, data.redZone.recoveryKi);
+                    }
+                    else
+                    {
+                        energy.Initialize(100f, 10f, 5f, 20f);
+                    }
+                }
+            }
+            else
+            {
+                fc.ApplyStats(defaultMoveSpeed, defaultJumpForce, defaultGravityScale);
+                if (health != null) health.Initialize(defaultMaxHealth);
+                if (energy != null) energy.Initialize(100f, 10f, 5f, 20f);
+            }
+
+            return fighter;
+        }
+
+        private GameObject CreateFighterProcedural(string fighterName, Vector3 spawnPos, string characterId)
         {
             GameObject fighter = new GameObject(fighterName);
             fighter.transform.position = spawnPos;
@@ -163,7 +330,7 @@ namespace MysticCombat.Core
             rb.freezeRotation = true;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
-            // Body Collider (Bottom is at y=0, height ~1.9, center at 0.95)
+            // Body Collider
             BoxCollider2D col = fighter.AddComponent<BoxCollider2D>();
             col.size = new Vector2(FIGHTER_COLLIDER_WIDTH, FIGHTER_COLLIDER_HEIGHT);
             col.offset = new Vector2(0f, FIGHTER_COLLIDER_HEIGHT / 2f);
@@ -172,49 +339,17 @@ namespace MysticCombat.Core
             SpriteRenderer sr = fighter.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 5;
 
-            // Input Provider (Decoupled: Human Keyboard vs Tactical CPU HFSM)
-            bool isCpu = (playerIndex == PlayerInputHandler.PlayerIndex.P2) &&
-                         (GameManager.Instance == null || GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu);
-
-            FighterController fc = fighter.AddComponent<FighterController>();
-
-            if (isCpu)
-            {
-                CpuDifficulty diff = (GameManager.Instance != null) ? GameManager.Instance.CurrentCpuDifficulty : CpuDifficulty.Easy;
-                CpuFighterBrain brain = null;
-                if (characterId == "goku")
-                {
-                    brain = fighter.AddComponent<GokuBrain>();
-                }
-                else
-                {
-                    brain = fighter.AddComponent<SaitamaBrain>();
-                }
-
-                brain.Configure(diff);
-                fc.SetInputHandler(brain);
-                Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Spawned {fighterName} as CPU with {diff} difficulty!");
-            }
-            else
-            {
-                PlayerInputHandler inputHandler = fighter.AddComponent<PlayerInputHandler>();
-                inputHandler.playerIndex = playerIndex;
-                fc.SetInputHandler(inputHandler);
-            }
-
-            // Ground check point at the fighter's feet
+            // Ground check
             GameObject groundCheck = new GameObject("GroundCheck");
             groundCheck.transform.SetParent(fighter.transform);
             groundCheck.transform.localPosition = new Vector3(0f, -0.05f, 0f);
-            fc.SetGroundCheckPoint(groundCheck.transform);
-            fc.SetGroundLayer(1 << GROUND_LAYER);
 
-            // FighterAnimator (Loads real multi-frame pixel art)
+            // Animator
             FighterAnimator animator = fighter.AddComponent<FighterAnimator>();
             string folderName = characterId == "goku" ? "Goku" : "Saitama";
             animator.LoadCharacterFrames(folderName);
 
-            // Hurtbox Child GameObject (vulnerable area - green gizmo)
+            // Hurtbox
             GameObject hurtboxObj = new GameObject("Hurtbox");
             hurtboxObj.transform.SetParent(fighter.transform);
             hurtboxObj.transform.localPosition = Vector3.zero;
@@ -225,7 +360,7 @@ namespace MysticCombat.Core
             HurtboxController hurtbox = hurtboxObj.AddComponent<HurtboxController>();
             hurtbox.SetOwner(fighter.transform);
 
-            // Hitbox Child GameObject (attack reach - red gizmo)
+            // Hitbox
             GameObject hitboxObj = new GameObject("Hitbox");
             hitboxObj.transform.SetParent(fighter.transform);
             hitboxObj.transform.localPosition = Vector3.zero;
@@ -235,42 +370,14 @@ namespace MysticCombat.Core
             hitboxCol.offset = new Vector2(0.8f, 0.9f);
             HitboxController hitbox = hitboxObj.AddComponent<HitboxController>();
             hitbox.Setup(fighter.transform, 10, 5f, 6f);
-            fc.SetHitbox(hitbox);
 
-            // Fighter Audio (Voice shouts, martial hits, anime powers)
+            // Audio
             FighterAudio fa = fighter.AddComponent<FighterAudio>();
             fa.EnsureClipsLoaded();
-            fa.KiAuraVolume = 0.12f;
-            fa.VoiceVolume = 1.0f;
-            fa.VoiceSkillMultiplier = 1.45f;
-            fa.VoiceUltimateMultiplier = 1.70f;
 
             // Systems
-            HealthSystem health = fighter.AddComponent<HealthSystem>();
-            EnergySystem energy = fighter.AddComponent<EnergySystem>();
-
-            // Load and apply data from JSON (Data-Driven Architecture)
-            CharacterData data = CharacterDataLoader.Load(characterId);
-            if (data != null)
-            {
-                fc.ApplyStats(data.moveSpeed, data.jumpForce, data.gravityScale);
-                health.Initialize(data.maxHealth);
-                if (data.redZone != null)
-                {
-                    energy.Initialize(100f, data.redZone.threshold, data.redZone.duration, data.redZone.recoveryKi);
-                }
-                else
-                {
-                    energy.Initialize(100f, 10f, 5f, 20f);
-                }
-                Debug.Log($"[PrototypeBootstrap] Loaded data for '{data.displayName}': HP={data.maxHealth}, Speed={data.moveSpeed}, Jump={data.jumpForce}");
-            }
-            else
-            {
-                fc.ApplyStats(defaultMoveSpeed, defaultJumpForce, defaultGravityScale);
-                health.Initialize(defaultMaxHealth);
-                energy.Initialize(100f, 10f, 5f, 20f);
-            }
+            fighter.AddComponent<HealthSystem>();
+            fighter.AddComponent<EnergySystem>();
 
             return fighter;
         }

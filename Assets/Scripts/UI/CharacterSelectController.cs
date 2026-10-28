@@ -611,7 +611,9 @@ namespace MysticCombat.UI
 
                 if (card.skillValueText != null && data.skill != null)
                 {
-                    card.skillValueText.text = $"SKILL: {data.skill.name}  [Ki: {data.skill.kiCost:F0}]";
+                    card.skillValueText.text = (data.skill.name == "None" || data.skill.kiCost <= 0)
+                        ? "SKILL: None"
+                        : $"SKILL: {data.skill.name}  [Ki: {data.skill.kiCost:F0}]";
                 }
 
                 if (card.ultimateValueText != null && data.ultimate != null)

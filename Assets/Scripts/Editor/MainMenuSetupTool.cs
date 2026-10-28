@@ -9,6 +9,7 @@ using TMPro;
 using UnityEngine.SceneManagement;
 using MysticCombat.UI;
 using MysticCombat.Core;
+using MysticCombat.Systems;
 
 namespace MysticCombat.Editor
 {
@@ -25,7 +26,7 @@ namespace MysticCombat.Editor
     {
         private const string MAIN_MENU_SCENE_PATH = "Assets/Scenes/MainMenuScene.unity";
         private const string COMBAT_SCENE_PATH = "Assets/Scenes/SampleScene.unity";
-        private const string MAIN_MENU_BAKE_KEY = "MysticCombat_MainMenu_Bake_v13";
+        private const string MAIN_MENU_BAKE_KEY = "MysticCombat_MainMenu_Bake_v16";
 
         static MainMenuSetupTool()
         {
@@ -773,7 +774,7 @@ namespace MysticCombat.Editor
             GameObject skillObj = CreateUIObject("Line_Skill", statBox.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, statY - statSpacing * 2f), new Vector2(490f, 30f));
             TextMeshProUGUI skillTmp = skillObj.AddComponent<TextMeshProUGUI>();
             skillTmp.font = pressStartFont;
-            skillTmp.text = "SKILL: Kamehameha [Ki: 20]";
+            skillTmp.text = "SKILL: None";
             skillTmp.fontSize = 18;
             skillTmp.alignment = TextAlignmentOptions.Center;
             skillTmp.color = new Color(0.0f, 0.95f, 1.0f, 1f);
@@ -783,7 +784,7 @@ namespace MysticCombat.Editor
             GameObject ultObj = CreateUIObject("Line_Ultimate", statBox.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, statY - statSpacing * 3f), new Vector2(490f, 30f));
             TextMeshProUGUI ultTmp = ultObj.AddComponent<TextMeshProUGUI>();
             ultTmp.font = pressStartFont;
-            ultTmp.text = "ULTIMATE: Spirit Bomb [Ki: 80]";
+            ultTmp.text = "ULTIMATE: Kamehameha [Ki: 80]";
             ultTmp.fontSize = 18;
             ultTmp.alignment = TextAlignmentOptions.Center;
             ultTmp.color = new Color(1.0f, 0.30f, 0.30f, 1f);
@@ -827,56 +828,461 @@ namespace MysticCombat.Editor
             return btnObj;
         }
 
+        private static Slider CreateSlider(string name, Transform parent, Vector2 pos, Vector2 size, float minVal, float maxVal, float defaultVal, Color fillColor, Color handleColor)
+        {
+            GameObject sliderObj = CreateUIObject(name, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), pos, size);
+            Slider slider = sliderObj.AddComponent<Slider>();
+            slider.minValue = minVal;
+            slider.maxValue = maxVal;
+            slider.value = defaultVal;
+
+            // Background track
+            GameObject bgObj = CreateUIObject("Background", sliderObj.transform, new Vector2(0f, 0.25f), new Vector2(1f, 0.75f), Vector2.zero, Vector2.zero);
+            Image bgImg = bgObj.AddComponent<Image>();
+            bgImg.color = new Color(0.12f, 0.15f, 0.22f, 1f);
+
+            // Fill Area
+            GameObject fillArea = CreateUIObject("Fill Area", sliderObj.transform, new Vector2(0f, 0.25f), new Vector2(1f, 0.75f), new Vector2(-5f, 0f), new Vector2(-15f, 0f));
+            GameObject fill = CreateUIObject("Fill", fillArea.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            Image fillImg = fill.AddComponent<Image>();
+            fillImg.color = fillColor;
+            slider.fillRect = fill.GetComponent<RectTransform>();
+
+            // Handle Area
+            GameObject handleArea = CreateUIObject("Handle Slide Area", sliderObj.transform, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-15f, 0f));
+            GameObject handle = CreateUIObject("Handle", handleArea.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(14f, 24f));
+            Image handleImg = handle.AddComponent<Image>();
+            handleImg.color = handleColor;
+            slider.handleRect = handle.GetComponent<RectTransform>();
+            slider.targetGraphic = handleImg;
+
+            return slider;
+        }
+
         private static GameObject CreateOptionsModal(Transform parent, TMP_FontAsset mainFont, TMP_FontAsset titleFont, MainMenuController controller)
         {
             GameObject modalRoot = CreateUIObject("Options_Modal_Overlay", parent, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             Image modalDarkBg = modalRoot.AddComponent<Image>();
             modalDarkBg.color = new Color(0.02f, 0.01f, 0.05f, 0.94f);
 
-            GameObject window = CreateUIObject("Window_Box", modalRoot.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(850f, 520f));
+            OptionsMenuController optionsCtrl = modalRoot.AddComponent<OptionsMenuController>();
+
+            // Window Box (Spacious 1440x880)
+            GameObject window = CreateUIObject("Window_Box", modalRoot.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1440f, 880f));
             Image winImg = window.AddComponent<Image>();
-            winImg.color = new Color(0.06f, 0.07f, 0.12f, 0.98f);
+            winImg.color = new Color(0.05f, 0.07f, 0.12f, 0.98f);
             Outline winOutline = window.AddComponent<Outline>();
-            winOutline.effectColor = new Color(1.0f, 0.85f, 0.1f, 1f); // Arcade Gold border
+            winOutline.effectColor = new Color(1.0f, 0.85f, 0.15f, 1f); // Arcade Gold border
             winOutline.effectDistance = new Vector2(5f, -5f);
 
-            GameObject titleObj = CreateUIObject("Modal_Title", window.transform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -40f), new Vector2(0f, 50f));
+            // 1. Header (Title & Subtitle - Enlarged by 80%)
+            GameObject titleObj = CreateUIObject("Modal_Title", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 395f), new Vector2(1380f, 54f));
             TextMeshProUGUI titleTmp = titleObj.AddComponent<TextMeshProUGUI>();
             titleTmp.font = titleFont;
             titleTmp.text = "OPTIONS & CONTROLS";
-            titleTmp.fontSize = 28;
+            titleTmp.fontSize = 36;
+            titleTmp.fontStyle = FontStyles.Bold;
             titleTmp.alignment = TextAlignmentOptions.Center;
-            titleTmp.color = new Color(1.0f, 0.85f, 0.1f, 1f);
+            titleTmp.color = new Color(1.0f, 0.85f, 0.15f, 1f);
 
-            GameObject bodyObj = CreateUIObject("Modal_Body", window.transform, new Vector2(0.08f, 0.22f), new Vector2(0.92f, 0.82f), Vector2.zero, Vector2.zero);
-            TextMeshProUGUI bodyTmp = bodyObj.AddComponent<TextMeshProUGUI>();
-            bodyTmp.font = mainFont;
-            bodyTmp.text = "PLAYER MOVESET CONFIGURATION\n\n" +
-                           "• Player 1 (Goku):    WASD (Move/Jump/Crouch) | F (Light) | C (Heavy) | E (Skill) | Q (Ult)\n\n" +
-                           "• Player 2 (Saitama): Arrows (Move/Jump/Crouch) | J (Light) | K (Heavy) | U (Skill) | I (Ult)\n\n" +
-                           "[Custom player-preferred movesets and audio mixer will be configured here.]";
-            bodyTmp.fontSize = 18;
-            bodyTmp.alignment = TextAlignmentOptions.TopLeft;
-            bodyTmp.color = new Color(0.85f, 0.90f, 0.98f, 1f);
+            GameObject subObj = CreateUIObject("Modal_Subtitle", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 355f), new Vector2(1380f, 32f));
+            TextMeshProUGUI subTmp = subObj.AddComponent<TextMeshProUGUI>();
+            subTmp.font = mainFont;
+            subTmp.text = "CUSTOMIZE AUDIO MIXER & INDEPENDENT KEYBOARD PROFILES";
+            subTmp.fontSize = 20;
+            subTmp.alignment = TextAlignmentOptions.Center;
+            subTmp.color = new Color(0.65f, 0.78f, 0.92f, 0.9f);
 
-            GameObject closeBtn = CreateUIObject("Button_Back", window.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 45f), new Vector2(280f, 48f));
+            // =========================================================================
+            // VIEW 1: MAIN OPTIONS HUB
+            // =========================================================================
+            GameObject hubPanel = CreateUIObject("Panel_MainHub", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -25f), new Vector2(1380f, 700f));
+
+            // Music BGM Row Box
+            GameObject musicRowObj = CreateUIObject("Music_Row_Box", hubPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 230f), new Vector2(1300f, 80f));
+            Image musicRowImg = musicRowObj.AddComponent<Image>();
+            musicRowImg.color = new Color(0.08f, 0.11f, 0.18f, 0.95f);
+            Outline musicOutline = musicRowObj.AddComponent<Outline>();
+            musicOutline.effectColor = new Color(0.22f, 0.28f, 0.40f, 0.8f);
+            musicOutline.effectDistance = new Vector2(2f, -2f);
+
+            GameObject musicLblObj = CreateUIObject("Music_Label", musicRowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-420f, 0f), new Vector2(360f, 50f));
+            TextMeshProUGUI musicLblTmp = musicLblObj.AddComponent<TextMeshProUGUI>();
+            musicLblTmp.font = mainFont;
+            musicLblTmp.text = "►  MUSIC BGM";
+            musicLblTmp.fontSize = 25;
+            musicLblTmp.fontStyle = FontStyles.Bold;
+            musicLblTmp.alignment = TextAlignmentOptions.Left;
+            musicLblTmp.color = new Color(1f, 0.85f, 0.2f, 1f);
+
+            Slider musicSlider = CreateSlider("Music_Slider", musicRowObj.transform, new Vector2(20f, 0f), new Vector2(520f, 26f), 0f, 1f, InputSettingsManager.MusicVolume, new Color(1f, 0.85f, 0.2f, 1f), new Color(1f, 0.95f, 0.5f, 1f));
+
+            GameObject musicValObj = CreateUIObject("Music_Val", musicRowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(380f, 0f), new Vector2(120f, 50f));
+            TextMeshProUGUI musicValTmp = musicValObj.AddComponent<TextMeshProUGUI>();
+            musicValTmp.font = mainFont;
+            musicValTmp.text = $"{Mathf.RoundToInt(InputSettingsManager.MusicVolume * 100f)}%";
+            musicValTmp.fontSize = 26;
+            musicValTmp.fontStyle = FontStyles.Bold;
+            musicValTmp.alignment = TextAlignmentOptions.Center;
+            musicValTmp.color = Color.white;
+
+            // SFX Sound Row Box
+            GameObject sfxRowObj = CreateUIObject("SFX_Row_Box", hubPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 135f), new Vector2(1300f, 80f));
+            Image sfxRowImg = sfxRowObj.AddComponent<Image>();
+            sfxRowImg.color = new Color(0.08f, 0.11f, 0.18f, 0.95f);
+            Outline sfxOutline = sfxRowObj.AddComponent<Outline>();
+            sfxOutline.effectColor = new Color(0.22f, 0.28f, 0.40f, 0.8f);
+            sfxOutline.effectDistance = new Vector2(2f, -2f);
+
+            GameObject sfxLblObj = CreateUIObject("SFX_Label", sfxRowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-420f, 0f), new Vector2(360f, 50f));
+            TextMeshProUGUI sfxLblTmp = sfxLblObj.AddComponent<TextMeshProUGUI>();
+            sfxLblTmp.font = mainFont;
+            sfxLblTmp.text = "   SFX SOUND";
+            sfxLblTmp.fontSize = 25;
+            sfxLblTmp.fontStyle = FontStyles.Bold;
+            sfxLblTmp.alignment = TextAlignmentOptions.Left;
+            sfxLblTmp.color = new Color(0f, 0.9f, 1f, 1f);
+
+            Slider sfxSlider = CreateSlider("SFX_Slider", sfxRowObj.transform, new Vector2(20f, 0f), new Vector2(520f, 26f), 0f, 1f, InputSettingsManager.SFXVolume, new Color(0f, 0.9f, 1f, 1f), new Color(0.7f, 1f, 1f, 1f));
+
+            GameObject sfxValObj = CreateUIObject("SFX_Val", sfxRowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(380f, 0f), new Vector2(120f, 50f));
+            TextMeshProUGUI sfxValTmp = sfxValObj.AddComponent<TextMeshProUGUI>();
+            sfxValTmp.font = mainFont;
+            sfxValTmp.text = $"{Mathf.RoundToInt(InputSettingsManager.SFXVolume * 100f)}%";
+            sfxValTmp.fontSize = 26;
+            sfxValTmp.fontStyle = FontStyles.Bold;
+            sfxValTmp.alignment = TextAlignmentOptions.Center;
+            sfxValTmp.color = Color.white;
+
+            // Single Player Key Sub-Menu Button
+            GameObject btnSpObj = CreateUIObject("Btn_Open_SinglePlayer", hubPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 35f), new Vector2(1300f, 80f));
+            Image btnSpImg = btnSpObj.AddComponent<Image>();
+            btnSpImg.color = new Color(0.10f, 0.14f, 0.24f, 1f);
+            Outline btnSpOutline = btnSpObj.AddComponent<Outline>();
+            btnSpOutline.effectColor = new Color(0.22f, 0.28f, 0.40f, 0.8f);
+            btnSpOutline.effectDistance = new Vector2(2f, -2f);
+            Button btnSp = btnSpObj.AddComponent<Button>();
+
+            GameObject btnSpTxtObj = CreateUIObject("Text", btnSpObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 12f), new Vector2(1260f, 36f));
+            TextMeshProUGUI btnSpTmp = btnSpTxtObj.AddComponent<TextMeshProUGUI>();
+            btnSpTmp.font = mainFont;
+            btnSpTmp.text = "   CONFIGURE SINGLE PLAYER KEYS (Vs CPU / LAN)  »";
+            btnSpTmp.fontSize = 24;
+            btnSpTmp.fontStyle = FontStyles.Bold;
+            btnSpTmp.alignment = TextAlignmentOptions.Center;
+            btnSpTmp.color = Color.white;
+
+            GameObject btnSpDescObj = CreateUIObject("Desc", btnSpObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -20f), new Vector2(1260f, 26f));
+            TextMeshProUGUI btnSpDescTmp = btnSpDescObj.AddComponent<TextMeshProUGUI>();
+            btnSpDescTmp.font = mainFont;
+            btnSpDescTmp.text = "Full keyboard control for Player 1. Used against CPU and future LAN matches.";
+            btnSpDescTmp.fontSize = 16;
+            btnSpDescTmp.alignment = TextAlignmentOptions.Center;
+            btnSpDescTmp.color = new Color(0.5f, 0.85f, 1f, 1f);
+
+            // Local Duel Key Sub-Menu Button
+            GameObject btnLdObj = CreateUIObject("Btn_Open_LocalDuel", hubPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -65f), new Vector2(1300f, 80f));
+            Image btnLdImg = btnLdObj.AddComponent<Image>();
+            btnLdImg.color = new Color(0.10f, 0.14f, 0.24f, 1f);
+            Outline btnLdOutline = btnLdObj.AddComponent<Outline>();
+            btnLdOutline.effectColor = new Color(0.22f, 0.28f, 0.40f, 0.8f);
+            btnLdOutline.effectDistance = new Vector2(2f, -2f);
+            Button btnLd = btnLdObj.AddComponent<Button>();
+
+            GameObject btnLdTxtObj = CreateUIObject("Text", btnLdObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 12f), new Vector2(1260f, 36f));
+            TextMeshProUGUI btnLdTmp = btnLdTxtObj.AddComponent<TextMeshProUGUI>();
+            btnLdTmp.font = mainFont;
+            btnLdTmp.text = "   CONFIGURE 1v1 LOCAL DUEL KEYS (SHARED KEYBOARD)  »";
+            btnLdTmp.fontSize = 24;
+            btnLdTmp.fontStyle = FontStyles.Bold;
+            btnLdTmp.alignment = TextAlignmentOptions.Center;
+            btnLdTmp.color = Color.white;
+
+            GameObject btnLdDescObj = CreateUIObject("Desc", btnLdObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -20f), new Vector2(1260f, 26f));
+            TextMeshProUGUI btnLdDescTmp = btnLdDescObj.AddComponent<TextMeshProUGUI>();
+            btnLdDescTmp.font = mainFont;
+            btnLdDescTmp.text = "Shared keyboard combined table for 2 players battling on one PC.";
+            btnLdDescTmp.fontSize = 16;
+            btnLdDescTmp.alignment = TextAlignmentOptions.Center;
+            btnLdDescTmp.color = new Color(1f, 0.82f, 0.5f, 1f);
+
+            // Lower Side-by-Side Action Buttons
+            GameObject resetBtnObj = CreateUIObject("Button_Reset", hubPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-330f, -265f), new Vector2(580f, 66f));
+            Image resetBtnImg = resetBtnObj.AddComponent<Image>();
+            resetBtnImg.color = new Color(0.26f, 0.12f, 0.08f, 1f);
+            Outline resetOutline = resetBtnObj.AddComponent<Outline>();
+            resetOutline.effectColor = new Color(1.0f, 0.55f, 0.1f, 1f);
+            resetOutline.effectDistance = new Vector2(2f, -2f);
+            Button resetBtn = resetBtnObj.AddComponent<Button>();
+
+            GameObject resetTxtObj = CreateUIObject("Text", resetBtnObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            TextMeshProUGUI resetTxtTmp = resetTxtObj.AddComponent<TextMeshProUGUI>();
+            resetTxtTmp.font = mainFont;
+            resetTxtTmp.text = "   [ ↺ RESET ALL TO DEFAULTS ]";
+            resetTxtTmp.fontSize = 23;
+            resetTxtTmp.fontStyle = FontStyles.Bold;
+            resetTxtTmp.alignment = TextAlignmentOptions.Center;
+            resetTxtTmp.color = new Color(1.0f, 0.65f, 0.15f, 1f);
+
+            GameObject closeBtn = CreateUIObject("Button_SaveClose", hubPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(330f, -265f), new Vector2(580f, 66f));
             Image closeBtnImg = closeBtn.AddComponent<Image>();
-            closeBtnImg.color = new Color(0.12f, 0.18f, 0.28f, 1f);
+            closeBtnImg.color = new Color(0.08f, 0.24f, 0.16f, 1f);
             Outline btnOutline = closeBtn.AddComponent<Outline>();
-            btnOutline.effectColor = new Color(0.0f, 0.9f, 0.8f, 1f);
-            btnOutline.effectDistance = new Vector2(3f, -3f);
-
-            Button btnComp = closeBtn.AddComponent<Button>();
-            btnComp.onClick.AddListener(() => controller.CloseOptions());
+            btnOutline.effectColor = new Color(0.0f, 0.9f, 0.5f, 1f);
+            btnOutline.effectDistance = new Vector2(2f, -2f);
+            Button saveCloseBtn = closeBtn.AddComponent<Button>();
 
             GameObject closeTxtObj = CreateUIObject("Text", closeBtn.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             TextMeshProUGUI closeTxtTmp = closeTxtObj.AddComponent<TextMeshProUGUI>();
             closeTxtTmp.font = mainFont;
-            closeTxtTmp.text = "«  BACK (ESC)  «";
-            closeTxtTmp.fontSize = 20;
+            closeTxtTmp.text = "   [ « SAVE & BACK TO TITLE (ESC) ]";
+            closeTxtTmp.fontSize = 23;
+            closeTxtTmp.fontStyle = FontStyles.Bold;
             closeTxtTmp.alignment = TextAlignmentOptions.Center;
-            closeTxtTmp.color = Color.white;
+            closeTxtTmp.color = new Color(0.4f, 0.95f, 0.68f, 1f);
 
+            // =========================================================================
+            // VIEW 2: SINGLE PLAYER KEY BINDINGS SUB-SCREEN
+            // =========================================================================
+            GameObject spPanel = CreateUIObject("Panel_SinglePlayer", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -25f), new Vector2(1380f, 700f));
+
+            GameObject spGuideObj = CreateUIObject("Guide_Text", spPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 315f), new Vector2(1300f, 36f));
+            TextMeshProUGUI spGuideTmp = spGuideObj.AddComponent<TextMeshProUGUI>();
+            spGuideTmp.font = mainFont;
+            spGuideTmp.text = "SINGLE PLAYER PROFILE: FULL KEYBOARD MAPPING";
+            spGuideTmp.fontSize = 22;
+            spGuideTmp.fontStyle = FontStyles.Bold;
+            spGuideTmp.alignment = TextAlignmentOptions.Center;
+            spGuideTmp.color = new Color(0.5f, 0.85f, 1f, 1f);
+
+            FighterAction[] actions = new FighterAction[]
+            {
+                FighterAction.Left,
+                FighterAction.Right,
+                FighterAction.Jump,
+                FighterAction.Crouch,
+                FighterAction.LightAttack,
+                FighterAction.HeavyAttack,
+                FighterAction.Skill,
+                FighterAction.Ultimate,
+                FighterAction.Meditate
+            };
+
+            string[] actionLabels = new string[]
+            {
+                "MOVE LEFT",
+                "MOVE RIGHT",
+                "JUMP",
+                "CROUCH / GUARD",
+                "LIGHT ATTACK",
+                "HEAVY ATTACK",
+                "SPECIAL SKILL",
+                "ULTIMATE MOVE",
+                "KI MEDITATE"
+            };
+
+            float spStartY = 250f;
+            float spStepY = -54f;
+            for (int i = 0; i < actions.Length; i++)
+            {
+                float rowY = spStartY + i * spStepY;
+                GameObject rowObj = CreateUIObject($"Row_{actions[i]}", spPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, rowY), new Vector2(1260f, 48f));
+                Image rowImg = rowObj.AddComponent<Image>();
+                rowImg.color = (i % 2 == 0) ? new Color(0.08f, 0.10f, 0.16f, 0.7f) : new Color(0.12f, 0.15f, 0.22f, 0.7f);
+
+                GameObject actLblObj = CreateUIObject("ActionName", rowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-280f, 0f), new Vector2(580f, 42f));
+                TextMeshProUGUI actLblTmp = actLblObj.AddComponent<TextMeshProUGUI>();
+                actLblTmp.font = mainFont;
+                actLblTmp.text = $"   {actionLabels[i]}";
+                actLblTmp.fontSize = 23;
+                actLblTmp.fontStyle = FontStyles.Bold;
+                actLblTmp.alignment = TextAlignmentOptions.Left;
+                actLblTmp.color = new Color(0.85f, 0.90f, 0.95f, 1f);
+
+                GameObject keyBtnObj = CreateUIObject("Button_Key", rowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(330f, 0f), new Vector2(320f, 42f));
+                Image keyBtnImg = keyBtnObj.AddComponent<Image>();
+                keyBtnImg.color = new Color(0.12f, 0.18f, 0.28f, 1f);
+                Outline keyBtnOutline = keyBtnObj.AddComponent<Outline>();
+                keyBtnOutline.effectColor = new Color(0.0f, 0.8f, 0.9f, 0.7f);
+                keyBtnOutline.effectDistance = new Vector2(1f, -1f);
+                Button keyBtn = keyBtnObj.AddComponent<Button>();
+
+                GameObject keyTxtObj = CreateUIObject("Text", keyBtnObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                TextMeshProUGUI keyTxtTmp = keyTxtObj.AddComponent<TextMeshProUGUI>();
+                keyTxtTmp.font = mainFont;
+                keyTxtTmp.text = OptionsMenuController.FormatKeyName(InputSettingsManager.GetSinglePlayerKey(actions[i]));
+                keyTxtTmp.fontSize = 24;
+                keyTxtTmp.fontStyle = FontStyles.Bold;
+                keyTxtTmp.alignment = TextAlignmentOptions.Center;
+                keyTxtTmp.color = Color.white;
+
+                optionsCtrl.AddSinglePlayerRow(actions[i], actionLabels[i], keyBtn, keyBtnOutline, actLblTmp, keyTxtTmp);
+            }
+
+            // Single Player Sub-Menu Back Button
+            GameObject spBackObj = CreateUIObject("Button_SpBack", spPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -285f), new Vector2(660f, 62f));
+            Image spBackImg = spBackObj.AddComponent<Image>();
+            spBackImg.color = new Color(0.12f, 0.18f, 0.28f, 1f);
+            Outline spBackOutline = spBackObj.AddComponent<Outline>();
+            spBackOutline.effectColor = new Color(0.0f, 0.8f, 0.9f, 0.8f);
+            spBackOutline.effectDistance = new Vector2(2f, -2f);
+            Button spBackBtn = spBackObj.AddComponent<Button>();
+
+            GameObject spBackTxtObj = CreateUIObject("Text", spBackObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            TextMeshProUGUI spBackTmp = spBackTxtObj.AddComponent<TextMeshProUGUI>();
+            spBackTmp.font = mainFont;
+            spBackTmp.text = "   [ « BACK TO OPTIONS (ESC) ]";
+            spBackTmp.fontSize = 23;
+            spBackTmp.fontStyle = FontStyles.Bold;
+            spBackTmp.alignment = TextAlignmentOptions.Center;
+            spBackTmp.color = Color.white;
+
+            // =========================================================================
+            // VIEW 3: 1v1 LOCAL DUEL COMBINED TABLE SUB-SCREEN
+            // =========================================================================
+            GameObject ldPanel = CreateUIObject("Panel_LocalDuel", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -25f), new Vector2(1380f, 700f));
+
+            GameObject ldGuideObj = CreateUIObject("Guide_Text", ldPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 318f), new Vector2(1320f, 36f));
+            TextMeshProUGUI ldGuideTmp = ldGuideObj.AddComponent<TextMeshProUGUI>();
+            ldGuideTmp.font = mainFont;
+            ldGuideTmp.text = "1v1 LOCAL DUEL PROFILE: SHARED KEYBOARD COMBINED TABLE";
+            ldGuideTmp.fontSize = 22;
+            ldGuideTmp.fontStyle = FontStyles.Bold;
+            ldGuideTmp.alignment = TextAlignmentOptions.Center;
+            ldGuideTmp.color = new Color(1f, 0.82f, 0.5f, 1f);
+
+            // Table Header Row
+            GameObject headerObj = CreateUIObject("Table_Header", ldPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 272f), new Vector2(1320f, 44f));
+            Image headerImg = headerObj.AddComponent<Image>();
+            headerImg.color = new Color(0.14f, 0.18f, 0.26f, 1f);
+            Outline headerOutline = headerObj.AddComponent<Outline>();
+            headerOutline.effectColor = new Color(0.35f, 0.45f, 0.60f, 0.8f);
+            headerOutline.effectDistance = new Vector2(1f, -1f);
+
+            GameObject thAct = CreateUIObject("TH_Action", headerObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-380f, 0f), new Vector2(480f, 38f));
+            TextMeshProUGUI thActTmp = thAct.AddComponent<TextMeshProUGUI>();
+            thActTmp.font = mainFont;
+            thActTmp.text = "   FIGHTER ACTION";
+            thActTmp.fontSize = 22;
+            thActTmp.fontStyle = FontStyles.Bold;
+            thActTmp.alignment = TextAlignmentOptions.Left;
+            thActTmp.color = new Color(1f, 0.85f, 0.2f, 1f);
+
+            GameObject thP1 = CreateUIObject("TH_P1", headerObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(70f, 0f), new Vector2(340f, 38f));
+            TextMeshProUGUI thP1Tmp = thP1.AddComponent<TextMeshProUGUI>();
+            thP1Tmp.font = mainFont;
+            thP1Tmp.text = "PLAYER 1 (LEFT SIDE)";
+            thP1Tmp.fontSize = 22;
+            thP1Tmp.fontStyle = FontStyles.Bold;
+            thP1Tmp.alignment = TextAlignmentOptions.Center;
+            thP1Tmp.color = new Color(0f, 0.9f, 1f, 1f);
+
+            GameObject thP2 = CreateUIObject("TH_P2", headerObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(450f, 0f), new Vector2(340f, 38f));
+            TextMeshProUGUI thP2Tmp = thP2.AddComponent<TextMeshProUGUI>();
+            thP2Tmp.font = mainFont;
+            thP2Tmp.text = "PLAYER 2 (RIGHT SIDE)";
+            thP2Tmp.fontSize = 22;
+            thP2Tmp.fontStyle = FontStyles.Bold;
+            thP2Tmp.alignment = TextAlignmentOptions.Center;
+            thP2Tmp.color = new Color(1f, 0.35f, 0.35f, 1f);
+
+            // 9 Combined Rows
+            float ldStartY = 220f;
+            float ldStepY = -52f;
+            for (int i = 0; i < actions.Length; i++)
+            {
+                float rowY = ldStartY + i * ldStepY;
+                GameObject rowObj = CreateUIObject($"Row_{actions[i]}", ldPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, rowY), new Vector2(1320f, 46f));
+                Image rowImg = rowObj.AddComponent<Image>();
+                rowImg.color = (i % 2 == 0) ? new Color(0.08f, 0.10f, 0.16f, 0.7f) : new Color(0.12f, 0.15f, 0.22f, 0.7f);
+
+                // Column 1: Action Name
+                GameObject actLblObj = CreateUIObject("ActionName", rowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-380f, 0f), new Vector2(480f, 40f));
+                TextMeshProUGUI actLblTmp = actLblObj.AddComponent<TextMeshProUGUI>();
+                actLblTmp.font = mainFont;
+                actLblTmp.text = $"   {actionLabels[i]}";
+                actLblTmp.fontSize = 22;
+                actLblTmp.fontStyle = FontStyles.Bold;
+                actLblTmp.alignment = TextAlignmentOptions.Left;
+                actLblTmp.color = new Color(0.85f, 0.90f, 0.95f, 1f);
+
+                // Column 2: P1 Key Button
+                GameObject p1BtnObj = CreateUIObject("Button_P1Key", rowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(70f, 0f), new Vector2(310f, 40f));
+                Image p1BtnImg = p1BtnObj.AddComponent<Image>();
+                p1BtnImg.color = new Color(0.10f, 0.18f, 0.26f, 1f);
+                Outline p1Outline = p1BtnObj.AddComponent<Outline>();
+                p1Outline.effectColor = new Color(0.0f, 0.8f, 0.9f, 0.7f);
+                p1Outline.effectDistance = new Vector2(1f, -1f);
+                Button p1Btn = p1BtnObj.AddComponent<Button>();
+
+                GameObject p1TxtObj = CreateUIObject("Text", p1BtnObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                TextMeshProUGUI p1TxtTmp = p1TxtObj.AddComponent<TextMeshProUGUI>();
+                p1TxtTmp.font = mainFont;
+                p1TxtTmp.text = OptionsMenuController.FormatKeyName(InputSettingsManager.GetLocalDuelP1Key(actions[i]));
+                p1TxtTmp.fontSize = 23;
+                p1TxtTmp.fontStyle = FontStyles.Bold;
+                p1TxtTmp.alignment = TextAlignmentOptions.Center;
+                p1TxtTmp.color = Color.white;
+
+                // Column 3: P2 Key Button
+                GameObject p2BtnObj = CreateUIObject("Button_P2Key", rowObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(450f, 0f), new Vector2(310f, 40f));
+                Image p2BtnImg = p2BtnObj.AddComponent<Image>();
+                p2BtnImg.color = new Color(0.24f, 0.12f, 0.16f, 1f);
+                Outline p2Outline = p2BtnObj.AddComponent<Outline>();
+                p2Outline.effectColor = new Color(1.0f, 0.35f, 0.35f, 0.7f);
+                p2Outline.effectDistance = new Vector2(1f, -1f);
+                Button p2Btn = p2BtnObj.AddComponent<Button>();
+
+                GameObject p2TxtObj = CreateUIObject("Text", p2BtnObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                TextMeshProUGUI p2TxtTmp = p2TxtObj.AddComponent<TextMeshProUGUI>();
+                p2TxtTmp.font = mainFont;
+                p2TxtTmp.text = OptionsMenuController.FormatKeyName(InputSettingsManager.GetLocalDuelP2Key(actions[i]));
+                p2TxtTmp.fontSize = 23;
+                p2TxtTmp.fontStyle = FontStyles.Bold;
+                p2TxtTmp.alignment = TextAlignmentOptions.Center;
+                p2TxtTmp.color = Color.white;
+
+                optionsCtrl.AddLocalDuelRow(actions[i], actionLabels[i], actLblTmp, p1Btn, p1Outline, p1TxtTmp, p2Btn, p2Outline, p2TxtTmp);
+            }
+
+            // Local Duel Sub-Menu Back Button
+            GameObject ldBackObj = CreateUIObject("Button_LdBack", ldPanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -285f), new Vector2(660f, 62f));
+            Image ldBackImg = ldBackObj.AddComponent<Image>();
+            ldBackImg.color = new Color(0.12f, 0.18f, 0.28f, 1f);
+            Outline ldBackOutline = ldBackObj.AddComponent<Outline>();
+            ldBackOutline.effectColor = new Color(0.0f, 0.8f, 0.9f, 0.8f);
+            ldBackOutline.effectDistance = new Vector2(2f, -2f);
+            Button ldBackBtn = ldBackObj.AddComponent<Button>();
+
+            GameObject ldBackTxtObj = CreateUIObject("Text", ldBackObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            TextMeshProUGUI ldBackTmp = ldBackTxtObj.AddComponent<TextMeshProUGUI>();
+            ldBackTmp.font = mainFont;
+            ldBackTmp.text = "   [ « BACK TO OPTIONS (ESC) ]";
+            ldBackTmp.fontSize = 23;
+            ldBackTmp.fontStyle = FontStyles.Bold;
+            ldBackTmp.alignment = TextAlignmentOptions.Center;
+            ldBackTmp.color = Color.white;
+
+            // Connect references to controller
+            optionsCtrl.InitializeReferences(
+                controller,
+                hubPanel, spPanel, ldPanel,
+                musicOutline, musicLblTmp, musicSlider, musicValTmp,
+                sfxOutline, sfxLblTmp, sfxSlider, sfxValTmp,
+                btnSp, btnSpOutline, btnSpTmp,
+                btnLd, btnLdOutline, btnLdTmp,
+                resetBtn, resetOutline, resetTxtTmp,
+                saveCloseBtn, btnOutline, closeTxtTmp,
+                spBackBtn, spBackOutline, spBackTmp,
+                ldBackBtn, ldBackOutline, ldBackTmp
+            );
+
+            // Default view state: Hub active, sub-panels inactive
+            hubPanel.SetActive(true);
+            spPanel.SetActive(false);
+            ldPanel.SetActive(false);
+
+            EditorUtility.SetDirty(optionsCtrl);
             return modalRoot;
         }
 

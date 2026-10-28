@@ -227,54 +227,40 @@ namespace MysticCombat.UI
                 if (t != null) p2NameText = t.GetComponent<TextMeshProUGUI>();
             }
 
-            // 2. Resolve Player 1 (Goku) - Must be in active scene!
+            // 2. Resolve Player 1 - Must be in active scene!
             if (!IsInActiveScene(p1Health) || !IsInActiveScene(p1Energy))
             {
                 p1Health = null;
                 p1Energy = null;
 
-                GameObject goku = GameObject.Find("Fighter_P1_Goku");
-                if (goku != null)
+                foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
                 {
-                    p1Health = goku.GetComponent<HealthSystem>();
-                    p1Energy = goku.GetComponent<EnergySystem>();
-                }
-                else
-                {
-                    foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
+                    if (fc == null) continue;
+                    string n = fc.gameObject.name;
+                    if (n == "Fighter_P1" || n.StartsWith("Fighter_P1_"))
                     {
-                        if (fc.gameObject.name.Contains("Goku") || fc.gameObject.name.Contains("P1"))
-                        {
-                            p1Health = fc.GetComponent<HealthSystem>();
-                            p1Energy = fc.GetComponent<EnergySystem>();
-                            break;
-                        }
+                        p1Health = fc.GetComponent<HealthSystem>();
+                        p1Energy = fc.GetComponent<EnergySystem>();
+                        break;
                     }
                 }
             }
 
-            // 3. Resolve Player 2 (Saitama) - Must be in active scene!
+            // 3. Resolve Player 2 - Must be in active scene!
             if (!IsInActiveScene(p2Health) || !IsInActiveScene(p2Energy))
             {
                 p2Health = null;
                 p2Energy = null;
 
-                GameObject saitama = GameObject.Find("Fighter_P2_Saitama");
-                if (saitama != null)
+                foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
                 {
-                    p2Health = saitama.GetComponent<HealthSystem>();
-                    p2Energy = saitama.GetComponent<EnergySystem>();
-                }
-                else
-                {
-                    foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
+                    if (fc == null) continue;
+                    string n = fc.gameObject.name;
+                    if (n == "Fighter_P2" || n.StartsWith("Fighter_P2_"))
                     {
-                        if (fc.gameObject.name.Contains("Saitama") || fc.gameObject.name.Contains("P2"))
-                        {
-                            p2Health = fc.GetComponent<HealthSystem>();
-                            p2Energy = fc.GetComponent<EnergySystem>();
-                            break;
-                        }
+                        p2Health = fc.GetComponent<HealthSystem>();
+                        p2Energy = fc.GetComponent<EnergySystem>();
+                        break;
                     }
                 }
             }
@@ -375,6 +361,24 @@ namespace MysticCombat.UI
 
             UpdateRoundScore(matchManager.P1RoundWins, matchManager.P2RoundWins);
             UpdateTimer(matchManager.RoundTimer > 0f ? matchManager.RoundTimer : 99f);
+        }
+
+        /// <summary>
+        /// Explicitly binds fighter health and energy systems at runtime.
+        /// Immediately synchronizes health bars, Ki meters, and heroic avatar portraits.
+        /// </summary>
+        public void SetFighterReferences(HealthSystem p1Hp, HealthSystem p2Hp, EnergySystem p1Ki, EnergySystem p2Ki)
+        {
+            UnsubscribeEvents();
+
+            p1Health = p1Hp;
+            p2Health = p2Hp;
+            p1Energy = p1Ki;
+            p2Energy = p2Ki;
+
+            SyncInitialState();
+            SubscribeEvents();
+            Debug.Log($"<color=#00e676>[HUDController]</color> Bound fighter references: P1: {p1Health?.gameObject.name} | P2: {p2Health?.gameObject.name}");
         }
 
         private void SyncInitialState()

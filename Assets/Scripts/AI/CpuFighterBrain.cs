@@ -58,6 +58,9 @@ namespace MysticCombat.AI
         private float spacingOscillationDir = 1f;
         private bool isHesitating;
         private float hesitationTimer;
+        private float jumpCooldownTimer;
+        private float attackCooldownTimer;
+        private float crouchDefenseTimer;
 
         #endregion
 
@@ -132,6 +135,15 @@ namespace MysticCombat.AI
                 if (opponent == null) return;
             }
 
+            // Cooldown timers
+            if (jumpCooldownTimer > 0f) jumpCooldownTimer -= Time.deltaTime;
+            if (attackCooldownTimer > 0f) attackCooldownTimer -= Time.deltaTime;
+            if (crouchDefenseTimer > 0f)
+            {
+                crouchDefenseTimer -= Time.deltaTime;
+                if (crouchDefenseTimer <= 0f) CrouchHeld = false;
+            }
+
             // Humanized reaction tick timer
             reactionTimer -= Time.deltaTime;
             if (reactionTimer <= 0f)
@@ -202,7 +214,7 @@ namespace MysticCombat.AI
             }
 
             // Fallback scene search
-            FighterController[] allFighters = FindObjectsByType<FighterController>(FindObjectsSortMode.None);
+            FighterController[] allFighters = FindObjectsByType<FighterController>(FindObjectsInactive.Exclude);
             foreach (var f in allFighters)
             {
                 if (f != null && f.gameObject != this.gameObject)
@@ -334,7 +346,17 @@ namespace MysticCombat.AI
         private void ExecuteSpacingNeutral(float dist, float dirToOpponent)
         {
             MeditateHeld = false;
-            CrouchHeld = false;
+
+            // Defensive Crouch Duck: occasional duck under opponent attack
+            if (opponentController != null && 
+               (opponentController.CurrentState == FighterState.LightAttack || opponentController.CurrentState == FighterState.HeavyAttack) &&
+               dist <= 1.4f && crouchDefenseTimer <= 0f && Random.value < (0.45f * (1f - profile.mistakeChance)))
+            {
+                CrouchHeld = true;
+                crouchDefenseTimer = Random.Range(0.25f, 0.45f);
+                MoveInput = Vector2.zero;
+                return;
+            }
 
             // Weave back and forth around preferred distance
             float distanceError = dist - PreferredDistance;
@@ -347,23 +369,29 @@ namespace MysticCombat.AI
             }
             else
             {
-                // Footsies oscillation
+                // Opponent-relative footsies oscillation (step in to threaten, step back to bait)
                 spacingOscillationTimer -= Time.deltaTime;
                 if (spacingOscillationTimer <= 0f)
                 {
-                    spacingOscillationTimer = Random.Range(0.25f, 0.55f);
+                    spacingOscillationTimer = Random.Range(0.35f, 0.65f);
                     spacingOscillationDir *= -1f;
                 }
-                MoveInput = new Vector2(spacingOscillationDir * 0.4f, 0f);
+                float relativeStep = (spacingOscillationDir > 0f) ? dirToOpponent * 0.45f : -dirToOpponent * 0.35f;
+                MoveInput = new Vector2(relativeStep, 0f);
 
-                // In spacing range, check if close enough to poke or shoot
-                if (dist <= MeleeRange)
+                // In spacing range, attack with humanized rhythm
+                if (attackCooldownTimer <= 0f)
                 {
-                    PerformMeleePoke();
-                }
-                else if (dist <= SkillRange)
-                {
-                    PerformMidRangeAction();
+                    if (dist <= MeleeRange)
+                    {
+                        PerformMeleePoke();
+                        attackCooldownTimer = profile.reactionDelay * Random.Range(1.3f, 2.0f);
+                    }
+                    else if (dist <= SkillRange)
+                    {
+                        PerformMidRangeAction();
+                        attackCooldownTimer = profile.reactionDelay * Random.Range(1.5f, 2.4f);
+                    }
                 }
             }
         }
@@ -378,27 +406,51 @@ namespace MysticCombat.AI
                 // Sprint / Walk forward
                 MoveInput = new Vector2(dirToOpponent, 0f);
 
-                // Occasional jump-in if opponent is zoning or crouched
-                if (dist > 1.8f && dist < 3.2f && Random.value < (0.15f * (1f - profile.mistakeChance)))
+                // Tactical jump-in with strict cooldown gating
+                if (jumpCooldownTimer <= 0f && dist > 1.8f && dist < 3.2f && Random.value < 0.25f)
                 {
                     JumpPressed = true;
+                    jumpCooldownTimer = Random.Range(2.0f, 3.2f);
                 }
             }
             else
             {
-                // Close range: execute combo pressure
+                // Close range: execute combo pressure with natural cadence
                 MoveInput = new Vector2(dirToOpponent * 0.2f, 0f);
-                PerformMeleeCombo();
+                if (attackCooldownTimer <= 0f)
+                {
+                    PerformMeleeCombo();
+                    attackCooldownTimer = profile.reactionDelay * Random.Range(0.8f, 1.4f);
+                }
             }
         }
 
         private void ExecuteKiHoarding(float dist, float dirToOpponent)
         {
-            if (dist < profile.safeMeditateDistance)
+            bool isCornered = (dirToOpponent > 0 && transform.position.x < -7.2f) || (dirToOpponent < 0 && transform.position.x > 7.2f);
+
+            if (isCornered || dist < profile.safeMeditateDistance)
             {
-                // Too close to meditate safely! Back away
+                // Cannot retreat further into wall or opponent is too close!
                 MeditateHeld = false;
-                MoveInput = new Vector2(-dirToOpponent, 0f);
+                if (isCornered)
+                {
+                    // Escape jump over opponent if ready, else fight out of corner
+                    if (jumpCooldownTimer <= 0f)
+                    {
+                        MoveInput = new Vector2(dirToOpponent, 0f);
+                        JumpPressed = true;
+                        jumpCooldownTimer = 2.5f;
+                    }
+                    else
+                    {
+                        currentMacroState = MacroState.AggressiveRushdown;
+                    }
+                }
+                else
+                {
+                    MoveInput = new Vector2(-dirToOpponent, 0f);
+                }
             }
             else
             {
@@ -406,7 +458,7 @@ namespace MysticCombat.AI
                 MoveInput = Vector2.zero;
                 MeditateHeld = true;
 
-                // Stop meditating if Ki reached target or opponent gets close
+                // Stop meditating if Ki reached target
                 if (myEnergy != null && myEnergy.CurrentKi >= TargetKiHoard)
                 {
                     MeditateHeld = false;
@@ -418,14 +470,32 @@ namespace MysticCombat.AI
         private void ExecuteDefensiveRetreat(float dist, float dirToOpponent)
         {
             MeditateHeld = false;
+            bool isCornered = (dirToOpponent > 0 && transform.position.x < -7.2f) || (dirToOpponent < 0 && transform.position.x > 7.2f);
+
+            if (isCornered)
+            {
+                // If pinned to the boundary wall, jump out or punish!
+                if (jumpCooldownTimer <= 0f)
+                {
+                    MoveInput = new Vector2(dirToOpponent, 0f);
+                    JumpPressed = true;
+                    jumpCooldownTimer = 2.5f;
+                }
+                else
+                {
+                    currentMacroState = MacroState.PunishOpening;
+                }
+                return;
+            }
 
             // Move away from opponent
             MoveInput = new Vector2(-dirToOpponent, 0f);
 
-            // Occasional escape jump when backed into corner or pressed
-            if (dist < 1.4f && Random.value < 0.25f)
+            // Occasional defensive escape jump with cooldown gate
+            if (jumpCooldownTimer <= 0f && dist < 1.4f && Random.value < 0.35f)
             {
                 JumpPressed = true;
+                jumpCooldownTimer = Random.Range(2.0f, 3.0f);
             }
         }
 
@@ -437,25 +507,28 @@ namespace MysticCombat.AI
             float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
 
             // If in lethal range and have Ki for Ultimate, PUNISH WITH ULTIMATE!
-            if (currentKi >= UltimateCost && dist <= SkillRange)
+            if (currentKi >= UltimateCost && dist <= SkillRange && attackCooldownTimer <= 0f)
             {
                 UltimatePressed = true;
+                attackCooldownTimer = 1.0f;
                 currentMacroState = MacroState.SpacingNeutral;
                 return;
             }
 
             // If have Ki for Skill, punish with Skill!
-            if (currentKi >= SkillCost && dist <= SkillRange)
+            if (currentKi >= SkillCost && dist <= SkillRange && attackCooldownTimer <= 0f)
             {
                 SkillPressed = true;
+                attackCooldownTimer = 0.8f;
                 currentMacroState = MacroState.SpacingNeutral;
                 return;
             }
 
             // Melee range punish with Heavy Attack
-            if (dist <= MeleeRange)
+            if (dist <= MeleeRange && attackCooldownTimer <= 0f)
             {
                 HeavyAttackPressed = true;
+                attackCooldownTimer = 0.6f;
                 currentMacroState = MacroState.SpacingNeutral;
                 return;
             }

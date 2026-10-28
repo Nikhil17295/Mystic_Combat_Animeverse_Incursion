@@ -14,9 +14,9 @@ namespace MysticCombat.AI
     {
         #region Character-Specific Overrides
 
-        protected override float PreferredDistance => 2.1f;
-        protected override float MeleeRange => 1.15f;
-        protected override float SkillRange => 2.7f;      // Kamehameha reaches across mid-distance
+        protected override float PreferredDistance => 2.2f;
+        protected override float MeleeRange => 1.20f;
+        protected override float SkillRange => 3.5f;      // Kamehameha reaches 3.6m across mid/long-distance!
         protected override float SkillCost => 20f;
         protected override float UltimateCost => 80f;
         protected override float TargetKiHoard => 80f;
@@ -29,35 +29,26 @@ namespace MysticCombat.AI
         {
             float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
 
-            // Goku signature: Kamehameha blast at mid-range!
-            if (currentKi >= SkillCost && Random.value < (profile.comboChance * 0.85f))
+            // Goku signature: Kamehameha Ultimate blast across mid/long-range!
+            if (currentKi >= UltimateCost && Random.value < (profile.comboChance * 0.90f))
             {
-                SkillPressed = true;
+                UltimatePressed = true;
                 return;
             }
 
-            // Occasional martial arts dash/hop
-            if (Random.value < 0.20f)
-            {
-                JumpPressed = true;
-            }
+            // Step in slightly to contest neutral
+            float dirToOpponent = (opponent != null && opponent.position.x > transform.position.x) ? 1f : -1f;
+            MoveInput = new Vector2(dirToOpponent * 0.4f, 0f);
         }
 
         protected override void PerformMeleeCombo()
         {
             float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
 
-            // Ultimate check (Super Saiyan blast / Spirit Bomb)
+            // Ultimate check (Kamehameha blast!)
             if (currentKi >= UltimateCost && Random.value < profile.comboChance)
             {
                 UltimatePressed = true;
-                return;
-            }
-
-            // Goku signature combo: Light jab canceled into Kamehameha flurry!
-            if (currentKi >= SkillCost && Random.value < profile.comboChance)
-            {
-                SkillPressed = true;
                 return;
             }
 

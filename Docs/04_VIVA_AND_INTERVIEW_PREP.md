@@ -547,6 +547,148 @@ When demonstrating the game to evaluators:
 >    - **Visceral Close Combat:** Pokes with heavy punches and chains into *Consecutive Normal Punches* (`SkillPressed`) point-blank.
 >    - **100-Ki Lethality:** Hoards the entire $100\text{ Ki}$ bar to march up and drop the game-ending *Serious Punch* (`UltimatePressed`)."*
 
+---
+
+### Q55: Why did Character Selection fail to change the actual fighters on stage despite updating the HUD, and how did you resolve it?
+**Answer:**
+> *"This was caused by a combination of scene hardcoding and name-brittle object queries:
+> 1. **Static Scene Hardcoding:** `SampleScene.unity` had static baked GameObject instances (`Fighter_P1_Goku` and `Fighter_P2_Saitama`) saved directly in the scene YAML.
+> 2. **Name-Brittle Queries in Systems:** `MatchManager.cs` and `HUDController.cs` contained hardcoded `GameObject.Find("Fighter_P1_Goku")` and `GameObject.Find("Fighter_P2_Saitama")` calls. Even when Character Select chose Saitama as Player 1, `MatchManager` and the HUD explicitly hunted for Goku as P1 and Saitama as P2!
+> 3. **The Solution (The Deployer Pattern):**
+>    - We stripped static character instances from the arena scene, treating `SampleScene` as an empty stage.
+>    - We encapsulated characters as standalone prefabs in `Assets/Resources/Prefabs/Fighters/` (`Goku.prefab`, `Saitama.prefab`).
+>    - On scene load, [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs) reads session character IDs from `GameManager`, instantiates the selected prefabs as `Fighter_P1` and `Fighter_P2`, and injects their references directly into `MatchManager.SetFighterReferences()` and `HUDController.SetFighterReferences()`. All combinations (Goku vs. Saitama, Saitama vs. Goku, and Mirror matches) now deploy with 100% fidelity."*
+
+---
+
+### Q56: How does your dynamic fighter deployment pipeline prevent race conditions between `Destroy()` and `Awake()`?
+**Answer:**
+> *"In Unity, calling `Destroy(gameObject)` is deferred until the end of the current frame.
+> 1. **The Race Condition:** If an old fighter exists in a scene, calling `Destroy(oldFighter)` in `Start()` means the object is still active in the hierarchy for that entire frame. If other scripts run `FindObjectsByType` or `GameObject.Find` in `Awake()`, they will discover the obsolete fighter that was scheduled for deletion.
+> 2. **The Prevention Mechanism:**
+>    - **Immediate Deactivation:** When `PrototypeBootstrap` sweeps the scene for legacy fighters, it calls `go.SetActive(false);` immediately before `Destroy(go);`. This excludes them from active physics, trigger collisions, and `FindObjectsInactive.Exclude` queries.
+>    - **Direct Dependency Injection:** Rather than having `MatchManager` and `HUDController` query the scene tree using brittle string names, `PrototypeBootstrap` explicitly passes the newly instantiated GameObject references directly via `SetFighterReferences(p1Health, p2Health, p1Energy, p2Energy)`, completely bypassing the need for scene searches."*
+
+---
+
+### Q57: How did you implement real-time dynamic key re-binding in Unity's new Input System, and how does it compare to Godot's `InputMap`?
+**Answer:**
+> *"In Unity's modern Input System (`UnityEngine.InputSystem`), input devices are represented by hardware device classes (`Keyboard.current`).
+> 1. **Data Architecture:** We constructed `InputSettingsManager.cs`, a persistent static manager that maps our `FighterAction` enum to `Key` enums.
+> 2. **Key Interception Pipeline:**
+>    - When a player clicks a key binding button, `OptionsMenuController` enters a 'listening' state, pulsing the button label with `[ PRESS KEY ]`.
+>    - In `Update()`, the controller iterates through `Keyboard.current.allKeys` to detect which key triggered `wasPressedThisFrame`.
+>    - Once detected (and verified not to be `Escape`), the new key is assigned, saved immediately to `PlayerPrefs`, and formatted with readable typography (e.g. arrows display as `←`, `→`, `↑`, `↓`).
+> 3. **Godot vs Unity Architectural Comparison:**
+>    - In **Godot**, actions are registered in `ProjectSettings` (`input/*`). Runtime rebinding is achieved using `InputMap.action_erase_events(action)` and `InputMap.action_add_event(action, new_event)`, then saved to `user://settings.cfg` via `ConfigFile`.
+>    - In **Unity**, since actions are read via C# code querying `Keyboard.current[key]`, we manage key mapping in our centralized `InputSettingsManager` and serialize values via `PlayerPrefs`."*
+
+---
+
+### Q58: Why did you separate Single Player (9 keys) and 1v1 Local Duel (18 keys) into two distinct profiles instead of a single global keymap?
+**Answer:**
+> *"This directly addresses how input ergonomics differ between solo play and shared-keyboard play:
+> 1. **Solo Player Ergonomics (Vs CPU & Future LAN):** In Single Player (or future networked LAN matches), Player 1 has full ownership of the entire keyboard. They can spread their hands out comfortably across WASD and the right side of the board without worrying about colliding with another human hand.
+> 2. **Shared Keyboard Constraint (1v1 Local Duel):** When two humans play locally on the exact same keyboard, Player 1 must stay strictly on the left half (`WASD + FCEQX`) while Player 2 sits on the right half (`JLIK + HNUOM`).
+> 3. **The Solution:** By maintaining two independent profiles (`SinglePlayerKeys` and `LocalDuelP1/P2Keys`), players can customize their solo setup however they prefer without corrupting or breaking their 2-player local battle setup. `PlayerInputHandler` checks `GameManager.Instance.CurrentGameMode` at runtime and automatically routes to the appropriate profile."*
+
+---
+
+### Q59: Why did you design the Local Duel options as a 3-column combined table rather than two separate boxes, and how does this prevent player input collisions?
+**Answer:**
+> *"When configuring two players on one keyboard, separate columns or disjointed panels create cognitive overload:
+> 1. **The Collision Trap:** In a shared keyboard fighting game, if Player 1 maps an attack to `U` while Player 2 has `U` mapped to their special skill, pressing `U` during combat will trigger both players' actions simultaneously.
+> 2. **The Combined Table UX:** By structuring the screen as a unified 3-column table:
+>    `[ ACTION ] | [ PLAYER 1 (LEFT SIDE) ] | [ PLAYER 2 (RIGHT SIDE) ]`
+>    both players can see their mappings aligned horizontally on the exact same row. It allows players to visually audit keys in seconds and eliminates cross-talk conflicts before the match starts."*
+
+---
+
+### Q60: How does your UI architecture achieve clear, intuitive navigation without displaying cluttered button instructions on screen?
+**Answer:**
+> *"In authentic arcade design, good UI communicates state purely through visual feedback rather than instruction labels:
+> 1. **Blinking Arcade Cursor (`►`):** The focused element dynamically receives a leading `►` symbol. When focus shifts via W/S or arrow keys, the prefix is stripped from the old element and assigned to the new one.
+> 2. **Pulsing Neon Gold Focus Frame:** Rather than a static box, the selected element's `Outline` component continuously blends between Solar Gold (`#FFD54F`) and Pure White (`#FFFFFF`) using a sine-wave function (`Mathf.Sin(Time.unscaledTime * 7f)`).
+> 3. **Directional Multiplexing:** Vertical inputs (`W/S`, `Up/Down`) shift the menu row index; horizontal inputs (`A/D`, `Left/Right`) nudge volume sliders by $\pm 5\%$ or swap between Player 1 and Player 2 columns.
+> 4. **Mouse/Keyboard Harmony:** Hovering with the mouse immediately syncs the focus index, allowing seamless switching between controller, keyboard, and mouse without desynchronizing visual focus."*
+
+---
+
+### Q61: Why did you move key bindings into dedicated sub-screens instead of keeping them permanently open beneath the audio sliders?
+**Answer:**
+> *"This was a critical UI/UX refactor driven by information density and visual ergonomics:
+> 1. **The Single-Screen Density Trap:** Squeezing volume sliders, two profile tabs, and 9 to 18 key rows onto one static screen forced typography down to $12\text{pt}\text{–}14\text{pt}$, creating visual clutter and eye strain.
+> 2. **The 3-Tier Hierarchy:** By breaking the system into a Main Options Hub (audio sliders and sub-menu launchers) and dedicated sub-screens for Single Player and 1v1 Local Duel, each view has ample screen estate.
+> 3. **The Result:** We expanded the window to $1440 \times 880\text{px}$ and increased font sizes by **$80\%$** ($22\text{pt}\text{–}36\text{pt}$ across all labels and buttons). The interface is now instantly legible from across the room, perfectly matching 90s arcade clarity."*
+
+---
+
+### Q62: How did you solve the empty arena bug when transitioning from Character Select into the combat stage?
+**Answer:**
+> *"This was a fascinating multi-scene Unity engine lifecycle bug with three root causes:
+> 1. **`RuntimeInitializeOnLoadMethod` Limitation:** Attributes like `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` only fire **once** when the game starts up. Because our game boots into `MainMenuScene`, the method ran inside the main menu (where it safely aborted). When the player picked characters and loaded `SampleScene`, that method never executed again!
+> 2. **The `SceneManager.sceneLoaded` Active Scene Gotcha:** We subscribed to `SceneManager.sceneLoaded`, but Unity does not update `SceneManager.GetActiveScene()` until after all event listeners finish running. When our deployer checked `SceneManager.GetActiveScene().name == 'MainMenuScene'`, it evaluated to true, falsely believing it was still inside the main menu!
+> 3. **The Fix:** We updated the guard to check the actual loaded scene (`scene.name`) and the deployer's own scene (`gameObject.scene.name`). We explicitly called `SceneManager.SetActiveScene(scene)` and `SceneManager.MoveGameObjectToScene()`, ensuring that `[PrototypeBootstrap]` and all spawned fighter GameObjects belong strictly to the new combat arena scene."*
+
+---
+
+### Q63: How does `MatchManager` avoid race conditions when fighters are instantiated dynamically at runtime?
+**Answer:**
+> *"In amateur games, match managers often assume fighters exist statically in the scene file and start round timers inside `Start()` or `Awake()`. If fighters are spawned dynamically, this throws `NullReferenceException` or starts Round 1 before characters even appear.
+> 
+> We solved this through a stateful readiness handshake:
+> 1. **Default `WaitingToStart` State:** `MatchManager` initializes its state to `MatchState.WaitingToStart`.
+> 2. **Conditional Round Kickoff:** In `MatchManager.Start()`, it inspects whether both fighters are discovered. If null, it logs a waiting notice and does not tick the round timer.
+> 3. **Direct Injection Handshake:** When `PrototypeBootstrap` instantiates the fighters, it calls `MatchManager.SetFighterReferences(p1Hp, p2Hp, p1Ki, p2Ki)`. `MatchManager` binds the death events and transitions `WaitingToStart -> RoundInProgress`, kicking off Round 1 cleanly with zero frame delay."*
+
+---
+
+### Q64: How did you handle audio mixing, dynamic range, and vocal calibration across music, menu sounds, and character combat shouts?
+**Answer:**
+> *"Audio balancing in fighting games is notorious for loudness wars where vocal shouts and menu sounds overpower the soundtrack. We addressed this through a four-tier mixing pipeline:
+> 1. **Full Headroom for BGM ($1.00\text{f} / 100\%$):** We set the default background music to full amplitude ($1.00\text{f}$) so players experience the full dynamic range of our retro arcade soundtrack right out of the box.
+> 2. **Anti-Ear-Fatigue Menu SFX (Reduced by $\sim 50\%$):** Rapidly cycling through pause or victory menu items with loud sounds causes immediate ear fatigue. We dropped navigation SFX volume from $0.45\text{f}$ down to $0.22\text{f}$ and applied a linear amplitude decay envelope (`Mathf.Sign(...) * (1f - (t / duration))`) to eliminate the harsh click on audio cutoffs.
+> 3. **Move-Slot Semantic Correctness & Acoustic Balancing:**
+>    - Goku has no special skill (`voiceSkillClip = null`); his signature Ultimate (Ki: 80, `Q`/`O`) is **Kamehameha**, mapped to `voiceUltimateClip`. Because the raw WAV recording has a near-clipping digital ceiling (peak `0.906`), its multiplier was calibrated down to `0.50f` with an explicit safety clamp.
+> 4. **Equalizing Softer Vocal Stems (Saitama Boost):** Saitama's vocal recordings (`consecutive_normal_punches.mp3` and `serious_punch.mp3`) have softer vocal gain that previously got swallowed by heavy hit effects. We boosted his multipliers to `2.20f` (Skill) and `2.50f` (Ultimate) so both fighters have balanced vocal presence in the match.
+> 5. **Single-Pass Master Audio Bus Scaling:** We maintain one-shot `AudioSource.volume` at `1.0f` and apply `InputSettingsManager.SFXVolume` strictly inside `PlayOneShot()`, eliminating the double-multiplication bugs common in game audio."*
+
+---
+
+### Q65: How did you fix character sprite bouncing during special move animations in 2D pixel art?
+**Answer:**
+> *"In 2D fighting games, sprite bouncing occurs when animation frames have different image dimensions or irregular transparent padding below the character's feet.
+> 
+> 1. **The Root Cause:** Goku's walking and punching sprites were exported onto a $128 \times 128\text{px}$ canvas with feet at baseline row $y = 104$ ($23\text{px}$ bottom padding). However, his Kamehameha skill frames were exported onto an irregular $90 \times 79\text{px}$ canvas with only $14\text{–}20\text{px}$ padding. Because the pivot was calculated based on the $128\text{px}$ assumption, Goku's sprite shifted $20\text{px}$ upwards into the air during the attack, making him bounce on and off the floor.
+> 2. **The Fix:** We wrote a batch asset processor in Python to standardize all 44 Goku frames onto identical $128 \times 128\text{px}$ canvases, aligning the ground contact point to row $104$ and the stance center to column $64$. In `FighterAnimator.cs`, the baseline pivot `Vector2(0.5f, 23/128)` now applies uniformly to every single frame, ensuring rock-solid foot planting."*
+
+---
+
+### Q66: How do you prevent fighting game AI from spamming actions at 60 FPS while keeping difficulty challenging?
+**Answer:**
+> *"In Unity, code in `Update()` runs 60 times every second. A rookie mistake in AI development is writing probabilistic rolls like `if (Random.value < 0.15f) JumpPressed = true;` inside `Update()`. While $15\%$ sounds modest, evaluating it 60 times a second guarantees roughly 9 jumps every single second, turning the CPU bot into an erratic pogo-stick!
+> 
+> We resolved this by implementing **explicit action cadence timers**:
+> 1. **Jump Cooldown Gate:** Added a `jumpCooldownTimer` enforced at $2.0\text{s}\text{–}3.2\text{s}$, ensuring jumps only happen with deliberate tactical intent (e.g. jumping over an incoming projectile or corner escape).
+> 2. **Attack Cadence & Rhythm:** Throttled basic attacks with an `attackCooldownTimer` ($0.25\text{s}\text{–}0.50\text{s}$) that simulates human reaction cadence and allows for natural hit-confirm combos.
+> 3. **Opponent-Relative Footsies:** Neutral spacing shifts back and forth relative to the opponent (`dirToOpponent`) rather than oscillating in absolute world coordinates, creating authentic boxing footsies."*
+
+---
+
+### Q67: Why did the combat background music fail to play during Round 1, and how did you resolve the scene transition race condition?
+**Answer:**
+> *"This was a classic event-timing race condition during asynchronous scene loading:
+> 1. **The Root Cause:** When transitioning from Character Select into the combat stage, `PrototypeBootstrap` deployed the fighters and invoked `MatchManager.StartRound(1)`. This fired the `OnRoundStart(1)` event immediately. However, `MatchAudioController` in the scene had not yet completed its `OnEnable()` subscription or was blocked by a stale `CurrentState == GameState.MainMenu` guard. Because `MatchAudioController.Start()` was completely empty, it sat in silence during the entire first round until Round 2 fired a new event.
+> 2. **The Self-Healing Solution:** We implemented a two-part fix:
+>    - **Scene-Aware Guarding:** Replaced the brittle `GameState.MainMenu` flag with a direct scene check (`gameObject.scene.name == 'MainMenuScene'`).
+>    - **Stateful Self-Healing in `Start()`:** In `MatchAudioController.Start()`, we check `if (matchManager.CurrentMatchState == MatchState.RoundInProgress && !musicSource.isPlaying) PlayBattleMusic();`. If the event was missed during scene load, `Start()` catches the in-progress round and immediately kicks off the battle soundtrack with zero frame silence."*
+
+
+
+
+
+
+
 
 
 

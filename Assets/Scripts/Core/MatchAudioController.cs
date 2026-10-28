@@ -3,6 +3,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 using MysticCombat.Core;
+using MysticCombat.Systems;
 
 namespace MysticCombat.Core
 {
@@ -64,7 +65,7 @@ namespace MysticCombat.Core
                 battleMusicVolume = Mathf.Clamp01(value);
                 if (musicSource != null && musicSource.isPlaying)
                 {
-                    musicSource.volume = battleMusicVolume;
+                    musicSource.volume = battleMusicVolume * InputSettingsManager.MusicVolume;
                 }
             }
         }
@@ -91,6 +92,7 @@ namespace MysticCombat.Core
             }
 
             // Setup Music AudioSource
+            InputSettingsManager.EnsureInitialized();
             if (musicSource == null)
             {
                 musicSource = gameObject.AddComponent<AudioSource>();
@@ -98,7 +100,7 @@ namespace MysticCombat.Core
             musicSource.loop = true;
             musicSource.playOnAwake = false;
             musicSource.spatialBlend = 0f; // 2D Sound, uniform across stage
-            musicSource.volume = battleMusicVolume;
+            musicSource.volume = battleMusicVolume * InputSettingsManager.MusicVolume;
             musicSource.mute = false;
 
             // Setup SFX / Fanfare AudioSource
@@ -140,15 +142,33 @@ namespace MysticCombat.Core
 
         private void Start()
         {
-            // Combat music start is handled exclusively by HandleRoundStart following the round bell sequence
+            if (gameObject.scene.name == "MainMenuScene") return;
+
+            // Self-healing: If MatchManager already started Round 1 while components were initializing,
+            // start the combat battle BGM cleanly!
+            if (matchManager != null && matchManager.CurrentMatchState == MatchManager.MatchState.RoundInProgress)
+            {
+                if (musicSource != null && !musicSource.isPlaying)
+                {
+                    PlayBattleMusic(resetToStart: true);
+                }
+            }
         }
 
         private void Update()
         {
+            if (gameObject.scene.name == "MainMenuScene") return;
+
             // Enable live real-time slider adjustments in the Inspector during play
             if (musicSource != null && musicSource.isPlaying)
             {
-                musicSource.volume = battleMusicVolume;
+                musicSource.volume = battleMusicVolume * InputSettingsManager.MusicVolume;
+            }
+            else if (musicSource != null && !musicSource.isPlaying && battleMusic != null &&
+                     matchManager != null && matchManager.CurrentMatchState == MatchManager.MatchState.RoundInProgress)
+            {
+                // Failsafe: Round is actively in progress but BGM was not playing -> start it!
+                PlayBattleMusic(resetToStart: false);
             }
         }
 
@@ -159,7 +179,7 @@ namespace MysticCombat.Core
         private void HandleRoundStart(int roundNumber)
         {
             // Strictly guard against playing combat music on main menu
-            if (GameManager.Instance != null && GameManager.Instance.CurrentState == GameManager.GameState.MainMenu)
+            if (gameObject.scene.name == "MainMenuScene")
             {
                 return;
             }
@@ -209,7 +229,7 @@ namespace MysticCombat.Core
             // Ring the KO gong loud and clear
             if (koBellClip != null && sfxSource != null)
             {
-                sfxSource.PlayOneShot(koBellClip, bellVolume);
+                sfxSource.PlayOneShot(koBellClip, bellVolume * InputSettingsManager.SFXVolume);
             }
         }
 
@@ -233,8 +253,8 @@ namespace MysticCombat.Core
             // 3. Play 3-second victory fanfare
             if (victoryJingle != null && sfxSource != null)
             {
-                sfxSource.volume = victoryJingleVolume;
-                sfxSource.PlayOneShot(victoryJingle, victoryJingleVolume);
+                sfxSource.volume = victoryJingleVolume * InputSettingsManager.SFXVolume;
+                sfxSource.PlayOneShot(victoryJingle, victoryJingleVolume * InputSettingsManager.SFXVolume);
             }
         }
 
@@ -245,12 +265,12 @@ namespace MysticCombat.Core
         public void PlayBattleMusic(bool resetToStart = true)
         {
             if (musicSource == null) return;
-            if (GameManager.Instance != null && GameManager.Instance.CurrentState == GameManager.GameState.MainMenu) return;
+            if (gameObject.scene.name == "MainMenuScene") return;
 
             if (battleMusic != null)
             {
                 musicSource.clip = battleMusic;
-                musicSource.volume = battleMusicVolume;
+                musicSource.volume = battleMusicVolume * InputSettingsManager.MusicVolume;
                 musicSource.loop = true;
                 if (resetToStart)
                 {
@@ -313,6 +333,14 @@ namespace MysticCombat.Core
                     if (!File.Exists(koPath)) koPath = Path.Combine(sfxFolder, "sfx_ko_bell.wav");
                     yield return StartCoroutine(LoadClipFromFile(koPath, (c) => koBellClip = c));
                 }
+            }
+
+            // Self-healing: If battle music was loaded asynchronously while round 1 was already running, play it!
+            if (battleMusic != null && musicSource != null && !musicSource.isPlaying &&
+                matchManager != null && matchManager.CurrentMatchState == MatchManager.MatchState.RoundInProgress &&
+                gameObject.scene.name != "MainMenuScene")
+            {
+                PlayBattleMusic(resetToStart: true);
             }
         }
 

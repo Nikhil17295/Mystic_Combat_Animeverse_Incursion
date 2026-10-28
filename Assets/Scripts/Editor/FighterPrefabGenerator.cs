@@ -21,6 +21,10 @@ namespace MysticCombat.Editor
         private const string GOKU_PREFAB_PATH = "Assets/Prefabs/Fighters/Goku.prefab";
         private const string SAITAMA_PREFAB_PATH = "Assets/Prefabs/Fighters/Saitama.prefab";
 
+        private const string RESOURCES_DIR = "Assets/Resources/Prefabs/Fighters";
+        private const string GOKU_RESOURCE_PATH = "Assets/Resources/Prefabs/Fighters/Goku.prefab";
+        private const string SAITAMA_RESOURCE_PATH = "Assets/Resources/Prefabs/Fighters/Saitama.prefab";
+
         static FighterPrefabGenerator()
         {
             EditorApplication.delayCall += EnsurePrefabsExist;
@@ -41,13 +45,20 @@ namespace MysticCombat.Editor
             {
                 Directory.CreateDirectory(PREFAB_DIR);
             }
+            if (!Directory.Exists(RESOURCES_DIR))
+            {
+                Directory.CreateDirectory(RESOURCES_DIR);
+            }
 
             BuildFighterPrefab("Goku", PlayerInputHandler.PlayerIndex.P1, GOKU_PREFAB_PATH);
             BuildFighterPrefab("Saitama", PlayerInputHandler.PlayerIndex.P2, SAITAMA_PREFAB_PATH);
 
+            BuildFighterPrefab("Goku", PlayerInputHandler.PlayerIndex.P1, GOKU_RESOURCE_PATH);
+            BuildFighterPrefab("Saitama", PlayerInputHandler.PlayerIndex.P2, SAITAMA_RESOURCE_PATH);
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log("<color=#00e676>[FighterPrefabGenerator]</color> Generated Goku.prefab and Saitama.prefab in Assets/Prefabs/Fighters/!");
+            Debug.Log("<color=#00e676>[FighterPrefabGenerator]</color> Generated Goku.prefab and Saitama.prefab in Assets/Prefabs/Fighters/ and Assets/Resources/Prefabs/Fighters/!");
         }
 
         private static void BuildFighterPrefab(string fighterName, PlayerInputHandler.PlayerIndex playerIndex, string assetPath)
@@ -94,6 +105,10 @@ namespace MysticCombat.Editor
             // Systems
             HealthSystem health = fighter.AddComponent<HealthSystem>();
             EnergySystem energy = fighter.AddComponent<EnergySystem>();
+
+            // Audio
+            FighterAudio fa = fighter.AddComponent<FighterAudio>();
+            fa.EnsureClipsLoaded();
 
             // Hurtbox child (Green Scene Gizmo)
             GameObject hurtboxObj = new GameObject("Hurtbox");

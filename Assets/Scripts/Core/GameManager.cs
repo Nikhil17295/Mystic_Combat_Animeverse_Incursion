@@ -164,6 +164,12 @@ namespace MysticCombat.Core
             Debug.Log($"[GameManager] Game mode set to: {mode}");
         }
 
+        public void SetCpuDifficulty(CpuDifficulty difficulty)
+        {
+            currentCpuDifficulty = difficulty;
+            Debug.Log($"[GameManager] CPU Difficulty set to: {difficulty}");
+        }
+
         /// <summary>
         /// Loads a scene by name.
         /// </summary>

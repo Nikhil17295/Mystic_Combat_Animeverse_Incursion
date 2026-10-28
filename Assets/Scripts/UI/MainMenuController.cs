@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using MysticCombat.Core;
+using MysticCombat.Systems;
 
 namespace MysticCombat.UI
 {
@@ -72,7 +73,7 @@ namespace MysticCombat.UI
         [SerializeField] private AudioSource musicSource;
         [SerializeField] private AudioClip titleMusicClip;
         [Tooltip("Title screen background music volume. Adjustable live in Inspector during Play mode.")]
-        [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.70f;
+        [SerializeField] [Range(0f, 1f)] private float musicVolume = 1.00f;
 
         [Header("Options & Controls Modal")]
         [SerializeField] private GameObject optionsPanel;
@@ -154,6 +155,9 @@ namespace MysticCombat.UI
             audioSource.mute = false;
 
             // Setup Music Player
+            InputSettingsManager.EnsureInitialized();
+            musicVolume = InputSettingsManager.MusicVolume;
+
             if (musicSource == null)
             {
                 musicSource = gameObject.AddComponent<AudioSource>();
@@ -800,6 +804,15 @@ namespace MysticCombat.UI
                 musicSource.volume = musicVolume;
                 musicSource.loop = true;
                 musicSource.Play();
+            }
+        }
+
+        public void SetMusicVolume(float volume)
+        {
+            musicVolume = Mathf.Clamp01(volume);
+            if (musicSource != null)
+            {
+                musicSource.volume = musicVolume;
             }
         }
 

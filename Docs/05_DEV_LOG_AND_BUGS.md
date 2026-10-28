@@ -612,6 +612,174 @@ ull. Because AssetDatabase is stripped from runtime player builds, runtime scrip
   4. **Character-Specific Brains & Difficulty Knobs:** Created [`GokuBrain.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/GokuBrain.cs) (mid-range Kamehameha zoner), [`SaitamaBrain.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/SaitamaBrain.cs) (relentless rushdown brawler), and [`CpuBrainProfile.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/CpuBrainProfile.cs) with Easy, Hard, and Extreme difficulty tiers.
   5. **Dynamic Character Select Switching:** Added `[TAB]` keyboard cycling in [`CharacterSelectController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CharacterSelectController.cs) to switch CPU difficulty on the fly.
 
+---
+
+### Bug 20: Character Select Lock-In Disconnect: Hardcoded Scene GameObjects & Deferred `Destroy()` Race Condition
+
+- **Symptom:**
+  1. In the Character Selection screen, when Player 1 locked in Saitama and CPU locked in Goku, the HUD updated names and portraits correctly, but the physical combatants on the stage were always locked to Goku (P1) vs. Saitama (P2).
+  2. If Saitama was chosen for both players (Mirror Match), the match failed to load Player 2 or inverted health and Ki bar event listeners.
+- **Root Cause:**
+  1. **Static Scene Prefab Instances:** [`SampleScene.unity`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scenes/SampleScene.unity) had static baked GameObject instances (`Fighter_P1_Goku` and `Fighter_P2_Saitama`) serialized directly into the scene hierarchy.
+  2. **Deferred `Destroy()` Execution:** When `PrototypeBootstrap` called `Destroy(existingFighter)`, Unity deferred object removal until the end of the frame. In `Awake()`, `MatchManager` and `HUDController` executed `GameObject.Find("Fighter_P1_Goku")` and bound to the obsolete fighters before they were removed.
+  3. **Brittle String Queries:** Both `MatchManager.cs` and `HUDController.cs` explicitly searched for `"Fighter_P1_Goku"` and `"Fighter_P2_Saitama"`. Any other character combination failed to bind.
+- **Resolution:**
+  1. **Clean Arena Architecture:** Stripped static fighter instances from `SampleScene.unity` and updated [`SceneSetupTool.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/SceneSetupTool.cs) to treat the arena as an empty stage.
+  2. **Resources Prefab Encapsulation:** Saved canonical fighter prefabs into `Assets/Resources/Prefabs/Fighters/` (`Goku.prefab`, `Saitama.prefab`).
+  3. **Dynamic Runtime Deployer:** In [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs), `DeployFighter()` dynamically instantiates the chosen character prefab via `Resources.Load<GameObject>()` based on `GameManager.Instance.P1SelectedCharacterId` and `P2SelectedCharacterId`.
+  4. **Direct Reference Injection:** Implemented `SetFighterReferences(p1Hp, p2Hp, p1Ki, p2Ki)` on both `MatchManager` and `HUDController`, allowing the deployer to inject the newly spawned fighter references directly, eliminating all brittle scene search queries.
+  5. **Immediate Deactivation Sweep:** Any residual scene fighters are deactivated with `go.SetActive(false)` immediately before calling `Destroy(go)`, preventing lifecycle race conditions during frame 0.
+
+---
+
+### Bug 21: Non-Persistent Editor Lambda Listeners & Static Controls Modal
+
+- **Symptom:**
+  1. The Main Menu's "Options & Moveset" button opened a static, read-only placeholder box with text stating `[Custom player-preferred movesets and audio mixer will be configured here.]`, providing no actual volume sliders or key customization.
+  2. When procedurally generating UI in Unity Editor baking scripts (`MainMenuSetupTool.cs`), attaching C# lambda listeners (e.g. `btn.onClick.AddListener(() => OnClick())`) failed to persist after saving the scene file (`EditorSceneManager.SaveScene`).
+- **Root Cause:**
+  1. **UnityEvent Serialization Mechanics:** Standard `AddListener` calls register transient, non-serialized C# delegates in memory. When Unity saves a scene, only persistent listeners serialized in YAML are retained.
+  2. **Single Global Keymap Constraint:** If a single global keymap was used, remapping Player 1's keys for solo play against the CPU would inadvertently scramble the shared keyboard layout required for 2-player 1v1 local duels.
+- **Resolution:**
+  1. **Persistent Manager (`InputSettingsManager.cs`):** Manages `MusicVolume`, `SFXVolume`, `SinglePlayerKeys` (9 actions for Vs CPU / LAN), and `LocalDuelP1/P2Keys` (18 actions for shared keyboard), persisted via `PlayerPrefs`.
+  2. **Runtime Lifecycle Event Hooking (`OptionsMenuController.cs`):**
+     - Instead of relying on fragile Editor-time lambda serialization, `OptionsMenuController` stores serialized lists of rows (`singlePlayerRows` and `localDuelRows`).
+     - In `Awake()`, `HookAllListeners()` binds runtime `onClick` and `onValueChanged` delegates to all sliders, tab switches, and key buttons.
+  3. **3-Column Combined Table Layout:**
+     - The 1v1 Local Duel panel presents all 9 actions in a unified 3-column table:
+       `[ ACTION NAME ] | [ PLAYER 1 (LEFT SIDE) ] | [ PLAYER 2 (RIGHT SIDE) ]`
+     - This allows both players to audit their keys side-by-side and avoid mapping overlaps before combat starts.
+  4. **Interactive Key Rebinding Loop:**
+     - Clicking any key button transitions to `[ PRESS KEY ]` with gold pulse animation.
+     - `Update()` listens to `Keyboard.current.allKeys`, intercepts the pressed key, updates the button label, and writes to `PlayerPrefs` immediately. ESC cleanly cancels without modifying the key.
+  5. **Compiler Verification & CS0103 Fix:**
+     - Executed a full project compilation check across both assemblies (`Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`) using Unity's official Roslyn compiler (`csc.dll` via .NET 8 SDK).
+     - Fixed a refactoring typo in `OptionsMenuController.InitializeReferences()` where a legacy call to `HookButtonEvents()` was resolved to `HookAllListeners()`.
+     - Verified clean compilation with **0 errors** across all 34 C# source files and 393 reference assemblies.
+
+---
+
+### Bug 22: High Information Density & Illegible Font Scaling in Unified Options Screen
+
+- **Symptom:**
+  1. Font sizes in the initial Controls & Options screen were cramped down to $12\text{pt}\text{–}14\text{pt}$, making key labels and descriptions hard to read on 1080p and higher displays.
+  2. Displaying all 18 key rows simultaneously below the audio sliders caused visual clutter and sensory overload.
+  3. The menu lacked an obvious arcade-style navigation focus indicator, making keyboard/controller navigation ambiguous.
+- **Root Cause:** Squeezing audio controls, mode descriptors, and 18 interactive key rows onto a single $1060 \times 720\text{px}$ canvas left insufficient vertical clearance ($< 32\text{px}$ per row), artificially restricting text scale.
+- **Resolution:**
+  1. **$80\%$ Typography Scale-Up:** Scaled fonts across the board: Titles to $36\text{pt}$, Subtitles to $20\text{pt}$, Action Labels & Buttons to $23\text{pt}\text{–}25\text{pt}$, and Percentage Indicators to $26\text{pt}$.
+  2. **Hierarchical 3-Screen Architecture:**
+     - **Main Hub:** Audio sliders, launcher cards (`[ 👤 CONFIGURE SINGLE PLAYER KEYS » ]` and `[ ⚔️ CONFIGURE 1v1 LOCAL DUEL KEYS » ]`), and side-by-side lower buttons (`Reset Defaults` and `Save & Back`).
+     - **Single Player Sub-Screen:** Full window dedicated to 9 spacious action rows ($54\text{px}$ row height).
+     - **1v1 Local Duel Sub-Screen:** Full $1440\text{px}$ width dedicated to the 3-column combined table (`ACTION` | `PLAYER 1` | `PLAYER 2`).
+  3. **Obvious Visual Navigation System:**
+     - Implemented dynamic `►` cursor assignment and real-time pulsing Solar Gold (`#FFD54F`) focus frame.
+     - Dual-axis input handling: Vertical ($W/S$, Up/Down) shifts active rows; horizontal ($A/D$, Left/Right) nudges volume sliders $\pm 5\%$ or toggles between P1 and P2 columns.
+     - Full synchronization between keyboard, D-pad, and mouse hover/click interactions.
 
 
 
+
+
+
+
+
+---
+
+### Bug 23: Empty Arena & Null Fighter Deployment via `RuntimeInitializeOnLoadMethod` Single-Execution & Scene Transition Trap
+
+- **Symptom:**
+  1. After cleaning up static pre-baked fighters from `SampleScene.unity` to allow dynamic Character Selection, playing the game from `MainMenuScene` loaded an empty combat arena with zero fighters on stage.
+  2. The round timer did not start, HUD portraits showed null bars, and keyboard inputs had no characters to control.
+- **Root Cause:**
+  1. **`RuntimeInitializeOnLoadMethod` Lifecycle Trap:** Attributes with `RuntimeInitializeLoadType.AfterSceneLoad` fire **only once** upon initial application launch. When starting the game from `MainMenuScene`, the method ran inside `MainMenuScene` and aborted because fighters should not spawn in the menu. When the player transitioned into `SampleScene`, that method was never invoked again!
+  2. **The `SceneManager.sceneLoaded` Active Scene Gotcha:** In Unity, when `SceneManager.sceneLoaded` fires, `SceneManager.GetActiveScene()` is **not yet switched** to the newly loaded scene. When `PrototypeBootstrap.DeployMatchFighters()` ran:
+     ```csharp
+     if (SceneManager.GetActiveScene().name == "MainMenuScene") return;
+     ```
+     `SceneManager.GetActiveScene()` was still `"MainMenuScene"`, so the deployment aborted immediately!
+  3. **Premature `MatchManager.Start()`:** `MatchManager.Start()` immediately called `StartMatch()` regardless of whether fighters were present, expecting static scene fighters.
+- **Resolution:**
+  1. **Target Scene Context Guard:** In [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs), replaced `SceneManager.GetActiveScene().name` checks with `gameObject.scene.name` and the loaded `scene.name`.
+  2. **Explicit Scene Migration (`SceneManager.MoveGameObjectToScene`):** Called `SceneManager.SetActiveScene(scene)` and moved instantiated fighters explicitly into `scene` to prevent them from belonging to the unloading scene.
+  3. **Dual Execution Hooks:** Wired both `SceneManager.sceneLoaded` (for scene changes from Main Menu) and `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` (for direct Play Mode debugging inside `SampleScene`).
+  4. **Stateful Readiness Handshake (`MatchState.WaitingToStart`):**
+     - In [`MatchManager.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchManager.cs), default state is `MatchState.WaitingToStart`.
+     - In `Start()`: If fighters are missing, logs a waiting notice and does not start the round timer.
+     - In `SetFighterReferences()` and `Update()`: When valid fighters are supplied/discovered, transitions `WaitingToStart -> RoundInProgress` and calls `StartMatch()`.
+  5. **Auto-Bake Integration:** In [`SceneSetupTool.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/SceneSetupTool.cs), added an explicit `[PrototypeBootstrap]` GameObject to `SampleScene.unity` and bumped `BAKE_VERSION_KEY` to `v27`.
+
+---
+
+### Bug 24: Overly Loud Menu Navigation SFX, Move-Slot Semantic Disconnect & Vocal Gain Calibration
+
+- **Symptom:**
+  1. Navigating choices inside the in-match Pause Menu and Victory Menu triggered an abrasive, loud sound effect that drowned out background music.
+  2. Goku's Kamehameha shout was extremely loud and did not drop in volume when pressing Skill (`E`), while Saitama's vocal callouts ("Consecutive Normal Punches" and "Serious Punch") were drowned out by punch impact sounds.
+  3. Default background music volume was set to `0.70f` ($70\%$), preventing new players from experiencing full dynamic range unless manually bumped up in Options.
+- **Root Cause:**
+  1. In `CombatMenuController.cs`, `navigateSfx` was triggered with an unscaled volume of `0.45f` and a raw square-wave without an amplitude decay envelope, producing high-frequency transient clicks.
+  2. **Move-Slot Disconnect:** In `FighterAudio.cs` and `SceneSetupTool.cs`, `goku_voice_kamehameha` was attached to `voiceUltimateClip` (Ultimate `Q`), while `voiceSkillClip` (Skill `E`, where Kamehameha actually lives in `goku.json`) was left as `null`. When players pressed `E` to fire Kamehameha, no voice played; when pressing `Q`, the voice played at uncalibrated levels.
+  3. **Acoustic Mastering Disparity:** `goku_voice_kamehameha.wav` was mastered at near-peak ceiling (Peak `0.906`, RMS `0.262`). Even with a $30\%$ drop ($0.84\times$), it remained deafening. In contrast, Saitama's MP3 stems had softer recording gain and were eclipsed by physical hit SFX.
+  4. In `InputSettingsManager.cs`, `DEFAULT_MUSIC_VOL` was hardcoded to `0.70f`, and returning users had `0.70f` cached in `PlayerPrefs`.
+- **Resolution:**
+  1. **Menu Navigation SFX Volume Halved:** Reduced `navigateSfx` playback volume from `0.45f` down to `0.22f` ($51\%$ reduction) across keyboard and mouse triggers in `CombatMenuController.cs`. Added linear decay envelope `(1f - t/duration)` to procedural audio to remove clicks.
+  2. **Goku Kamehameha Wired as Ultimate (`Q`) & Gain-Calibrated:**
+     - In `FighterAudio.cs`, mapped `goku_voice_kamehameha` to `voiceUltimateClip` and set `voiceSkillClip = null` (Goku has no skill voice; his animation and ultimate finisher is Kamehameha).
+     - Calibrated Goku's `voiceUltimateMultiplier` down to `0.50f`, and added an explicit clamp in `PlayVoiceSound()`: `tunedVolume = Mathf.Min(tunedVolume, 0.50f);` for Kamehameha.
+  3. **Saitama Vocal Shouts Amplified:**
+     - Boosted Saitama's `voiceSkillMultiplier` to **`2.20f`** (Consecutive Normal Punches).
+     - Boosted Saitama's `voiceUltimateMultiplier` to **`2.50f`** (Serious Punch).
+  4. **Master BGM Default to 100% with Migration:**
+     - Updated `DEFAULT_MUSIC_VOL = 1.00f;` in `InputSettingsManager.cs`.
+     - In `LoadAllSettings()`, added an auto-upgrade branch: if stored `PlayerPrefs` was the legacy default (`0.70f`) or unset, it auto-migrates to `1.00f`.
+     - Updated serialized defaults in `MainMenuController.cs` and bumped `MAIN_MENU_BAKE_KEY` to `v16` in `MainMenuSetupTool.cs`.
+  5. **Master Audio Bus Synchronization (Single-Pass Scaling):** Linked `MatchAudioController.cs` and `FighterAudio.cs` directly to `InputSettingsManager.MusicVolume` and `SFXVolume` using single-pass multiplication in `PlayOneShot()`.
+  6. **Clean Compilation:** Re-verified with official Roslyn compiler (`csc.dll` via .NET 8 SDK): **0 errors** across both `Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`.
+
+---
+
+### Bug 25: Animation Bouncing, Static Collider Disconnect & 60-FPS AI Pogo-Sticking
+
+- **Symptom:**
+  1. Goku bounced $20\text{px}$ into the air whenever he initiated his Kamehameha skill animation, popping up and snapping back down.
+  2. Crouching changed the character sprite to ducking, but opponents' high melee strikes still connected because the hurtbox remained at standing height.
+  3. Goku's Kamehameha beam whiffed into thin air when standing at his preferred zoning distance ($2.1\text{m}$).
+  4. CPU bots felt erratic and "super dumb": pogo-stick jumping 9 times every second, pacing back and forth blindly on an arbitrary world timer, and getting stuck running against the arena boundary wall while trying to retreat and meditate.
+- **Root Cause:**
+  1. **Canvas Size & Baseline Disparity:** Standard Goku frames were $128 \times 128\text{px}$ with a $23\text{px}$ bottom padding (`y = 104`). In contrast, `skill_0..3.png` were sliced at $90 \times 79\text{px}$ with variable paddings ($14\text{–}20\text{px}$), causing `FighterAnimator.cs` to skip its standard pivot formula and lift Goku's feet $20\text{px}$ into the air.
+  2. **Static Hurtbox Collider:** `Hurtbox` was a static child `BoxCollider2D` ($1.8\text{m}$ tall) that never resized during `FighterState.Crouching`.
+  3. **Hitbox Reach Disconnect:** In `FighterController.cs`, the skill attack hitbox was configured with a width of only $1.3\text{m}$, far shorter than the visual beam and Goku's $2.1\text{m}$ preferred distance. Additionally, `HitboxController.ConfigureAttack()` updated internal fields without synchronizing `hitboxCollider.offset` and `size` on the physical component.
+  4. **The 60 FPS Probability Trap & World-Space Oscillation:**
+     - Evaluating `Random.value < 0.15f` every frame in `Update()` caused bots to jump 9 times per second.
+     - Neutral footsies oscillation used world space (`spacingOscillationDir * 0.4f`) rather than opponent-relative vectors.
+     - `ExecuteKiHoarding` lacked stage boundary checks; when backed against the wall ($|x| > 7.2\text{m}$), bots kept trying to walk backward into the wall.
+- **Resolution:**
+  1. **$128 \times 128$ Canvas Standardization:** Re-canvased all 44 Goku frames onto uniform $128 \times 128\text{px}$ PNGs with feet locked at `y = 104` and stance center at $x = 64$.
+  2. **Dynamic Hurtbox Resizing:** In `FighterController.TransitionTo()`, scaled `hurtboxCollider.size` to $0.95\text{m}$ ($y = 0.48\text{m}$) on entering `Crouching` and restored to $1.8\text{m}$ on exit.
+  3. **Kamehameha Reach & Component Sync:** Expanded beam reach to $3.6\text{m}$ (`offset = (2.1f, 0.9f)`, `size = (3.6f, 0.85f)`) and synchronized `hitboxCollider.offset` and `size` in `ConfigureAttack()`.
+  4. **Tactical HFSM Overhaul:**
+     - Added `jumpCooldownTimer` ($2.0\text{s}\text{–}3.2\text{s}$) to prevent pogo-sticking.
+     - Added `attackCooldownTimer` ($0.25\text{s}\text{–}0.50\text{s}$) for human-like attack rhythm.
+     - Converted neutral footsies to opponent-relative stepping (`dirToOpponent * 0.45f` in, `-dirToOpponent * 0.35f` out).
+     - Added corner awareness near walls ($|x| > 7.2\text{m}$): bots now jump over or fight their way out instead of running into the wall.
+     - Added defensive crouch ducking when opponents attack in close range.
+  5. **Compiler Verification:** Clean compilation with **0 errors** across both `Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`.
+
+---
+
+### Bug 26: Silent Round 1 Combat BGM via Scene Load Event Race & Stale MainMenu Guard
+
+- **Symptom:**
+  1. When starting combat from Character Select or launching directly into `SampleScene`, Round 1 played in complete silence without background music.
+  2. Upon reaching Round 2, the combat BGM (*Double Dragon 2 - Final Battle 2*) suddenly kicked in and played normally.
+- **Root Cause:**
+  1. **Stale `GameState.MainMenu` Guard:** In `MatchAudioController.cs`, `HandleRoundStart()` and `PlayBattleMusic()` checked `if (GameManager.Instance != null && GameManager.Instance.CurrentState == GameManager.GameState.MainMenu) return;`. In `GameManager.cs`, `currentState` defaulted to `GameState.MainMenu` and `MatchManager` never explicitly set it to `GameState.InMatch` on round start.
+  2. **Scene Load Event Race Condition:** `PrototypeBootstrap` deployed fighters dynamically during scene loading, triggering `MatchManager.StartRound(1)` and firing `OnRoundStart?.Invoke(1)` before `MatchAudioController` had completed its event subscription.
+  3. **Empty `Start()` Recovery:** `MatchAudioController.Start()` was completely empty, assuming future events would fire. Because Round 1's event was already spent, the controller stayed idle until Round 2 fired a new event.
+- **Resolution:**
+  1. **Scene-Context Filtering:** In [`MatchAudioController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchAudioController.cs), replaced the brittle `CurrentState == GameState.MainMenu` check with `if (gameObject.scene.name == "MainMenuScene") return;`.
+  2. **Stateful Self-Healing in `Start()`:** In `Start()`, inspected whether `matchManager.CurrentMatchState == MatchState.RoundInProgress`. If Round 1 has already begun and `!musicSource.isPlaying`, calls `PlayBattleMusic(resetToStart: true)` immediately.
+  3. **Continuous Failsafe in `Update()`:** Added an automatic playback recovery check in `Update()` if a round is in progress and the music source is silent.
+  4. **State Synchronization in `MatchManager`:** In `MatchManager.StartMatch()`, explicitly calls `GameManager.Instance.SetState(GameState.InMatch)`.
+  5. **Compiler Verification:** Clean compilation with **0 errors** across both `Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`.

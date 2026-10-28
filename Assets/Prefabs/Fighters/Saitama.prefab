@@ -77,7 +77,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.85, y: 1.8}
+  m_Size: {x: 0.9, y: 1.8}
   m_EdgeRadius: 0
 --- !u!114 &5329731355989888119
 MonoBehaviour:
@@ -160,7 +160,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.8, y: 0.85}
+  m_Offset: {x: 0.8, y: 0.9}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0, y: 0}
@@ -208,7 +208,7 @@ GameObject:
   - component: {fileID: 2326665947787089667}
   - component: {fileID: 4550509057508311584}
   - component: {fileID: 2310252803913224546}
-  - component: {fileID: 2550535491218571143}
+  - component: {fileID: 2439215869594205095}
   m_Layer: 0
   m_Name: Saitama
   m_TagString: Untagged
@@ -225,7 +225,7 @@ Transform:
   m_GameObject: {fileID: 5636494491918378925}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.2, y: -3, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1.12, y: 1.12, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -298,14 +298,14 @@ BoxCollider2D:
   m_Offset: {x: 0, y: 0.95}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1.6, y: 1.6}
-    newSize: {x: 1.6, y: 1.6}
+    pivot: {x: 0.5, y: 0.15625}
+    oldSize: {x: 5.714286, y: 5.714286}
+    newSize: {x: 5.714286, y: 5.714286}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.85, y: 1.9}
+  m_Size: {x: 0.8, y: 1.9}
   m_EdgeRadius: 0
 --- !u!212 &6652089876104225734
 SpriteRenderer:
@@ -361,7 +361,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 1.6, y: 1.6}
+  m_Size: {x: 5.714286, y: 5.714286}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 0
@@ -392,10 +392,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 275722d1f91068d4d97839c01746bf24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Fighter.FighterController
-  inputHandler: {fileID: 112296142506977528}
-  opponent: {fileID: 4284370108491550822, guid: fd362ab0e7f64e44ebb02d1fccaa9e62, type: 3}
+  legacyInputHandler: {fileID: 0}
+  opponent: {fileID: 0}
   attackHitbox: {fileID: 7795675334206622691}
-  fighterAudio: {fileID: 2550535491218571143}
+  fighterAudio: {fileID: 0}
   groundCheckPoint: {fileID: 1617011440705394427}
   groundCheckRadius: 0.15
   groundLayer:
@@ -456,7 +456,7 @@ MonoBehaviour:
   redZoneThreshold: 10
   redZoneDuration: 5
   recoveryKi: 20
---- !u!114 &2550535491218571143
+--- !u!114 &2439215869594205095
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -471,31 +471,31 @@ MonoBehaviour:
   sfxSource: {fileID: 0}
   auraSource: {fileID: 0}
   voiceSource: {fileID: 0}
-  jumpClip: {fileID: 8300000, guid: 53e898e360727bf313d67dac9180b655, type: 3}
-  landClip: {fileID: 8300000, guid: bc0cc04549f9bd50cb61e4328e5c88a9, type: 3}
-  crouchClip: {fileID: 8300000, guid: 64f0b210014189de4b4b2b4522de6b1e, type: 3}
-  dashClip: {fileID: 8300000, guid: 7a07bde6e3bafe35f9fc33d8ef4d2141, type: 3}
-  lightWhiffClip: {fileID: 8300000, guid: 99635607f1acaae91b11415016099e9b, type: 3}
-  heavyWhiffClip: {fileID: 8300000, guid: 9e51008bf3395c7817e44aad4f532cb2, type: 3}
+  jumpClip: {fileID: 8300000, guid: a5a8334d7e151ac4486b794a82673e86, type: 3}
+  landClip: {fileID: 8300000, guid: a5a8334d7e151ac4486b794a82673e86, type: 3}
+  crouchClip: {fileID: 8300000, guid: 44703b5540eb24f44b86bca53a4734d1, type: 3}
+  dashClip: {fileID: 8300000, guid: b60b174baf8f403469b0285ab001a257, type: 3}
+  lightWhiffClip: {fileID: 8300000, guid: 6289ed9b751b8a64aa21b8bff20f484a, type: 3}
+  heavyWhiffClip: {fileID: 8300000, guid: 84f0bbfcefa055248a3ab7745a0cd0d3, type: 3}
   skillAttackClip: {fileID: 0}
   ultimateAttackClip: {fileID: 0}
-  lightHitClip: {fileID: 8300000, guid: c763b19988f8594a4ad0e68360e7c4c9, type: 3}
-  heavyHitClip: {fileID: 8300000, guid: 2605571bf6fb8c804df784055cda6c65, type: 3}
+  lightHitClip: {fileID: 8300000, guid: 132ff3e39d2f67344b75d46764d42485, type: 3}
+  heavyHitClip: {fileID: 8300000, guid: e44b9e1ee4c1ae54aaa08d1a582414f1, type: 3}
   skillHitClip: {fileID: 0}
   ultimateHitClip: {fileID: 0}
-  kiChargeLoopClip: {fileID: 8300000, guid: cbf726ab5f2e7801a75ad4c195307c64, type: 3}
-  redZoneWarningClip: {fileID: 8300000, guid: 040c9c42201d714c9065ba3301bce739, type: 3}
+  kiChargeLoopClip: {fileID: 8300000, guid: 84dd92e6ed8422a4da67d1025456066a, type: 3}
+  redZoneWarningClip: {fileID: 8300000, guid: 63a8bab3dcb63f942bc42ae9003039d7, type: 3}
   voiceAttackGruntClip: {fileID: 0}
   voiceHurtClip: {fileID: 0}
-  voiceSkillClip: {fileID: 8300000, guid: 7c226bd4a44afec40ae9e20ad4cc931f, type: 3}
-  voiceUltimateClip: {fileID: 8300000, guid: 2d4a68a3d81554b4da36f19e2d723b6b, type: 3}
+  voiceSkillClip: {fileID: 8300000, guid: 711a3a0b76f55d94fa6b2d2598994559, type: 3}
+  voiceUltimateClip: {fileID: 8300000, guid: ba1f01ed480c6d342bb5302235b807bc, type: 3}
   sfxVolume: 1
   whiffVolume: 0.65
   impactVolume: 1
   voiceVolume: 1
   kiAuraVolume: 0.12
-  voiceSkillMultiplier: 1.45
-  voiceUltimateMultiplier: 1.7
+  voiceSkillMultiplier: 2.2
+  voiceUltimateMultiplier: 2.5
 --- !u!1 &6632295880658998869
 GameObject:
   m_ObjectHideFlags: 0

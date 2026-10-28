@@ -60,6 +60,7 @@ namespace MysticCombat.Fighter
         private float attackTimer;
         private float attackStartupTimer;
         private float attackActiveTimer;
+        private BoxCollider2D hurtboxCollider;
         private float flurryHitTimer;
 
         #endregion
@@ -103,6 +104,12 @@ namespace MysticCombat.Fighter
             {
                 if (legacyInputHandler != null) inputHandler = legacyInputHandler;
                 else inputHandler = GetComponent<IFighterInput>();
+            }
+
+            if (hurtboxCollider == null)
+            {
+                Combat.HurtboxController hb = GetComponentInChildren<Combat.HurtboxController>(true);
+                if (hb != null) hurtboxCollider = hb.GetComponent<BoxCollider2D>();
             }
         }
 
@@ -217,6 +224,12 @@ namespace MysticCombat.Fighter
             {
                 attackHitbox.Deactivate();
                 attackHitbox.ResetHitTargets();
+            }
+
+            if (hurtboxCollider != null)
+            {
+                hurtboxCollider.size = new Vector2(0.85f, 1.8f);
+                hurtboxCollider.offset = new Vector2(0f, 0.95f);
             }
 
             if (spriteRenderer != null)
@@ -410,7 +423,10 @@ namespace MysticCombat.Fighter
                         attackActiveTimer = 0.50f;
                         if (attackHitbox != null)
                         {
-                            attackHitbox.ConfigureAttack(45, 14f, 15f, new Vector2(1.1f, 1.0f), new Vector2(1.5f, 1.2f));
+                            bool isGoku = gameObject.name.ToLower().Contains("goku");
+                            Vector2 offset = isGoku ? new Vector2(1.8f, 1.0f) : new Vector2(1.2f, 1.0f);
+                            Vector2 size = isGoku ? new Vector2(3.0f, 1.4f) : new Vector2(1.6f, 1.2f);
+                            attackHitbox.ConfigureAttack(45, 14f, 15f, offset, size);
                         }
                         TransitionTo(FighterState.Ultimate);
                         return;
@@ -429,7 +445,10 @@ namespace MysticCombat.Fighter
                         attackActiveTimer = 0.60f;
                         if (attackHitbox != null)
                         {
-                            attackHitbox.ConfigureAttack(20, 6f, 8f, new Vector2(1.0f, 0.9f), new Vector2(1.3f, 0.9f));
+                            bool isGoku = gameObject.name.ToLower().Contains("goku");
+                            Vector2 offset = isGoku ? new Vector2(2.1f, 0.9f) : new Vector2(1.05f, 0.9f);
+                            Vector2 size = isGoku ? new Vector2(3.6f, 0.85f) : new Vector2(1.4f, 0.9f);
+                            attackHitbox.ConfigureAttack(20, 6f, 8f, offset, size);
                         }
                         TransitionTo(FighterState.Skill);
                         return;
@@ -500,6 +519,21 @@ namespace MysticCombat.Fighter
 
             FighterState oldState = CurrentState;
             CurrentState = newState;
+
+            // Dynamic Hurtbox Height: Ducking lowers vulnerable body area!
+            if (hurtboxCollider != null)
+            {
+                if (newState == FighterState.Crouching)
+                {
+                    hurtboxCollider.size = new Vector2(0.85f, 0.95f);
+                    hurtboxCollider.offset = new Vector2(0f, 0.48f);
+                }
+                else if (oldState == FighterState.Crouching)
+                {
+                    hurtboxCollider.size = new Vector2(0.85f, 1.8f);
+                    hurtboxCollider.offset = new Vector2(0f, 0.95f);
+                }
+            }
 
             // --- State-Entry Audio Triggers (State-Driven Architecture) ---
             switch (newState)

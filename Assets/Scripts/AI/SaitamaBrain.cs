@@ -27,15 +27,9 @@ namespace MysticCombat.AI
 
         protected override void PerformMidRangeAction()
         {
-            // Saitama doesn't zone with projectiles; he immediately charges forward!
+            // Saitama doesn't zone with projectiles; he closes distance aggressively!
             float dirToOpponent = (opponent != null && opponent.position.x > transform.position.x) ? 1f : -1f;
             MoveInput = new Vector2(dirToOpponent, 0f);
-
-            // Occasional hero hop to close distance
-            if (Random.value < 0.25f)
-            {
-                JumpPressed = true;
-            }
         }
 
         protected override void PerformMeleePoke()
