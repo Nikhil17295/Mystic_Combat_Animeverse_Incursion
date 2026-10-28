@@ -58,7 +58,8 @@ namespace MysticCombat.Core
         public enum GameMode
         {
             VsCpu,
-            LocalPvP
+            LocalPvP,
+            LanPvP
         }
 
         #endregion
@@ -75,6 +76,9 @@ namespace MysticCombat.Core
 
         [Header("CPU AI Difficulty")]
         [SerializeField] private CpuDifficulty currentCpuDifficulty = CpuDifficulty.Easy;
+
+        [Header("LAN Multiplayer Settings")]
+        [SerializeField] private bool isLanHost = true;
 
         #endregion
 
@@ -119,6 +123,15 @@ namespace MysticCombat.Core
         {
             get => currentCpuDifficulty;
             set => currentCpuDifficulty = value;
+        }
+
+        /// <summary>
+        /// True if this machine acts as the authoritative LAN Host. False if Client.
+        /// </summary>
+        public bool IsLanHost
+        {
+            get => isLanHost;
+            set => isLanHost = value;
         }
 
         #endregion

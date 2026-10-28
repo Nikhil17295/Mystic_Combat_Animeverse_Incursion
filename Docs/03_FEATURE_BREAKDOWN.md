@@ -581,7 +581,7 @@ In 2D fighting games, multi-hit special attacks (such as E. Honda's *Hundred Han
 
 ### Overview
 To transition Mystic Combat from a combat prototype into a complete arcade fighting game loop, we introduced two dedicated modal systems in `SampleScene`:
-1. **The In-Combat Pause Menu (`Escape` / `P`):** Freezes the match at any instant, halts character input buffering, and presents 4 clean navigation choices:
+1. **The In-Combat Pause Menu (`Escape`):** Freezes the match at any instant, halts character input buffering, and presents 4 clean navigation choices:
    - **`RESUME`**: Unfreezes game physics and restores battle audio.
    - **`RESTART MATCH`**: Restarts the match from Round 1 with full health and zeroed scores.
    - **`CHARACTER SELECT`**: Directly loads `MainMenuScene` with state `GameState.CharacterSelect`, immediately opening Hero Selection.
@@ -626,33 +626,34 @@ The CPU continuously perceives the battlefield through sensory queries:
 - Opponent animation states ($\text{IsOpponentInRecovery}$, $\text{IsOpponentMeditating}$)
 
 The AI transitions dynamically between 5 macro postures:
-1. **`SpacingNeutral`:** Maintains optimal footsies spacing, weaving forward and backward to bait human whiffs while looking for poke openings.
-2. **`AggressiveRushdown`:** Sprints into close melee range ($< 1.0\text{m}$) to chain attack combos. Fired whenever the opponent is exhausted in the Red Zone, under low HP, or meditating.
-3. **`KiHoarding`:** Disengages to safe distance ($> 3.0\text{m}$) and channels Meditation (`MeditateHeld = true`) to charge energy or accelerate Red Zone recovery.
-4. **`DefensiveRetreat`:** Backpedals and uses evasive hops when low on health or suffering from Red Zone exhaustion.
-5. **`PunishOpening`:** Detects when an opponent misses a high-recovery move (Heavy/Ultimate) and immediately commits to a counter-strike.
+1. **`RushdownPressure` (Default):** Advances with intent and delivers relentless close-range pressure whenever within $1.55\text{m}$. Opens with Light jabs to bait reactions and confirm into combo finishers.
+2. **`PunishOpening`:** Detects when an opponent whiffs a heavy attack or ultimate, or enters `HitStun` or `Exhausted` (Red Zone). Closes in instantly to punish with an Ultimate blast, Skill flurry, or heavy haymaker.
+3. **`SpacingNeutral`:** Engages in dynamic footsies around $1.45\text{m} - 1.65\text{m}$. If the player steps into strike range, the bot counter-attacks immediately instead of retreating.
+4. **`KiCharge`:** Disengages to safe distance ($> 3.0\text{m}$) and channels Meditation (`MeditateHeld = true`) to charge energy. The moment the player approaches within $2.4\text{m}$, meditation is cancelled instantly to defend.
+5. **`ExhaustionRecovery`:** Triggered during Red Zone exhaustion. Utilizes accelerated meditation ($1.5\times$ speedup) at safe distance or defensive jumps/crouches when cornered.
 
-### Micro Action Execution & Virtual Input Pipeline
-- **Continuous Inputs:** `MoveInput` (Vector2), `MeditateHeld` (bool), and `CrouchHeld` (bool) remain active as long as the macro state demands them.
-- **Single-Frame Button Pulses:** Attack buttons (`LightAttackPressed`, `HeavyAttackPressed`, `SkillPressed`, `UltimatePressed`) and `JumpPressed` are pulsed for a single frame and automatically reset in `LateUpdate()`. This ensures `FighterController` detects them identically to human hardware key presses (`wasPressedThisFrame`).
+### Micro Action Execution & Frame-Latched Virtual Input Pipeline
+- **Continuous Inputs:** `MoveInput` (Vector2), `MeditateHeld` (bool), and `CrouchHeld` (bool) remain active as long as the tactical state demands them.
+- **2-Frame Latched Button Triggers:** Attack buttons (`LightAttackPressed`, `HeavyAttackPressed`, `SkillPressed`, `UltimatePressed`) and `JumpPressed` are latched across 2 frames. This eliminates the race condition where `LateUpdate()` cleared button pulses before `FighterController.Update()` evaluated them, guaranteeing 100% actuation reliability regardless of Unity script execution ordering.
+- **Hit-Confirm Chain-Canceling Engine:** The AI monitors `myController.HasHitTargetThisSwing` on every frame during `LightAttack`. If a hit lands, the bot cancels recovery directly into a Heavy Haymaker or special Skill based on its `comboChance`.
 
 ### Character-Specific Combat Personalities
 1. **Goku (`GokuBrain.cs`):**
-   - **Style:** Disciplined martial artist & mid-range zoner.
-   - **Spacing:** Maintains $\approx 2.1\text{m}$ distance.
-   - **Special Move:** Fires *Kamehameha* (`[E]`) from mid-distance ($1.4\text{m} - 2.7\text{m}$) when $\text{Ki} \ge 20$.
-   - **Ki Target:** Hoards $80\text{ Ki}$ for his Ultimate blast.
+   - **Style:** Disciplined martial artist, Super Saiyan powerhouse & beam zoner.
+   - **Spacing:** $1.65\text{m}$ melee range; full-screen beam sniping.
+   - **Super Saiyan Ascension:** The instant Goku reaches $35\text{ Ki}$, he triggers `Skill` to ascend to Super Saiyan form ($+25\%$ speed, $+66\%$ light damage, $+43\%$ heavy damage).
+   - **Special Move:** Snipes with full-screen *Kamehameha* beam (Ultimate / $80\text{ Ki}$ / $45\text{ dmg}$) from up to $6.5\text{m}$ away on vulnerable opponents.
 2. **Saitama (`SaitamaBrain.cs`):**
-   - **Style:** Relentless rushdown brawler.
-   - **Spacing:** Point-blank ($< 1.0\text{m}$); never retreats in neutral.
-   - **Special Move:** Unloads *Consecutive Normal Punches* (`[U]`) in close quarters.
-   - **Ki Target:** Hoards the entire $100\text{ Ki}$ bar to march up and drop the lethal *Serious Punch* (`[O]`).
+   - **Style:** Relentless in-your-face rushdown brawler.
+   - **Spacing:** Tight brawling ($1.30\text{m}$); refuses to back away in neutral.
+   - **Visceral Combo Chain:** Light Jab ($4\text{ dmg}$) $\to$ Heavy Haymaker ($9\text{ dmg}$) $\to$ *Consecutive Normal Punches* ($15\text{ hits} / 30\text{ dmg}$).
+   - **Serious Punch Finisher:** Hoards $80\text{ Ki}$ to march up and drop the round-ending *Serious Punch* ($90\text{ damage}$) with full cinematic camera shake and impact flash.
 
 ### Configurable Difficulty Knobs (`CpuBrainProfile.cs`)
-- **`reactionDelay`:** Easy ($0.40\text{s}$), Hard ($0.14\text{s}$), Extreme ($0.08\text{s}$).
-- **`mistakeChance`:** Easy ($35\%$), Hard ($8\%$), Extreme ($2\%$).
-- **`comboChance`:** Easy ($30\%$), Hard ($85\%$), Extreme ($95\%$).
-- **`healthMultiplier` & `damageMultiplier`:** Scaled to $1.4\times$ and $1.25\times$ on Extreme difficulty for tournament boss battles.
+- **`reactionDelay`:** Easy ($0.22\text{s}$), Hard ($0.10\text{s}$), Extreme ($0.04\text{s}$).
+- **`mistakeChance`:** Easy ($15\%$), Hard ($4\%$), Extreme ($0\%$).
+- **`comboChance`:** Easy ($60\%$), Hard ($88\%$), Extreme ($98\%$).
+- **`healthMultiplier` & `damageMultiplier`:** Scaled to $1.35\times$ and $1.25\times$ on Extreme difficulty for tournament boss battles.
 - **Character Select Integration:** Players can press `[TAB]` on the Character Select Screen when in `Vs CPU` mode to cycle dynamically between `[ CPU: EASY ]`, `[ CPU: HARD ]`, and `[ CPU: EXTREME ]`.
 
 ---
@@ -1144,25 +1145,349 @@ Integrates a complete 44-frame custom pixel-art animation suite for Goku's Super
 
 ### Overview
 The combat menu system (`CombatMenuController.cs`) governs two critical modal states:
-1. **In-Combat Pause Menu (`PauseMenu_Root`):** Triggered by `ESC` or `P`. Freezes `Time.timeScale = 0f` and `AudioListener.pause = true` while keeping UI interactive.
-2. **Post-Match Results Screen (`ResultsMenu_Root`):** Triggered after the final round K.O. Slides down from off-screen ($Y=+950\text{px}$) with winner portrait, tournament epithet, final round score, and rematch options.
+1. **In-Combat Pause Menu (`PauseMenu_Root`):** Triggered solely by `[ESCAPE]`. Freezes `Time.timeScale = 0f` and `AudioListener.pause = true` while keeping UI interactive (polling for `P` removed to prevent collision with right-hand arcade clusters).
+2. **Post-Match Results Screen (`ResultsMenu_Root`):** Triggered after the final round K.O. Slides down from off-screen ($Y=+950\text{px}$) with winner portrait, tournament epithet, final round score, and rematch options. Small textual elements have been scaled up ($15\text{pt} - 22\text{pt}$) for arcade and couch readability.
 
 ### Visual & Typography Specifications
 
-| Element | Primary Font | Fallback Font | Display Text | Color Styling |
-| :--- | :--- | :--- | :--- | :--- |
-| **Pause Header** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `PAUSED` | Electric Cyan (`#00F5FF`) |
-| **Pause Subtitle** | `RetroGaming_SDF` | `LiberationSans SDF` | `- COMBAT FROZEN -` | Crisp Ice (`#D9EBFF`) |
-| **Pause Selection** | `RetroGaming_SDF` | `LiberationSans SDF` | `>  RESUME  <` | Solar Gold (`#FFE040`) |
-| **Pause Navigation**| `RetroGaming_SDF` | `LiberationSans SDF` | `[W/S or ARROWS] Navigate \| [ENTER] Select \| [ESC] Resume` | Muted Silver |
-| **Victory Header** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `* WORLD CHAMPION *` | Solar Gold (`#FFE040`) |
-| **Winner Title** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `PLAYER 1: GOKU WINS!` | Cyan (`#00F5FF`) or Gold |
-| **Winner Epithet** | `RetroGaming_SDF` | `LiberationSans SDF` | `HOPE OF THE UNIVERSE \| TOURNAMENT VICTOR` | Crisp Ice |
-| **Final Score** | `RetroGaming_SDF` | `LiberationSans SDF` | `FINAL SCORE:  2 - 1` | Crisp Ice |
-| **Results Selection**| `RetroGaming_SDF` | `LiberationSans SDF` | `>  REMATCH  <` | Solar Gold with Gold Glow |
+| Element | Primary Font | Fallback Font | Font Size | Display Text | Color Styling |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Pause Header** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `32pt` | `PAUSED` | Electric Cyan (`#00F5FF`) |
+| **Pause Subtitle** | `RetroGaming_SDF` | `LiberationSans SDF` | `15pt` | `- COMBAT FROZEN -` | Crisp Ice (`#D9EBFF`) |
+| **Pause Selection** | `RetroGaming_SDF` | `LiberationSans SDF` | `20pt` | `>  RESUME  <` | Solar Gold (`#FFE040`) |
+| **Pause Navigation**| `RetroGaming_SDF` | `LiberationSans SDF` | `15pt` | `[W/S or ARROWS] Navigate \| [ENTER] Select \| [ESC] Resume` | Muted Silver |
+| **Victory Tag** | `RetroGaming_SDF` | `LiberationSans SDF` | `16pt` | `* ANIMEVERSE MARTIAL ARTS TOURNAMENT *` | Electric Cyan (`#00F5FF`) |
+| **Victory Header** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `34pt` | `* WORLD CHAMPION *` | Solar Gold (`#FFE040`) |
+| **Winner Title** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `30pt` | `PLAYER 1: GOKU WINS!` | Cyan (`#00F5FF`) or Gold |
+| **Winner Epithet** | `RetroGaming_SDF` | `LiberationSans SDF` | `18.5pt` | `HOPE OF THE UNIVERSE \| TOURNAMENT VICTOR` | Solar Gold Tint |
+| **Final Score** | `RetroGaming_SDF` | `LiberationSans SDF` | `21pt` | `FINAL SCORE:  2 - 1` | Crisp Ice (`#D9EBFF`) |
+| **Results Buttons** | `RetroGaming_SDF` | `LiberationSans SDF` | `22pt` | `REMATCH \| CHAR SELECT \| MAIN MENU` | Crisp White on Navy |
+| **Results Hints** | `RetroGaming_SDF` | `LiberationSans SDF` | `15pt` | `[W/S or ARROWS] Navigate \| [ENTER] Confirm \| [ESC] Main Menu` | Muted Silver |
 
 ### Zero-Block Guarantee
 1. **Direct YAML `_MainTex` Connection:** `ArcadeClassic_SDF.asset` and `RetroGaming_SDF.asset` have their Material `_MainTex` connected directly to their sub-asset `Texture2D` fileIDs.
 2. **Automatic Fallback Chaining:** All characters missing from the retro font atlas automatically fall back to `LiberationSans SDF`.
 3. **Pure ASCII Strings:** All typography uses universal ASCII characters (`>`, `<`, `*`, `-`, `|`), eliminating missing glyph tofu errors.
 4. **Runtime Self-Healing:** Every call to `Awake()`, `Start()`, `PauseGame()`, and `ShowResultsSequence()` triggers `SanitizeAndHealUIHierarchy()`, ensuring text meshes never enter a corrupted state.
+
+
+---
+
+## 37. Dynamic 3-Round Arena System, Interactive Animated Flame Braziers & Multiverse Incursion VFX
+
+### Overview
+To transform the combat arena from a static image into a living, breathing stage, `ArenaBackgroundManager.cs` introduces a **3-Round Stage Evolution System** paired with **interactive pixel-art flame braziers**, **ember particle emitters**, and a **Doctor Strange rotating Tao Mandala**.
+
+### 1. The Three Evolving Round Stages
+
+| Round | Stage Atmosphere | Key Visual Elements | Environmental VFX |
+| :--- | :--- | :--- | :--- |
+| **Round 1** | **Grand Martial Arts Tournament** *(Dusk / Twilight)* | Ancient carved dragon stone floor, temple pagodas, decorative banners, sunset mountain silhouettes. | Warm orange brazier flames, drifting gentle embers (14/s), peaceful pre-match air. |
+| **Round 2** | **Battle on the Moon** *(Saitama vs Boros Homage)* | Moon regolith crater floor, dark cosmic starry void, radiant blue-and-white Planet Earth in the sky. | Eerie blue/cyan plasma flames, Doctor Strange Tao Mandala rotating in space rift, low-gravity cosmic dust (12/s). |
+| **Round 3** | **Multiverse Dimensional Cataclysm** *(Mirror Dimension x Saiyan Ki)* | Shattered floating stone platforms, cosmic reality tear, blinding solar gold & crimson nebulae (Clean composition with zero circular mandalas). | Blazing Super Saiyan golden ki flames, lightning fractures, intense ember surges (38/s). |
+
+### 2. Interactive Animated Flame Braziers (`BrazierFlameAnimator.cs`)
+- **Twin Flanking Pedestals:** Located at $X = -5.5$ and $X = +5.5$, $Y = -2.4$, perfectly framing the 16:9 arcade camera zoom while keeping the main sparring lane clear.
+- **Carved Dragon Stone Stand (`brazier_stand_pixel.png`):** Handcrafted $40 \times 64$ retro arcade stone plinth with gold runic collar and ruby eye gem.
+- **8-Frame Looping Pixel Fire:**
+  - `Orange` (Tournament): $10\text{ FPS}$ breathing warm flame loop with white-yellow core and curling vermillion tongues.
+  - `Blue` (Moon / Space): Cold incandescent cyan core tapering into violet eldritch flame tips.
+  - `Gold` (Saiyan Overdrive): Towering $115\%$ height divine ki flame loop with surging solar aura borders.
+- **Interactive Combat Surge:**
+  When a heavy attack, Kamehameha beam, or Serious Punch connects:
+  $$\text{surgeScale} = 1.4\times, \quad \text{extraEmbers} = +12$$
+  The braziers visually flare up and shower the arena with sparks, instantly grounding combat hits into the physical world!
+
+### 3. Doctor Strange Rotating Tao Mandala (Featured in Round 2)
+- Rendered from `time_stone_mandala.png` at sorting order $-9$ (behind braziers and fighters).
+- Positioned inside the dimensional space fissure at $(X = 0.5, Y = 0.7)$ during the Round 2 Moon Battle.
+- Rotates continuously at $16^\circ/\text{s}$ in `Update()`, creating mystical sorcery motion in the background.
+- **Explicitly Disabled in Round 3:** In the final round, the mandala is completely omitted, allowing the raw, unobstructed Super Saiyan ki auroras, lightning fractures, and floating temple debris to command the screen.
+- Rotates continuously at $16^\circ/\text{s}$ in `Update()`, creating dynamic movement in the background while players fight.
+
+
+---
+
+## 38. Comprehensive Combat Attributes, Frame Data, Kinetic Physics & Red Zone Mechanics
+
+### Overview
+To transition Mystic Combat into an authentic, esports-ready fighting experience, the combat engine features calibrated low poke damages, decisive high-risk Ultimates, Gatling chain cancels, and a high-stakes Red Zone exhaustion mechanic.
+
+### 1. Calibrated Attack & Damage Matrix
+
+| Attack Move | Character | Damage (Normal) | Damage (Red Zone Target) | Startup | Active | Total Duration | Knockback $(X, Y)$ | Attack Level / Target |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Light Attack** | Goku | $3\text{ HP}$ ($5$ SSJ) | $4\text{ HP}$ ($7$ SSJ) | $0.08\text{s}$ | $0.20\text{s}$ | $0.38\text{s}$ | $(2.0\text{f}, 0.5\text{f})$ | High (Duckable) |
+| **Light Attack** | Saitama | $4\text{ HP}$ | $5\text{ HP}$ | $0.08\text{s}$ | $0.20\text{s}$ | $0.38\text{s}$ | $(2.2\text{f}, 0.5\text{f})$ | High (Duckable) |
+| **Heavy Attack** | Goku | $7\text{ HP}$ ($10$ SSJ) | $9\text{ HP}$ ($14$ SSJ) | $0.18\text{s}$ | $0.32\text{s}$ | $0.75\text{s}$ | $(5.0\text{f}, 1.8\text{f})$ | Mid (Hits crouching) |
+| **Heavy Attack** | Saitama | $9\text{ HP}$ | $12\text{ HP}$ | $0.18\text{s}$ | $0.32\text{s}$ | $0.75\text{s}$ | $(5.5\text{f}, 2.0\text{f})$ | Mid (Hits crouching) |
+| **Skill (Flurry)** | Saitama | $2 \times 15 = 30\text{ HP}$ | $3 \times 15 = 45\text{ HP}$ | $0.15\text{s}$ | $2.30\text{s}$ | $2.70\text{s}$ | $(0.30\text{f}, 0.0\text{f})$ | Mid (Traps opponent) |
+| **Skill (SSJ)** | Goku | Buff ($0\text{ Dmg}$) | N/A | $0.00\text{s}$ | $15.0\text{s}$ | Instant | N/A | Ki Power-Up ($+25\%$ Spd) |
+| **Ultimate (Kamehameha)**| Goku | $45\text{ HP}$ | $61\text{ HP}$ | $2.15\text{s}$ | $1.21\text{s}$ | $3.36\text{s}$ | $(8.5\text{f}, 2.2\text{f})$ | Full-Screen AoE Beam |
+| **Ultimate (Serious Punch)**| Saitama | $90\text{ HP}$ | **$122\text{ HP}$ (Instant KO!)** | $2.40\text{s}$ | $1.40\text{s}$ | $3.80\text{s}$ | $(12.0\text{f}, 3.0\text{f})$ | Melee Cataclysm |
+
+### 2. Character Asymmetry & Passive Attributes
+
+| Attribute | Goku (Agile Martial Artist) | Saitama (Immovable Titan) |
+| :--- | :--- | :--- |
+| **Move Speed** | $5.2\text{ m/s}$ ($6.5\text{ m/s}$ in Super Saiyan) | $4.4\text{ m/s}$ |
+| **Jump Force** | $12.5\text{ m/s}$ (High aerial mobility & anti-air control) | $10.8\text{ m/s}$ (Heavy, grounded leap) |
+| **Knockback Resistance**| Standard ($100\%$ knockback applied) | **Dense Mass: $20\%$ passive knockback reduction** ($80\%$ knockback applied) |
+| **Special Utility** | $15\text{s}$ Super Saiyan transformation with continuous Ki aura | $15\text{-hit}$ multi-punch flurry trapping opponents |
+| **Ki Economy** | Fast meditation ($15\text{ Ki/s}$), Kamehameha costs $80\text{ Ki}$ | Steady meditation ($12\text{ Ki/s}$), Serious Punch costs $80\text{ Ki}$ |
+
+### 3. Red Zone Mechanics (High-Risk Exhaustion)
+- **Damage Vulnerability (+35%):** Exhausted fighters receive $+35\%$ damage from all attacks.
+- **Extended Hitstun (+0.12s):** Base hitstun is extended from $0.22\text{s}$ to $0.34\text{s}$ (light) and $0.38\text{s}$ to $0.50\text{s}$ (heavy).
+- **Visual Danger Pulse:** `SpriteRenderer.color` pulses between white and danger vermillion (`#FF6666`) at 5 Hz.
+- **Movement Penalty:** Ground movement speed is reduced to $35\%$.
+- **Recovery Acceleration:** Meditating while in the Red Zone increases exhaustion recovery speed by $1.5\times$.
+
+### 4. Kinetic Physics & Hitstop Tuning
+- **Grounded Friction:** Knockback decelerates at $14\text{ m/s}^2$ on ground contact, stopping slippery sliding.
+- **Asymmetrical Gravity:** Falling speed accelerates at $1.35\times$ base gravity scale (`3.0 -> 4.05`), ensuring snappy landings.
+- **Wall Impact Crunch:** Boundary collisions at $|V_x| > 3.0\text{ m/s}$ spawn dust puffs and camera shake (`0.18f, 0.15f`).
+- **Gatling Chain Canceling:** Light attacks unlock immediate cancellation into Heavy Attack or Skill upon hit confirmation (`OnAttackHitConfirmed`).
+
+
+---
+
+## 39. Capsule Physics Colliders, Anti-Stacking Geometry & Duckable Attack Clearance
+
+### Overview
+To eliminate clumsy character interactions—such as standing on an opponent's head or shoving them across the floor by running—the physics and hitbox subsystems feature rounded vertical capsule bodies, a proximity push-lock, and calibrated vertical hitboxes.
+
+### 1. Physical Collider Specification
+
+| Parameter | Previous Value | New Calibrated Value | Gameplay Impact |
+| :--- | :--- | :--- | :--- |
+| **Collider Type** | `BoxCollider2D` (Flat edges) | **`CapsuleCollider2D` (Vertical)** | Hemispherical dome top naturally deflects descending jumpers. |
+| **Collider Size** | $0.80\text{m} \times 1.90\text{m}$ | **$1.10\text{m} \times 1.45\text{m}$** | Compact vertical profile ($1.45\text{m}$) prevents aerial clipping; wider width ($1.10\text{m}$) enforces sparring gap. |
+| **Collider Offset**| $(0.00\text{m}, 0.95\text{m})$ | **$(0.00\text{m}, 0.725\text{m})$** | Anchored cleanly between ground level and chest height. |
+| **Push Behavior** | Dynamic friction shove | **Immovable Proximity Lock** | Forward velocity clamped to $0$ when moving towards opponent at gap $\le 1.15\text{m}$. |
+| **Aerial Stacking**| Supported horizontal balance | **Anti-Stacking Slip Vector** | Descending fighters over opponent ($dy > 0.70\text{m}$) are pushed horizontally at $3.0\text{ m/s}$. |
+
+### 2. Vertical Attack Hitbox & Ducking Hurtbox Table
+
+| State / Attack | Hurtbox / Hitbox Size | Offset $(X, Y)$ | Vertical Span $(Y_{\text{min}} \to Y_{\text{max}})$ | Interaction with Ducking |
+| :--- | :--- | :--- | :--- | :--- |
+| **Standing Hurtbox** | $0.85\text{m} \times 1.80\text{m}$ | $(0.00\text{m}, 0.95\text{m})$ | $0.050\text{m} \to 1.850\text{m}$ | Full-body vulnerable target |
+| **Crouching Hurtbox** | $0.75\text{m} \times 0.65\text{m}$ | $(0.00\text{m}, 0.35\text{m})$ | $0.025\text{m} \to 0.675\text{m}$ | **Low profile target ($Y_{\text{top}} = 0.675\text{m}$)** |
+| **Light Attack (Poke)** | $0.75\text{m} \times 0.45\text{m}$ | $(0.80\text{m}, 1.05\text{m})$ | $0.825\text{m} \to 1.275\text{m}$ | **Clean Whiff** ($+0.150\text{m}$ clearance) |
+| **Heavy Attack (Strike)**| $0.82\text{m} \times 0.48\text{m}$ | $(0.84\text{m}, 1.05\text{m})$ | $0.810\text{m} \to 1.290\text{m}$ | **Clean Whiff** ($+0.135\text{m}$ clearance) |
+| **Saitama Skill (Flurry)**| $1.40\text{m} \times 0.90\text{m}$ | $(1.05\text{m}, 0.70\text{m})$ | $0.250\text{m} \to 1.150\text{m}$ | **Hits Ducking** (Punishes crouching) |
+| **Goku Ult (Kamehameha)**| $8.50\text{m} \times 1.60\text{m}$ | $(4.60\text{m}, 0.95\text{m})$ | $0.150\text{m} \to 1.750\text{m}$ | **Hits Ducking** (Un-duckable AoE beam) |
+| **Saitama Ult (Serious Punch)**| $1.40\text{m} \times 1.00\text{m}$ | $(1.25\text{m}, 0.95\text{m})$ | $0.450\text{m} \to 1.450\text{m}$ | **Hits Standing / Close** (Short melee reach) |
+
+
+---
+
+## 40. Waist-Level Push Boxes, Calibrated Close-Range Heavy Attacks & Strict Hurtbox Filtering
+
+### Overview
+This update eliminates the root cause of the ducking dodge failure by strictly filtering hit registrations to hurtboxes, replaces tall body colliders with short waist-high capsules ($0.90\text{m}$) for free cross-over jumps, keeps the physical capsule static at runtime to prevent Box2D depenetration jumping, and scales the Heavy Attack hitbox down to a compact, close-range strike ($10\%$ larger than Light Attack).
+
+### 1. Attack Hitbox & Collision Profile
+
+| Parameter | Light Attack (Jab) | Heavy Attack (Old) | Heavy Attack (New Calibrated) | Ratio (New Heavy vs Light) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Hitbox Size** | $0.75\text{m} \times 0.45\text{m}$ | $1.05\text{m} \times 0.55\text{m}$ | **$0.82\text{m} \times 0.48\text{m}$** | **$+9.3\%$ width, $+6.7\%$ height (~10%)** |
+| **Hitbox Offset** | $(0.80\text{m}, 1.05\text{m})$ | $(0.95\text{m}, 1.00\text{m})$ | **$(0.84\text{m}, 1.05\text{m})$** | $+0.04\text{m}$ forward reach |
+| **Maximum Reach**| $1.175\text{m}$ | $1.475\text{m}$ (Excessive) | **$1.250\text{m}$ (Close commitment)**| $+0.075\text{m}$ over light jab |
+| **Vertical Span** | $0.825\text{m} \to 1.275\text{m}$ | $0.725\text{m} \to 1.275\text{m}$ | **$0.810\text{m} \to 1.290\text{m}$** | $Y_{\text{min}} = 0.810\text{m}$ |
+| **Clearance over Duck**| $+0.150\text{m}$ (Clean Whiff) | $+0.170\text{m}$ | **$+0.135\text{m}$ (Clean Whiff)** | Guaranteed whiff over $Y_{\text{top}} = 0.675\text{m}$ |
+
+### 2. Physical Body Collider Calibration
+
+| Property | Value (Standing & Crouching) | Impact |
+| :--- | :--- | :--- |
+| **Capsule Dimensions** | $1.10\text{m} \times 0.90\text{m}$ (Waist-high) | Leaves upper body free for aerial cross-overs |
+| **Capsule Offset** | $(0.00\text{m}, 0.45\text{m})$ | Anchored at lower torso and legs |
+| **Runtime Resizing** | **STATIC (Never Resized)** | Prevents Box2D floor depenetration impulses and "infinite jumping" |
+| **Grounded Push Lock** | Active at gap $\le 1.15\text{m}$ | Bulldozing prevented on the ground |
+| **Airborne Jumps** | Full horizontal speed | Cross-overs completely unobstructed |
+
+
+---
+
+## 48. Saitama Serious Punch Cinematic Engine, Re-Ordered Physical Frames & Fair Hitbox Tuning
+
+### Overview
+To give Saitama's Ultimate attack the terrifying, psychological dread of the anime's iconic "DEATH PUNCH" (Episode 5 vs. Genos), `SaitamaSeriousPunchCinematic.cs` integrates the high-detail big box frames from `saitama_jus__by_arzeer_de00xcg.png` while strictly preserving the 2.40s physical buildup, voice line synchronization, and short, fair hitbox.
+
+### 1. Frame Re-Ordering & Transitional Pose Correction
+In the original sprite exports, the standing forward frame (`ultimate_0`) was erroneously placed at index 0, causing Saitama to stand still before awkwardly dropping into a crouch.
+- **The Correct Physical Sequencing:**
+  - `ultimate_0.png` through `ultimate_5.png`: Drop into low crouch and coil right fist backward into deep shadow.
+  - `ultimate_6.png`: **The Transition Frame** (the re-positioned standing braced frame), held during the final milliseconds before the punch launches!
+  - `ultimate_7.png` through `ultimate_10.png`: Forward punch eruption and kinetic release.
+  - `ultimate_11.png` through `ultimate_13.png`: Wind deceleration, stepping up, and recovery.
+
+### 2. The 3-Phase Arcade Super Combo Freeze
+
+| Phase | Duration / Time | Character Pose & Audio | Visual Overlays & FX | Damaging Hitbox |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Coiled Buildup** | $0.0\text{s} - 2.4\text{s}$ | Stance drop (`ultimate_0..5`) and braced transition (`ultimate_6`). Voice: *"Hissatsu... Maji Series..."* | Normal arena lighting. Saitama coils with kinetic tension. | Inactive (Defender can jump or back away) |
+| **2. Pitch-Black Super Freeze** | $2.40\text{s} - 2.68\text{s}$ ($0.28\text{s}$ window) | Vocal release: **"SERIOUS PUNCH!"** | Screen snaps to **100% solid pitch-black void** (`sortingOrder = 950`). **Big Punch Cut-In ($720 \times 628\text{px}$)** flashes against the void, dynamically positioned near screen center without exceeding Saitama's $X$ coordinate backwards. | Inactive (Cinematic transition freeze) |
+| **3. Instant Snap-Back & Strike** | $2.68\text{s} - 3.20\text{s}$ | Physical punch release (`ultimate_7..10`). | Black screen vanishes instantly! Arena returns. Saitama continues his normal character punch animation. White impact flash, heavy camera shake, and brazier surge erupt! | **Active: Short Melee Hitbox ($1.4\text{m} \times 1.0\text{m}$)**. Deals 90 damage only at point-blank range. |
+| **4. Recovery** | $3.20\text{s} - 3.80\text{s}$ | Stance recovery (`ultimate_11..13`). Wind dissipates. | Normal gameplay flow resumes. | Inactive |
+
+### 3. Hitbox Discipline & Competitive Fairness
+- Damaging Hitbox Size: `Vector2(1.4f, 1.0f)`
+- Damaging Hitbox Offset: `Vector2(1.25f, 0.95f)`
+- **Competitive Rule:** Even though the Big Punch cut-in is visually massive during the super freeze, the damaging hitbox is strictly confined to close melee range. A defender who anticipates the 2.40s telegraphed buildup and spaces backward or neutral-jumps will safely avoid all damage!
+
+
+---
+
+## 49. Mirror Match Alternate Palette Engine & Multi-Screen Synchronization
+
+### Overview
+In fighting game tournament play, mirror matches (Goku vs. Goku or Saitama vs. Saitama) require unambiguous visual differentiation between Player 1 and Player 2/CPU across every game state. The Mirror Match Engine provides high-contrast alternate palettes, persistent baseline state tracking (`baseTintColor`), and multi-screen visual synchronization.
+
+### 1. Alternate Palette Specifications
+
+| Character | Base Identity | P1 Palette (Original) | P2 Alternate Palette (Mirror) | RGB Multiplier | Visual Presentation |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Son Goku** | Turtle School Dogi | Classic Orange / Indigo | **Cool Ice / Cyan Gi** | `RGBA(0.45, 0.75, 1.0, 1.0)` | Multiplies across orange gi into an electrifying cobalt/cyan dogi, preserving deep black hair and martial arts belt. |
+| **Saitama** | Hero for Fun Suit | Yellow Suit / Red Gloves / White Cape | **Fiery Sunset / Crimson Suit** | `RGBA(1.0, 0.50, 0.45, 1.0)` | Multiplies across yellow suit into a bold blazing coral/crimson combat uniform with warm cape highlights. |
+
+### 2. Multi-Screen Synchronization Table
+
+| Stage / System | Visual Component | Mirror Match Behavior (`p1 == p2`) | Normal Match Behavior (`p1 != p2`) |
+| :--- | :--- | :--- | :--- |
+| **Character Select** | P2 Indicator Badge | Updates to **`[ P2: ALT PALETTE ]`** or **`[ CPU: ALT PALETTE ]`** | Displays standard `[ PLAYER 2 ]` or `[ CPU: DIFFICULTY ]` |
+| **Character Select** | Mirror Match Banner | Activates `Mirror_Match_Notice`: `? MIRROR MATCH: P2 RECEIVES ALTERNATE PALETTE ?` | Hidden |
+| **Versus Screen** | `versusP2AvatarImage` | Multiplied by `GetAlternatePaletteColor(p2Id)` | Multiplied by `Color.white` (Original) |
+| **Versus Screen** | P2 Name / Badge | Appends **`[ALT]`** to character name and **`(ALT PALETTE)`** to badge | Standard name and badge |
+| **Arena Combat** | In-World `SpriteRenderer` | Set to `baseTintColor` via `SetBaseTintColor()`. Red Zone pulses relative to this tint. | Normal `Color.white` |
+| **Combat HUD** | `p2AvatarCard` | Top-right avatar bust card tinted with `GetAlternatePaletteColor(p2Id)` | Normal `Color.white` |
+| **Round Reset** | Reset Subsystem | `ResetForNewRound()` explicitly restores `spriteRenderer.color = baseTintColor` | Restores `Color.white` |
+
+### 3. Architecture & Bug Resolution
+- **Root Cause of Missing Tint:** Previous implementation set `sr2.color` once at instantiation in `PrototypeBootstrap`, but `FighterController.HandleRedZoneVisuals()` in `Update()` executed `else if (spriteRenderer.color != Color.white) spriteRenderer.color = Color.white;`, instantly clobbering the alternate tint on Frame 1.
+- **The State Pattern Solution:** `FighterController` now stores `baseTintColor`. Runtime effects pulse between `baseTintColor` and effect colors (e.g. Red Zone danger red), and non-exhausted states cleanly restore `baseTintColor`, guaranteeing that Player 2's alternate palette persists throughout the entire match.
+
+
+---
+
+# 38. Fighter Rebalance, Asymmetric Ki Economy, SSJ Toggle & Climax Invulnerability
+
+### Combat Tuning Matrix
+
+| Parameter / Mechanic | Son Goku (Ki Martial Artist) | Saitama (Physical Brawler) | Design Rationale |
+| :--- | :--- | :--- | :--- |
+| **Meditation Ki Rate** | **$8.0\text{ Ki/s}$** | **$5.0\text{ Ki/s}$** | Goku has formal spiritual training; Saitama lacks ki control. |
+| **Light Attack Ki Gain** | **$+4.0\text{ Ki}$** | **$+2.5\text{ Ki}$** | Fast Ki accumulation for Goku; slower for Saitama. |
+| **Heavy Attack Ki Gain** | **$+7.0\text{ Ki}$** | **$+5.0\text{ Ki}$** | Rewards heavy commitment with higher energy return. |
+| **Target Comeback Ki** | $+1.5\text{ Ki}$ (both fighters) | $+1.5\text{ Ki}$ (both fighters) | Nerfed from $3.0\text{ Ki}$ to slow down unearned supers. |
+| **Starting Ki** | **$0\text{ Ki}$** | **$0\text{ Ki}$** | Free initial $25\text{ Ki}$ removed; players must earn specials. |
+| **Skill Mechanism** | **Super Saiyan (Active Toggle)** | **Consecutive Normal Punches** | Strategic buff toggle vs instant multi-hit melee strike. |
+| **Skill Ki Cost** | **$2.5\text{ Ki/s}$ continuous drain** | **$30\text{ Ki}$ upfront cost** | Goku burns stamina over time; Saitama expends upfront energy. |
+| **Skill Cooldown** | **$15.0\text{s}$** (begins upon deactivation) | **$15.0\text{s}$** (begins on cast) | Anti-spam discipline prevents back-to-back activation. |
+| **Skill Payload** | $+25\%$ Spd, $+66\%$ Light Dmg, $+43\%$ Heavy Dmg | **5 hits @ 6 damage = 30 dmg** ($0.35\text{s}$ hit spacing) | Spaced punches allow defender to counter-hit or interrupt! |
+| **Ultimate Mechanism** | Kamehameha Beam ($45\text{ dmg}$) | Serious Punch ($90\text{ decisive dmg}$) | Long-range beam vs point-blank execution blow. |
+| **Ultimate Ki Cost** | **$70\text{ Ki}$** | **$100\text{ Ki}$** (Full meter required) | Reflects payload disparity ($45\text{ dmg}$ vs $90\text{ dmg}$). |
+| **Ultimate Cooldown** | **$15.0\text{s}$** | **$15.0\text{s}$** | Ensures fair neutral resets after super attacks. |
+| **Climax Invulnerability** | **Active during final $1.0\text{s}$ & beam** | **Active during final $1.0\text{s}$ & strike** | Prevents cheap late-startup interruptions. |
+| **Voice Interruption** | Voice cuts off on `HitStun` / `Knockout` | Voice cuts off on `HitStun` / `Knockout` | Stops dangling vocal scream when flinching. |
+
+---
+
+### Saitama Skill Rework: Interruption & Defense Windows
+Previously, Consecutive Normal Punches delivered 15 micro-hits @ 2 damage ($15 \times 2 = 30$), which locked the opponent in continuous hitstun with zero counterplay.
+- **New Tuning:** 5 deliberate punches @ 6 damage ($5 \times 6 = 30$ total damage).
+- **Hit Interval:** $0.35\text{s}$ between punches.
+- **Defensive Counterplay:** If the opponent is hit by punch 1 or blocks, there are small recovery windows between subsequent punches where a fast jab or armored move can strike Saitama.
+- **Interruption Consequence:** If Saitama is struck, his flurry immediately halts, his hitbox deactivates, and his battle shout (*"Consecutive Normal Punches!"*) is instantly stopped.
+
+---
+
+## 50. Option A 4-Tier Segmented Ki Meter: Dynamic Threshold Calibration & Visual Economy
+
+### 1. Functional Specification
+
+| Segment Zone | Fill Color | Hex Code | Ki Interval | Tactical Meaning & In-Game Value |
+| :--- | :--- | :--- | :--- | :--- |
+| **Zone 1: Red Zone** | Crimson Scarlet | `#FF3838` | $0 \to \text{Mark 1}$ ($10\text{ Ki}$) | **Danger Zone:** Fighter is vulnerable to or inside Red Zone Exhaustion ($30\%$ move speed, no attack canceling). |
+| **Zone 2: Safe Buffer** | Neon Mint Green | `#33F259` | $\text{Mark 1} \to \text{Mark 2}$ | **Safe Neutral Zone:** Fighter is safe from exhaustion, but activating Skill will consume Ki below Mark 1 into the Red Zone. |
+| **Zone 3: Skill-Safe** | Sky Electric Blue | `#1FC0FF` | $\text{Mark 2} \to \text{Mark 3}$ | **Skill-Ready Buffer:** Reaching Mark 2 ensures that activating Skill leaves the fighter safely above the Red Zone! |
+| **Zone 4: Ultimate Surplus** | Solar Gold | `#FFE02E` | $\text{Mark 3} \to \text{Max 100}$ | **Ultimate Buffer:** Reaching Mark 3 ensures that firing an Ultimate leaves the fighter safely above the Red Zone. Above Mark 3 is pure surplus/overcharge. |
+
+### 2. Fighter-Specific Threshold Calibration
+
+| Threshold Mark | Visual Geometry | Son Goku Calibration | Saitama Calibration | Rationale |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mark 1 (Red Zone)** | 3px x 26px Platinum Divider | **$10\text{ Ki}$ ($10\%$)** | **$10\text{ Ki}$ ($10\%$)** | Identical exhaustion threshold across both characters. |
+| **Mark 2 (Safe Skill)** | 3px x 26px Platinum Divider | **$45\text{ Ki}$ ($45\%$)** | **$30\text{ Ki}$ ($30\%$)** | Calculated as $\text{RedZone} + \text{SkillCost}$. For Goku: $10 + 35 = 45$. For Saitama: $10 + 20 = 30$. |
+| **Mark 3 (Safe Ultimate)** | 3px x 26px Platinum Divider | **$90\text{ Ki}$ ($90\%$)** | **$90\text{ Ki}$ ($90\%$)** | Calculated as $\text{RedZone} + \text{UltimateCost}$ ($10 + 80 = 90$). Reaching this mark allows unleasing super attacks safely. |
+
+### 3. Visual Polish & Symmetry
+- **Grayscale Specular Texture:** Created `ki_bar_grand_fill_white.png` so colors tint with $100\%$ saturation and zero hue contamination while retaining the 3D beveled rim highlight.
+- **Divider Notches:** 3px wide metallic notches with 1px black outline drop-shadows positioned directly on the threshold lines, extending 1px above and below the bar frame to evoke physical arcade bezel brackets.
+- **Mirrored Tournament P2:** Inverted coordinate anchors ensure Player 2 fills cleanly from the right border inward toward the center timer.
+
+
+
+---
+
+## 51. LAN Multiplayer Duel System: Peer Discovery, Socket Streaming & Synchronized Roster Selection
+
+### Overview
+The LAN Multiplayer Duel System enables two separate computers on the same local Wi-Fi or Ethernet network to compete head-to-head in tournament-grade fighting game combat. It eliminates shared keyboard cramping while providing instant, zero-desync gameplay through a Host-Authoritative binary protocol.
+
+### 1. Functional System Flow
+
+```
+[ Main Menu ]
+      │
+      ├── Select "1 VS 1 LAN MULTIPLAYER" or Press [L]
+      │
+      ▼
+[ LanLobbyModal ]
+      │
+      ├── [ HOST MATCH ] ──► Binds Port 7777, Discovers IPv4 ──► "Waiting for Challenger..."
+      │                                                                  │
+      └── [ JOIN MATCH ] ──► Enters Host IP ──► Connects to Port 7777 ───┘
+                                                                         │
+                                                                         ▼
+                                                       [ Connection Handshake Success ]
+                                                                         │
+                                                                         ▼
+                                                       [ Character Select Screen (Synced) ]
+                                                       • Host controls P1 Selection
+                                                       • Client controls P2 Selection
+                                                       • Both Lock In ──► Cinematic Fly-In
+                                                                         │
+                                                                         ▼
+                                                       [ Combat Arena (SampleScene) ]
+                                                       • Host runs physics & hitboxes
+                                                       • Client streams buttons & mirrors view
+```
+
+### 2. Detailed Component Breakdown
+
+#### A. `LanLobbyModal.cs` (Lobby UI & Automatic IP Discovery)
+- **Automatic IP Scanning:** Calls `LanNetworkManager.Instance.GetLocalIPv4Address()` which traverses `NetworkInterface.GetAllNetworkInterfaces()`, automatically filtering for operational, non-loopback IPv4 addresses (e.g. `192.168.1.45`).
+- **One-Click Host:** Instantly spins up a `TcpListener` on port `7777`, configures `GameManager.Instance.IsLanHost = true`, and displays instructions for the joining player.
+- **Client Connect:** Provides an arcade-styled text field with pre-filled default `127.0.0.1` (enabling single-machine two-window testing) and a Connect button.
+- **Resilient Fallback Generation:** If UI elements are not pre-baked in the scene, `EnsureUIBuilt()` procedurally constructs all panels, buttons, and TextMeshPro labels at runtime!
+
+#### B. `CharacterSelectController.cs` (Network Synchronization)
+- **Bidirectional Packet Sync:** Whenever either player presses Left/Right to browse characters, `SendCharSelectSync()` transmits a `CharSelectSyncPacket` containing `(PlayerIndex, CharacterId, IsLockedIn)`.
+- **Decoupled Roles:**
+  - Host acts as Player 1 (`currentPhase = SelectingP1`).
+  - Client acts as Player 2 (`currentPhase = SelectingP2OrCpu`).
+- **Coordinated Launch:** When both players confirm their fighters, the Host dispatches a `MatchStartPacket` containing the finalized character IDs, triggering the dramatic `VERSUS!` slide animation on both screens simultaneously!
+
+#### C. `NetworkMatchSynchronizer.cs` (In-Combat Real-Time Engine)
+- **Host Role:**
+  - Deploys Fighter 1 with local keyboard controls.
+  - Deploys Fighter 2 with `NetworkFighterInput`.
+  - In `FixedUpdate()`, packages a 38-byte `MatchSnapshotPacket` containing positions, velocities, health, Ki, active states, and round clocks, broadcasting to the Client at 60Hz.
+  - Receives `FighterInputPacket` from Client and pipes directly into Fighter 2's input buffer.
+- **Client Role:**
+  - Reads local keyboard using comfortable single-player ergonomic mappings (WASD or Arrow keys).
+  - Sends a 9-byte `FighterInputPacket` with bitmasked actions to the Host every frame.
+  - Receives the Host's 60Hz snapshot and smoothly positions both fighters, mirrors facing direction, updates animation states, and keeps the tournament HUD in perfect synchronization.
+  - Automatically disables local physics simulation (`Rigidbody2D.bodyType = Kinematic`) and attack hitboxes, completely preventing local physics drift or duplicate damage calculations.

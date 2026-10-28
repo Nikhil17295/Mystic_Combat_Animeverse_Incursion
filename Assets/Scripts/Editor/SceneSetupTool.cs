@@ -317,9 +317,10 @@ namespace MysticCombat.Editor
             rb.freezeRotation = true;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
-            BoxCollider2D col = fighter.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(0.85f, 1.9f);
-            col.offset = new Vector2(0f, 0.95f);
+            CapsuleCollider2D col = fighter.AddComponent<CapsuleCollider2D>();
+            col.direction = CapsuleDirection2D.Vertical;
+            col.size = new Vector2(1.10f, 0.90f);
+            col.offset = new Vector2(0f, 0.45f);
 
             SpriteRenderer sr = fighter.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 5;
@@ -393,9 +394,10 @@ namespace MysticCombat.Editor
             rb.freezeRotation = true;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
-            BoxCollider2D col = fighter.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(0.85f, 1.9f);
-            col.offset = new Vector2(0f, 0.95f);
+            CapsuleCollider2D col = fighter.AddComponent<CapsuleCollider2D>();
+            col.direction = CapsuleDirection2D.Vertical;
+            col.size = new Vector2(1.10f, 0.90f);
+            col.offset = new Vector2(0f, 0.45f);
 
             SpriteRenderer sr = fighter.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 5;
@@ -613,6 +615,8 @@ namespace MysticCombat.Editor
 
             Sprite kiBg = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/ki_bar_grand_bg.png");
             Sprite kiFill = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/ki_bar_grand_fill.png");
+            Sprite kiFillWhite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/ki_bar_grand_fill_white.png");
+            if (kiFillWhite == null) kiFillWhite = kiFill;
 
             Sprite timeMandala = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/time_stone_mandala.png");
             Sprite timeGem = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/timestone_gem_emerald.png");
@@ -698,7 +702,7 @@ namespace MysticCombat.Editor
             Image p1KiBg = p1KiContainer.AddComponent<Image>();
             p1KiBg.sprite = kiBg;
 
-            // P1 Ki Fill
+            // P1 Legacy Ki Fill (Disabled fallback)
             GameObject p1KiObj = CreateUIObject("KiFill", p1KiContainer.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             RectTransform p1KiRt = p1KiObj.GetComponent<RectTransform>();
             p1KiRt.offsetMin = new Vector2(3f, 3f);
@@ -709,6 +713,75 @@ namespace MysticCombat.Editor
             p1KiImg.fillMethod = Image.FillMethod.Horizontal;
             p1KiImg.fillOrigin = (int)Image.OriginHorizontal.Left;
             p1KiImg.fillAmount = 0.5f;
+            p1KiObj.SetActive(false);
+
+            // P1 Segmented Ki Container (Option A: 4 Tactical Zones with 3 Divider Marks)
+            GameObject p1SegContainer = CreateUIObject("SegmentContainer", p1KiContainer.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            RectTransform p1SegRt = p1SegContainer.GetComponent<RectTransform>();
+            p1SegRt.offsetMin = new Vector2(3f, 3f);
+            p1SegRt.offsetMax = new Vector2(-3f, -3f);
+
+            // 4 Fills: Red (0-10%), Green (10-45%), Blue (45-90%), Yellow (90-100%)
+            GameObject p1KiRedObj = CreateUIObject("KiFill_Red", p1SegContainer.transform, new Vector2(0f, 0f), new Vector2(0.10f, 1f), Vector2.zero, Vector2.zero);
+            Image p1KiRedImg = p1KiRedObj.AddComponent<Image>();
+            p1KiRedImg.sprite = kiFillWhite;
+            p1KiRedImg.color = new Color(1.00f, 0.22f, 0.22f, 1f);
+            p1KiRedImg.type = Image.Type.Filled;
+            p1KiRedImg.fillMethod = Image.FillMethod.Horizontal;
+            p1KiRedImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+            p1KiRedImg.fillAmount = 1f;
+
+            GameObject p1KiGreenObj = CreateUIObject("KiFill_Green", p1SegContainer.transform, new Vector2(0.10f, 0f), new Vector2(0.45f, 1f), Vector2.zero, Vector2.zero);
+            Image p1KiGreenImg = p1KiGreenObj.AddComponent<Image>();
+            p1KiGreenImg.sprite = kiFillWhite;
+            p1KiGreenImg.color = new Color(0.20f, 0.95f, 0.35f, 1f);
+            p1KiGreenImg.type = Image.Type.Filled;
+            p1KiGreenImg.fillMethod = Image.FillMethod.Horizontal;
+            p1KiGreenImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+            p1KiGreenImg.fillAmount = 1f;
+
+            GameObject p1KiBlueObj = CreateUIObject("KiFill_Blue", p1SegContainer.transform, new Vector2(0.45f, 0f), new Vector2(0.90f, 1f), Vector2.zero, Vector2.zero);
+            Image p1KiBlueImg = p1KiBlueObj.AddComponent<Image>();
+            p1KiBlueImg.sprite = kiFillWhite;
+            p1KiBlueImg.color = new Color(0.12f, 0.75f, 1.00f, 1f);
+            p1KiBlueImg.type = Image.Type.Filled;
+            p1KiBlueImg.fillMethod = Image.FillMethod.Horizontal;
+            p1KiBlueImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+            p1KiBlueImg.fillAmount = 0.5f;
+
+            GameObject p1KiYellowObj = CreateUIObject("KiFill_Yellow", p1SegContainer.transform, new Vector2(0.90f, 0f), new Vector2(1.00f, 1f), Vector2.zero, Vector2.zero);
+            Image p1KiYellowImg = p1KiYellowObj.AddComponent<Image>();
+            p1KiYellowImg.sprite = kiFillWhite;
+            p1KiYellowImg.color = new Color(1.00f, 0.88f, 0.18f, 1f);
+            p1KiYellowImg.type = Image.Type.Filled;
+            p1KiYellowImg.fillMethod = Image.FillMethod.Horizontal;
+            p1KiYellowImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+            p1KiYellowImg.fillAmount = 0f;
+
+            // 3 Divider Notches: Mark 1 (0.10), Mark 2 (0.45), Mark 3 (0.90)
+            GameObject p1Mark1Obj = CreateUIObject("Mark_RedZone", p1SegContainer.transform, new Vector2(0.10f, 0.5f), new Vector2(0.10f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
+            RectTransform p1Mark1Rt = p1Mark1Obj.GetComponent<RectTransform>();
+            Image p1Mark1Img = p1Mark1Obj.AddComponent<Image>();
+            p1Mark1Img.color = new Color(0.92f, 0.95f, 1.00f, 0.95f);
+            Outline p1Out1 = p1Mark1Obj.AddComponent<Outline>();
+            p1Out1.effectColor = new Color(0f, 0f, 0f, 0.75f);
+            p1Out1.effectDistance = new Vector2(1f, 0f);
+
+            GameObject p1Mark2Obj = CreateUIObject("Mark_SkillSafe", p1SegContainer.transform, new Vector2(0.45f, 0.5f), new Vector2(0.45f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
+            RectTransform p1Mark2Rt = p1Mark2Obj.GetComponent<RectTransform>();
+            Image p1Mark2Img = p1Mark2Obj.AddComponent<Image>();
+            p1Mark2Img.color = new Color(0.92f, 0.95f, 1.00f, 0.95f);
+            Outline p1Out2 = p1Mark2Obj.AddComponent<Outline>();
+            p1Out2.effectColor = new Color(0f, 0f, 0f, 0.75f);
+            p1Out2.effectDistance = new Vector2(1f, 0f);
+
+            GameObject p1Mark3Obj = CreateUIObject("Mark_UltimateSafe", p1SegContainer.transform, new Vector2(0.90f, 0.5f), new Vector2(0.90f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
+            RectTransform p1Mark3Rt = p1Mark3Obj.GetComponent<RectTransform>();
+            Image p1Mark3Img = p1Mark3Obj.AddComponent<Image>();
+            p1Mark3Img.color = new Color(0.92f, 0.95f, 1.00f, 0.95f);
+            Outline p1Out3 = p1Mark3Obj.AddComponent<Outline>();
+            p1Out3.effectColor = new Color(0f, 0f, 0f, 0.75f);
+            p1Out3.effectDistance = new Vector2(1f, 0f);
 
             // P1 Round Point Gem Sockets (Tactical Visual Point Tracker - 2 Sockets, 56x56 each)
             GameObject p1PointGem1Obj = CreateUIObject("P1_PointGem_1", hudRoot.transform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(215f, -168f), new Vector2(56f, 56f));
@@ -776,7 +849,7 @@ namespace MysticCombat.Editor
             Image p2KiBg = p2KiContainer.AddComponent<Image>();
             p2KiBg.sprite = kiBg;
 
-            // P2 Ki Fill
+            // P2 Legacy Ki Fill (Disabled fallback)
             GameObject p2KiObj = CreateUIObject("KiFill", p2KiContainer.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             RectTransform p2KiRt = p2KiObj.GetComponent<RectTransform>();
             p2KiRt.offsetMin = new Vector2(3f, 3f);
@@ -787,6 +860,75 @@ namespace MysticCombat.Editor
             p2KiImg.fillMethod = Image.FillMethod.Horizontal;
             p2KiImg.fillOrigin = (int)Image.OriginHorizontal.Right;
             p2KiImg.fillAmount = 0.5f;
+            p2KiObj.SetActive(false);
+
+            // P2 Segmented Ki Container (Option A: Mirrored 4 Tactical Zones with 3 Divider Marks)
+            GameObject p2SegContainer = CreateUIObject("SegmentContainer", p2KiContainer.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            RectTransform p2SegRt = p2SegContainer.GetComponent<RectTransform>();
+            p2SegRt.offsetMin = new Vector2(3f, 3f);
+            p2SegRt.offsetMax = new Vector2(-3f, -3f);
+
+            // 4 Fills (Mirrored Right-to-Left): Red (0-10%), Green (10-30%), Blue (30-90%), Yellow (90-100%)
+            GameObject p2KiRedObj = CreateUIObject("KiFill_Red", p2SegContainer.transform, new Vector2(0.90f, 0f), new Vector2(1.00f, 1f), Vector2.zero, Vector2.zero);
+            Image p2KiRedImg = p2KiRedObj.AddComponent<Image>();
+            p2KiRedImg.sprite = kiFillWhite;
+            p2KiRedImg.color = new Color(1.00f, 0.22f, 0.22f, 1f);
+            p2KiRedImg.type = Image.Type.Filled;
+            p2KiRedImg.fillMethod = Image.FillMethod.Horizontal;
+            p2KiRedImg.fillOrigin = (int)Image.OriginHorizontal.Right;
+            p2KiRedImg.fillAmount = 1f;
+
+            GameObject p2KiGreenObj = CreateUIObject("KiFill_Green", p2SegContainer.transform, new Vector2(0.70f, 0f), new Vector2(0.90f, 1f), Vector2.zero, Vector2.zero);
+            Image p2KiGreenImg = p2KiGreenObj.AddComponent<Image>();
+            p2KiGreenImg.sprite = kiFillWhite;
+            p2KiGreenImg.color = new Color(0.20f, 0.95f, 0.35f, 1f);
+            p2KiGreenImg.type = Image.Type.Filled;
+            p2KiGreenImg.fillMethod = Image.FillMethod.Horizontal;
+            p2KiGreenImg.fillOrigin = (int)Image.OriginHorizontal.Right;
+            p2KiGreenImg.fillAmount = 1f;
+
+            GameObject p2KiBlueObj = CreateUIObject("KiFill_Blue", p2SegContainer.transform, new Vector2(0.10f, 0f), new Vector2(0.70f, 1f), Vector2.zero, Vector2.zero);
+            Image p2KiBlueImg = p2KiBlueObj.AddComponent<Image>();
+            p2KiBlueImg.sprite = kiFillWhite;
+            p2KiBlueImg.color = new Color(0.12f, 0.75f, 1.00f, 1f);
+            p2KiBlueImg.type = Image.Type.Filled;
+            p2KiBlueImg.fillMethod = Image.FillMethod.Horizontal;
+            p2KiBlueImg.fillOrigin = (int)Image.OriginHorizontal.Right;
+            p2KiBlueImg.fillAmount = 0.5f;
+
+            GameObject p2KiYellowObj = CreateUIObject("KiFill_Yellow", p2SegContainer.transform, new Vector2(0.00f, 0f), new Vector2(0.10f, 1f), Vector2.zero, Vector2.zero);
+            Image p2KiYellowImg = p2KiYellowObj.AddComponent<Image>();
+            p2KiYellowImg.sprite = kiFillWhite;
+            p2KiYellowImg.color = new Color(1.00f, 0.88f, 0.18f, 1f);
+            p2KiYellowImg.type = Image.Type.Filled;
+            p2KiYellowImg.fillMethod = Image.FillMethod.Horizontal;
+            p2KiYellowImg.fillOrigin = (int)Image.OriginHorizontal.Right;
+            p2KiYellowImg.fillAmount = 0f;
+
+            // 3 Divider Notches: Mark 1 (0.90), Mark 2 (0.70), Mark 3 (0.10)
+            GameObject p2Mark1Obj = CreateUIObject("Mark_RedZone", p2SegContainer.transform, new Vector2(0.90f, 0.5f), new Vector2(0.90f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
+            RectTransform p2Mark1Rt = p2Mark1Obj.GetComponent<RectTransform>();
+            Image p2Mark1Img = p2Mark1Obj.AddComponent<Image>();
+            p2Mark1Img.color = new Color(0.92f, 0.95f, 1.00f, 0.95f);
+            Outline p2Out1 = p2Mark1Obj.AddComponent<Outline>();
+            p2Out1.effectColor = new Color(0f, 0f, 0f, 0.75f);
+            p2Out1.effectDistance = new Vector2(1f, 0f);
+
+            GameObject p2Mark2Obj = CreateUIObject("Mark_SkillSafe", p2SegContainer.transform, new Vector2(0.70f, 0.5f), new Vector2(0.70f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
+            RectTransform p2Mark2Rt = p2Mark2Obj.GetComponent<RectTransform>();
+            Image p2Mark2Img = p2Mark2Obj.AddComponent<Image>();
+            p2Mark2Img.color = new Color(0.92f, 0.95f, 1.00f, 0.95f);
+            Outline p2Out2 = p2Mark2Obj.AddComponent<Outline>();
+            p2Out2.effectColor = new Color(0f, 0f, 0f, 0.75f);
+            p2Out2.effectDistance = new Vector2(1f, 0f);
+
+            GameObject p2Mark3Obj = CreateUIObject("Mark_UltimateSafe", p2SegContainer.transform, new Vector2(0.10f, 0.5f), new Vector2(0.10f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
+            RectTransform p2Mark3Rt = p2Mark3Obj.GetComponent<RectTransform>();
+            Image p2Mark3Img = p2Mark3Obj.AddComponent<Image>();
+            p2Mark3Img.color = new Color(0.92f, 0.95f, 1.00f, 0.95f);
+            Outline p2Out3 = p2Mark3Obj.AddComponent<Outline>();
+            p2Out3.effectColor = new Color(0f, 0f, 0f, 0.75f);
+            p2Out3.effectDistance = new Vector2(1f, 0f);
 
             // P2 Round Point Gem Sockets (Tactical Visual Point Tracker - 2 Sockets, 56x56 each)
             GameObject p2PointGem1Obj = CreateUIObject("P2_PointGem_1", hudRoot.transform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-215f, -168f), new Vector2(56f, 56f));
@@ -855,12 +997,26 @@ namespace MysticCombat.Editor
             so.FindProperty("p1HealthBar").objectReferenceValue = p1HpImg;
             so.FindProperty("p1GhostHealthBar").objectReferenceValue = p1GhostImg;
             so.FindProperty("p1KiBar").objectReferenceValue = p1KiImg;
+            so.FindProperty("p1KiRed").objectReferenceValue = p1KiRedImg;
+            so.FindProperty("p1KiGreen").objectReferenceValue = p1KiGreenImg;
+            so.FindProperty("p1KiBlue").objectReferenceValue = p1KiBlueImg;
+            so.FindProperty("p1KiYellow").objectReferenceValue = p1KiYellowImg;
+            so.FindProperty("p1MarkRedZone").objectReferenceValue = p1Mark1Rt;
+            so.FindProperty("p1MarkSkillSafe").objectReferenceValue = p1Mark2Rt;
+            so.FindProperty("p1MarkUltSafe").objectReferenceValue = p1Mark3Rt;
             so.FindProperty("p1PointGem1").objectReferenceValue = p1PointGem1Img;
             so.FindProperty("p1PointGem2").objectReferenceValue = p1PointGem2Img;
 
             so.FindProperty("p2HealthBar").objectReferenceValue = p2HpImg;
             so.FindProperty("p2GhostHealthBar").objectReferenceValue = p2GhostImg;
             so.FindProperty("p2KiBar").objectReferenceValue = p2KiImg;
+            so.FindProperty("p2KiRed").objectReferenceValue = p2KiRedImg;
+            so.FindProperty("p2KiGreen").objectReferenceValue = p2KiGreenImg;
+            so.FindProperty("p2KiBlue").objectReferenceValue = p2KiBlueImg;
+            so.FindProperty("p2KiYellow").objectReferenceValue = p2KiYellowImg;
+            so.FindProperty("p2MarkRedZone").objectReferenceValue = p2Mark1Rt;
+            so.FindProperty("p2MarkSkillSafe").objectReferenceValue = p2Mark2Rt;
+            so.FindProperty("p2MarkUltSafe").objectReferenceValue = p2Mark3Rt;
             so.FindProperty("p2PointGem1").objectReferenceValue = p2PointGem1Img;
             so.FindProperty("p2PointGem2").objectReferenceValue = p2PointGem2Img;
 

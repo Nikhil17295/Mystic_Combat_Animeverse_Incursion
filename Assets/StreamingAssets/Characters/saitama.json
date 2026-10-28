@@ -2,35 +2,47 @@
   "characterId": "saitama",
   "displayName": "Saitama",
   "maxHealth": 100,
-  "moveSpeed": 4.5,
-  "jumpForce": 11.0,
+  "moveSpeed": 4.4,
+  "jumpForce": 10.8,
   "gravityScale": 3.0,
   "lightAttack": {
-    "damage": 10,
-    "knockback": 2.5,
+    "damage": 4,
+    "knockback": 2.2,
     "startupFrames": 2,
     "activeFrames": 3,
     "recoveryFrames": 5,
-    "hitboxOffset": { "x": 0.7, "y": 0.1 },
-    "hitboxSize": { "x": 0.5, "y": 0.5 },
-    "kiGainOnHit": 6
+    "hitboxOffset": {
+      "x": 0.8,
+      "y": 1.05
+    },
+    "hitboxSize": {
+      "x": 0.75,
+      "y": 0.45
+    },
+    "kiGainOnHit": 2.5
   },
   "heavyAttack": {
-    "damage": 18,
-    "knockback": 5.0,
+    "damage": 9,
+    "knockback": 5.5,
     "startupFrames": 5,
     "activeFrames": 4,
     "recoveryFrames": 9,
-    "hitboxOffset": { "x": 0.9, "y": 0.0 },
-    "hitboxSize": { "x": 0.7, "y": 0.7 },
-    "kiGainOnHit": 10
+    "hitboxOffset": {
+      "x": 0.84,
+      "y": 1.05
+    },
+    "hitboxSize": {
+      "x": 0.82,
+      "y": 0.48
+    },
+    "kiGainOnHit": 5
   },
   "skill": {
     "name": "Consecutive Normal Punches",
     "type": "instant",
-    "kiCost": 20,
-    "damage": 12,
-    "hits": 3,
+    "kiCost": 30,
+    "damage": 6,
+    "hits": 5,
     "startupFrames": 4,
     "activeFrames": 12,
     "recoveryFrames": 8
@@ -38,15 +50,18 @@
   "ultimate": {
     "name": "Serious Punch",
     "kiCost": 100,
-    "damage": 100,
-    "hitboxSize": { "x": 1.2, "y": 0.8 },
+    "damage": 90,
+    "hitboxSize": {
+      "x": 1.2,
+      "y": 0.8
+    },
     "startupFrames": 20,
     "activeFrames": 3,
     "recoveryFrames": 30,
     "drawback": "Costs 100 Ki, tiny hitbox, instant KO if lands, 0 Ki if missed"
   },
-  "meditateKiPerSecond": 12.0,
-  "kiGainOnDamageTaken": 4,
+  "meditateKiPerSecond": 5.0,
+  "kiGainOnDamageTaken": 1.5,
   "redZone": {
     "threshold": 10,
     "duration": 5.0,

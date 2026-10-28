@@ -14,6 +14,8 @@ namespace MysticCombat.Systems
         [SerializeField] private int maxHealth = 100;
 
         private int currentHealth;
+        private EnergySystem energySystem;
+        private Fighter.FighterController fighterController;
 
         #endregion
 
@@ -33,6 +35,11 @@ namespace MysticCombat.Systems
         /// Whether the fighter is still alive (health > 0).
         /// </summary>
         public bool IsAlive => currentHealth > 0;
+
+        /// <summary>
+        /// Whether the fighter is currently invulnerable (e.g. final 1.0s of ultimate casting).
+        /// </summary>
+        public bool IsInvulnerable => (fighterController != null && fighterController.IsInvulnerable);
 
         /// <summary>
         /// Current health as a 0-1 fraction of max health.
@@ -60,6 +67,7 @@ namespace MysticCombat.Systems
         private void Awake()
         {
             currentHealth = maxHealth;
+            energySystem = GetComponent<EnergySystem>();
         }
 
         #endregion
@@ -81,12 +89,32 @@ namespace MysticCombat.Systems
         /// <summary>
         /// Reduces current health by the given amount. Clamps to 0.
         /// Fires OnHealthChanged and OnDeath as appropriate.
+        /// Accounts for Red Zone exhaustion (+35% extra damage vulnerability).
         /// </summary>
         /// <param name="amount">Damage to apply (positive value).</param>
         public void TakeDamage(int amount)
         {
             if (!IsAlive) return;
+            if (fighterController == null) fighterController = GetComponent<Fighter.FighterController>();
+            if (fighterController != null && fighterController.IsInvulnerable)
+            {
+                Debug.Log($"<color=#38bdf8>[INVULNERABLE / SUPER ARMOR]</color> {gameObject.name} absorbed {amount} damage during ultimate climax!");
+                return;
+            }
             if (amount <= 0) return;
+
+            if (energySystem == null)
+            {
+                energySystem = GetComponent<EnergySystem>();
+            }
+
+            // Red Zone Exhaustion Vulnerability: 35% increased damage taken!
+            if (energySystem != null && energySystem.IsInRedZone)
+            {
+                int baseAmount = amount;
+                amount = Mathf.RoundToInt(amount * 1.35f);
+                Debug.Log($"<color=#ef4444>[HealthSystem] {gameObject.name} in RED ZONE! Vulnerability (+35%): {baseAmount} -> {amount} damage.</color>");
+            }
 
             currentHealth = Mathf.Max(0, currentHealth - amount);
             OnHealthChanged?.Invoke(currentHealth, maxHealth);
@@ -120,6 +148,15 @@ namespace MysticCombat.Systems
         public void ResetHealth()
         {
             currentHealth = maxHealth;
+            OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        }
+
+        /// <summary>
+        /// Directly synchronizes health from an authoritative LAN snapshot.
+        /// </summary>
+        public void SetHealthDirect(int val)
+        {
+            currentHealth = Mathf.Clamp(val, 0, maxHealth);
             OnHealthChanged?.Invoke(currentHealth, maxHealth);
         }
 

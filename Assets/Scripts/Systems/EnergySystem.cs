@@ -178,6 +178,15 @@ namespace MysticCombat.Systems
             OnKiChanged?.Invoke(currentKi, maxKi);
         }
 
+        /// <summary>
+        /// Directly synchronizes Ki from an authoritative LAN snapshot.
+        /// </summary>
+        public void SetKiDirect(float val)
+        {
+            currentKi = Mathf.Clamp(val, 0f, maxKi);
+            OnKiChanged?.Invoke(currentKi, maxKi);
+        }
+
         #endregion
 
         #region Red Zone Logic

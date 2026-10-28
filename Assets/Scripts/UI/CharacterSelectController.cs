@@ -6,6 +6,7 @@ using TMPro;
 using MysticCombat.Core;
 using MysticCombat.Data;
 using MysticCombat.AI;
+using MysticCombat.Network;
 
 namespace MysticCombat.UI
 {
@@ -119,6 +120,30 @@ namespace MysticCombat.UI
         private float lastInputTime;
         private const float NAV_REPEAT_COOLDOWN = 0.20f;
         private bool isTransitioning = false;
+        private bool isLanHostLocked = false;
+        private bool isLanClientLocked = false;
+
+        #endregion
+
+        #region Unity Lifecycle Events
+
+        private void OnEnable()
+        {
+            if (LanNetworkManager.Instance != null)
+            {
+                LanNetworkManager.Instance.OnCharSelectSyncReceived += HandleNetworkCharSelectSync;
+                LanNetworkManager.Instance.OnMatchStartReceived += HandleNetworkMatchStart;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (LanNetworkManager.Instance != null)
+            {
+                LanNetworkManager.Instance.OnCharSelectSyncReceived -= HandleNetworkCharSelectSync;
+                LanNetworkManager.Instance.OnMatchStartReceived -= HandleNetworkMatchStart;
+            }
+        }
 
         #endregion
 
@@ -165,10 +190,23 @@ namespace MysticCombat.UI
         public void Open(GameManager.GameMode mode)
         {
             currentGameMode = mode;
-            currentPhase = SelectionPhase.SelectingP1;
-            p1SelectedIndex = 0;
-            p2SelectedIndex = (currentGameMode == GameManager.GameMode.VsCpu) ? 1 : 1;
             isTransitioning = false;
+            isLanHostLocked = false;
+            isLanClientLocked = false;
+
+            if (currentGameMode == GameManager.GameMode.LanPvP && GameManager.Instance != null && !GameManager.Instance.IsLanHost)
+            {
+                // Client starts directly on P2 selection!
+                currentPhase = SelectionPhase.SelectingP2OrCpu;
+                p1SelectedIndex = 0;
+                p2SelectedIndex = 1;
+            }
+            else
+            {
+                currentPhase = SelectionPhase.SelectingP1;
+                p1SelectedIndex = 0;
+                p2SelectedIndex = (currentGameMode == GameManager.GameMode.VsCpu) ? 1 : 1;
+            }
 
             if (versusOverlay != null)
             {
@@ -281,13 +319,46 @@ namespace MysticCombat.UI
 
             PlaySfx(navigateClip);
 
-            if (currentPhase == SelectionPhase.SelectingP1)
+            if (currentGameMode == GameManager.GameMode.LanPvP)
             {
-                p1SelectedIndex = (p1SelectedIndex + direction + fighterCards.Count) % fighterCards.Count;
+                bool isHost = GameManager.Instance == null || GameManager.Instance.IsLanHost;
+                if (isHost && !isLanHostLocked)
+                {
+                    p1SelectedIndex = (p1SelectedIndex + direction + fighterCards.Count) % fighterCards.Count;
+                    if (LanNetworkManager.Instance != null)
+                    {
+                        LanNetworkManager.Instance.SendCharSelectSync(new CharSelectSyncPacket
+                        {
+                            PlayerIndex = 1,
+                            CharacterId = fighterCards[p1SelectedIndex].characterId,
+                            IsLockedIn = false
+                        });
+                    }
+                }
+                else if (!isHost && !isLanClientLocked)
+                {
+                    p2SelectedIndex = (p2SelectedIndex + direction + fighterCards.Count) % fighterCards.Count;
+                    if (LanNetworkManager.Instance != null)
+                    {
+                        LanNetworkManager.Instance.SendCharSelectSync(new CharSelectSyncPacket
+                        {
+                            PlayerIndex = 2,
+                            CharacterId = fighterCards[p2SelectedIndex].characterId,
+                            IsLockedIn = false
+                        });
+                    }
+                }
             }
-            else if (currentPhase == SelectionPhase.SelectingP2OrCpu)
+            else
             {
-                p2SelectedIndex = (p2SelectedIndex + direction + fighterCards.Count) % fighterCards.Count;
+                if (currentPhase == SelectionPhase.SelectingP1)
+                {
+                    p1SelectedIndex = (p1SelectedIndex + direction + fighterCards.Count) % fighterCards.Count;
+                }
+                else if (currentPhase == SelectionPhase.SelectingP2OrCpu)
+                {
+                    p2SelectedIndex = (p2SelectedIndex + direction + fighterCards.Count) % fighterCards.Count;
+                }
             }
 
             UpdateUI();
@@ -300,6 +371,64 @@ namespace MysticCombat.UI
         {
             PlaySfx(lockInClip);
 
+            if (currentGameMode == GameManager.GameMode.LanPvP)
+            {
+                bool isHost = GameManager.Instance == null || GameManager.Instance.IsLanHost;
+                if (isHost)
+                {
+                    isLanHostLocked = true;
+                    if (LanNetworkManager.Instance != null)
+                    {
+                        LanNetworkManager.Instance.SendCharSelectSync(new CharSelectSyncPacket
+                        {
+                            PlayerIndex = 1,
+                            CharacterId = fighterCards[p1SelectedIndex].characterId,
+                            IsLockedIn = true
+                        });
+                    }
+
+                    if (isLanClientLocked)
+                    {
+                        if (LanNetworkManager.Instance != null)
+                        {
+                            LanNetworkManager.Instance.SendMatchStart(new MatchStartPacket
+                            {
+                                P1CharacterId = fighterCards[p1SelectedIndex].characterId,
+                                P2CharacterId = fighterCards[p2SelectedIndex].characterId
+                            });
+                        }
+                        currentPhase = SelectionPhase.ReadyLaunch;
+                        StartCoroutine(LaunchMatchSequence());
+                    }
+                    else
+                    {
+                        if (selectionPromptText != null)
+                        {
+                            selectionPromptText.text = "<color=#ffd700>P1 LOCKED IN! WAITING FOR OPPONENT TO LOCK IN...</color>";
+                        }
+                    }
+                }
+                else // Client
+                {
+                    isLanClientLocked = true;
+                    if (LanNetworkManager.Instance != null)
+                    {
+                        LanNetworkManager.Instance.SendCharSelectSync(new CharSelectSyncPacket
+                        {
+                            PlayerIndex = 2,
+                            CharacterId = fighterCards[p2SelectedIndex].characterId,
+                            IsLockedIn = true
+                        });
+                    }
+
+                    if (selectionPromptText != null)
+                    {
+                        selectionPromptText.text = "<color=#00f5ff>P2 LOCKED IN! WAITING FOR HOST TO START MATCH...</color>";
+                    }
+                }
+                return;
+            }
+
             if (currentPhase == SelectionPhase.SelectingP1)
             {
                 currentPhase = SelectionPhase.SelectingP2OrCpu;
@@ -311,6 +440,59 @@ namespace MysticCombat.UI
                 StartCoroutine(LaunchMatchSequence());
             }
         }
+
+        #endregion
+
+        #region LAN Network Callbacks
+
+        private void HandleNetworkCharSelectSync(CharSelectSyncPacket pkt)
+        {
+            int foundIdx = fighterCards.FindIndex(c => c.characterId.Equals(pkt.CharacterId, System.StringComparison.OrdinalIgnoreCase));
+            if (foundIdx < 0) foundIdx = 0;
+
+            if (pkt.PlayerIndex == 1)
+            {
+                p1SelectedIndex = foundIdx;
+                isLanHostLocked = pkt.IsLockedIn;
+            }
+            else if (pkt.PlayerIndex == 2)
+            {
+                p2SelectedIndex = foundIdx;
+                isLanClientLocked = pkt.IsLockedIn;
+            }
+
+            UpdateUI();
+
+            bool isHost = GameManager.Instance == null || GameManager.Instance.IsLanHost;
+            if (isHost && isLanHostLocked && isLanClientLocked && !isTransitioning)
+            {
+                if (LanNetworkManager.Instance != null)
+                {
+                    LanNetworkManager.Instance.SendMatchStart(new MatchStartPacket
+                    {
+                        P1CharacterId = fighterCards[p1SelectedIndex].characterId,
+                        P2CharacterId = fighterCards[p2SelectedIndex].characterId
+                    });
+                }
+                currentPhase = SelectionPhase.ReadyLaunch;
+                StartCoroutine(LaunchMatchSequence());
+            }
+        }
+
+        private void HandleNetworkMatchStart(MatchStartPacket pkt)
+        {
+            int idx1 = fighterCards.FindIndex(c => c.characterId.Equals(pkt.P1CharacterId, System.StringComparison.OrdinalIgnoreCase));
+            int idx2 = fighterCards.FindIndex(c => c.characterId.Equals(pkt.P2CharacterId, System.StringComparison.OrdinalIgnoreCase));
+            if (idx1 >= 0) p1SelectedIndex = idx1;
+            if (idx2 >= 0) p2SelectedIndex = idx2;
+
+            currentPhase = SelectionPhase.ReadyLaunch;
+            StartCoroutine(LaunchMatchSequence());
+        }
+
+        #endregion
+
+        #region Random & Difficulty Selection
 
         /// <summary>
         /// Instantly chooses a random character for the CPU and launches the match!
@@ -465,9 +647,17 @@ namespace MysticCombat.UI
                     card.p2Indicator.SetActive(isP2);
                     if (card.p2IndicatorText != null)
                     {
-                        // Strict [ PLAYER 2 ] and [ CPU: DIFFICULTY ] bracket formatting
-                        string diffBadge = (GameManager.Instance != null) ? $"[ CPU: {GameManager.Instance.CurrentCpuDifficulty.ToString().ToUpper()} ]" : "[ CPU ]";
-                        card.p2IndicatorText.text = (currentGameMode == GameManager.GameMode.VsCpu) ? diffBadge : "[ PLAYER 2 ]";
+                        // Strict [ PLAYER 2 ] and [ CPU: DIFFICULTY ] bracket formatting with Alternate Palette detection
+                        if (isP1 && isP2 && currentPhase != SelectionPhase.SelectingP1)
+                        {
+                            string diffBadge = (GameManager.Instance != null) ? $"[ CPU: {GameManager.Instance.CurrentCpuDifficulty.ToString().ToUpper()} (ALT) ]" : "[ CPU: ALT PALETTE ]";
+                            card.p2IndicatorText.text = (currentGameMode == GameManager.GameMode.VsCpu) ? diffBadge : "[ P2: ALT PALETTE ]";
+                        }
+                        else
+                        {
+                            string diffBadge = (GameManager.Instance != null) ? $"[ CPU: {GameManager.Instance.CurrentCpuDifficulty.ToString().ToUpper()} ]" : "[ CPU ]";
+                            card.p2IndicatorText.text = (currentGameMode == GameManager.GameMode.VsCpu) ? diffBadge : "[ PLAYER 2 ]";
+                        }
                         card.p2IndicatorText.color = (currentGameMode == GameManager.GameMode.VsCpu) ? cpuThemeColor : p2ThemeColor;
                     }
                 }
@@ -611,9 +801,20 @@ namespace MysticCombat.UI
 
                 if (card.skillValueText != null && data.skill != null)
                 {
-                    card.skillValueText.text = (data.skill.name == "None" || data.skill.kiCost <= 0)
-                        ? "SKILL: None"
-                        : $"SKILL: {data.skill.name}  [Ki: {data.skill.kiCost:F0}]";
+                    card.skillValueText.enableAutoSizing = true;
+                    card.skillValueText.fontSizeMin = 13f;
+                    card.skillValueText.fontSizeMax = 18f;
+
+                    if (data.characterId == "goku" || data.skill.name.ToLower().Contains("saiyan"))
+                    {
+                        card.skillValueText.text = $"SKILL: Super Saiyan (Toggle) [-2.5 Ki/s] (+25% Spd, +Atk Buffs)";
+                    }
+                    else
+                    {
+                        card.skillValueText.text = (data.skill.name == "None" || data.skill.kiCost <= 0)
+                            ? "SKILL: None"
+                            : $"SKILL: {data.skill.name}  [Ki: {data.skill.kiCost:F0}]";
+                    }
                 }
 
                 if (card.ultimateValueText != null && data.ultimate != null)
@@ -664,22 +865,35 @@ namespace MysticCombat.UI
                     versusP1NameText.text = p1Card.displayName.ToUpper();
                 }
 
-                // Set P2 details
+                // Set P2 details (Applying Alternate Palette if Mirror Match)
                 if (versusP2AvatarImage != null && p2Card.portraitImage != null)
                 {
                     versusP2AvatarImage.sprite = p2Card.portraitImage.sprite;
-                    versusP2AvatarImage.color = Color.white; // Keep 100% normal
+                    if (p1Id == p2Id)
+                    {
+                        versusP2AvatarImage.color = Fighter.FighterController.GetAlternatePaletteColor(p2Id);
+                    }
+                    else
+                    {
+                        versusP2AvatarImage.color = Color.white;
+                    }
                 }
                 if (versusP2NameText != null)
                 {
                     string prefix = (currentGameMode == GameManager.GameMode.VsCpu) ? "CPU " : "";
-                    versusP2NameText.text = prefix + p2Card.displayName.ToUpper();
+                    string altTag = (p1Id == p2Id) ? " [ALT]" : "";
+                    versusP2NameText.text = prefix + p2Card.displayName.ToUpper() + altTag;
                 }
 
                 if (versusP2BadgeText != null)
                 {
                     string diffBadge = (GameManager.Instance != null) ? $"[ CPU: {GameManager.Instance.CurrentCpuDifficulty.ToString().ToUpper()} ]" : "[ CPU ]";
-                    versusP2BadgeText.text = (currentGameMode == GameManager.GameMode.VsCpu) ? diffBadge : "[ PLAYER 2 ]";
+                    string badgeText = (currentGameMode == GameManager.GameMode.VsCpu) ? diffBadge : "[ PLAYER 2 ]";
+                    if (p1Id == p2Id)
+                    {
+                        badgeText = (currentGameMode == GameManager.GameMode.VsCpu) ? $"[ CPU: {GameManager.Instance.CurrentCpuDifficulty.ToString().ToUpper()} (ALT) ]" : "[ PLAYER 2 (ALT) ]";
+                    }
+                    versusP2BadgeText.text = badgeText;
                     versusP2BadgeText.color = (currentGameMode == GameManager.GameMode.VsCpu) ? cpuThemeColor : p2ThemeColor;
                 }
 

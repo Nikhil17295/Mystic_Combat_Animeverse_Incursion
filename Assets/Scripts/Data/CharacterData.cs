@@ -80,6 +80,7 @@ namespace MysticCombat.Data
         public string type;        // "projectile", "instant", "toggle"
         public float kiCost;
         public int damage;
+        public string buffs;
         public float speed;         // projectile speed (if applicable)
         public float lifetime;      // projectile lifetime (if applicable)
         public int hits;            // number of hits (for multi-hit skills)

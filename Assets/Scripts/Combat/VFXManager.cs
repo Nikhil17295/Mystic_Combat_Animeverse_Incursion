@@ -296,6 +296,7 @@ namespace MysticCombat.Combat
                 PlayShockwave(worldPos, scale: 1.25f);
                 if (shakeMultiplier > 0f) TriggerCameraShake(defaultShakeIntensity * 1.5f * shakeMultiplier, 0.22f);
                 if (triggerHitStop) TriggerHitStop(defaultHitstopSeconds * 1.4f);
+                ArenaBackgroundManager.Instance?.TriggerBrazierSurge(1.4f);
             }
             else
             {
@@ -368,6 +369,7 @@ namespace MysticCombat.Combat
         /// </summary>
         public void TriggerImpactFlash(float duration = 0.055f)
         {
+            ArenaBackgroundManager.Instance?.TriggerBrazierSurge(1.6f);
             if (flashOverlayImage == null) return;
             StartCoroutine(DoImpactFlash(duration));
         }

@@ -150,13 +150,14 @@ namespace MysticCombat.Editor
             {
                 "1 PLAYER  VS  CPU",
                 "1 VS 1  LOCAL DUEL",
+                "1 VS 1  LAN MULTIPLAYER",
                 "OPTIONS & MOVESET",
                 "QUIT GAME"
             };
 
             List<MainMenuController.MenuItem> items = new List<MainMenuController.MenuItem>();
-            float lineSpacing = 46f;
-            float startY = 45f;
+            float lineSpacing = 42f;
+            float startY = 60f;
 
             for (int i = 0; i < optionTitles.Length; i++)
             {
@@ -353,6 +354,12 @@ namespace MysticCombat.Editor
             }
 
             so.FindProperty("optionsPanel").objectReferenceValue = optionsModal;
+
+            // LAN Lobby Modal Creation
+            GameObject lanModalObj = CreateUIObject("Modal_LanLobby", canvasObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1920f, 1080f));
+            LanLobbyModal lanModal = lanModalObj.AddComponent<LanLobbyModal>();
+            lanModalObj.SetActive(false);
+            so.FindProperty("lanLobbyModal").objectReferenceValue = lanModal;
             so.FindProperty("combatSceneName").stringValue = "SampleScene";
             so.FindProperty("enableButtonChangeAudio").boolValue = false;
             so.FindProperty("enableEntranceImpactAudio").boolValue = false;

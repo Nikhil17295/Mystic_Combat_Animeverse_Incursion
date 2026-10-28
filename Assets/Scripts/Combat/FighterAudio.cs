@@ -401,6 +401,7 @@ namespace MysticCombat.Combat
 
         public void PlayVoiceHurt()
         {
+            StopVoice();
             if (voiceHurtClip != null)
             {
                 PlaySound(voiceHurtClip, voiceVolume * sfxVolume);
@@ -479,7 +480,29 @@ namespace MysticCombat.Combat
                     tunedVolume = Mathf.Min(tunedVolume, 0.50f);
                 }
                 float masterSfx = InputSettingsManager.SFXVolume;
-                src.PlayOneShot(clip, Mathf.Clamp(tunedVolume * masterSfx, 0f, 2.5f));
+                float finalVol = Mathf.Clamp(tunedVolume * masterSfx, 0f, 2.5f);
+
+                if (src == voiceSource)
+                {
+                    src.clip = clip;
+                    src.volume = finalVol;
+                    src.Play();
+                }
+                else
+                {
+                    src.PlayOneShot(clip, finalVol);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Immediately cancels and stops any currently playing character voice lines (e.g. upon taking damage or flinching).
+        /// </summary>
+        public void StopVoice()
+        {
+            if (voiceSource != null && voiceSource.isPlaying)
+            {
+                voiceSource.Stop();
             }
         }
 

@@ -1,77 +1,57 @@
 using UnityEngine;
+using MysticCombat.Fighter;
 
 namespace MysticCombat.AI
 {
     /// <summary>
     /// Saitama-specific AI combat brain.
-    /// Fighting Style: Overwhelming In-Your-Face Rushdown Brawler.
-    /// - Closes distance relentlessly (< 1.0m); refuses to back away in neutral.
-    /// - Loves close-range Light jabs into Heavy gut punches.
-    /// - Chains into Consecutive Normal Punches (Skill / U) point-blank.
-    /// - Hoards 100 Ki to march up and drop the lethal Serious Punch (Ultimate / O).
+    /// Fighting Style: Relentless In-Your-Face Rushdown Brawler.
+    /// - Closes distance without hesitation; refuses to backpedal in neutral.
+    /// - Chains fast Light jabs into Heavy haymakers and Consecutive Normal Punches (Skill / 20 Ki).
+    /// - If he builds 80 Ki, unleashes the devastating Serious Punch (Ultimate / 80 Ki / 90 damage)
+    ///   to decisively end the round!
     /// </summary>
     public class SaitamaBrain : CpuFighterBrain
     {
-        #region Character-Specific Overrides
+        #region Character Overrides
 
-        protected override float PreferredDistance => 0.95f;   // Pure in-your-face rushdown
-        protected override float MeleeRange => 1.20f;
-        protected override float SkillRange => 1.35f;          // Consecutive Normal Punches are point-blank
+        protected override float PreferredDistance => 1.30f;   // Tight close-quarters brawling
+        protected override float MeleeStrikeRange => 1.55f;
+        protected override float SkillStrikeRange => 1.85f;    // Consecutive Normal Punches
         protected override float SkillCost => 20f;
-        protected override float UltimateCost => 100f;         // Serious Punch costs entire 100 Ki bar!
-        protected override float TargetKiHoard => 100f;        // Hoards every bit of Ki for Serious Punch
+        protected override float UltimateCost => 80f;         // Serious Punch costs 80 Ki
+        protected override float TargetKiHoard => 80f;
 
         #endregion
 
         #region Customized Combat Actions
 
-        protected override void PerformMidRangeAction()
-        {
-            // Saitama doesn't zone with projectiles; he closes distance aggressively!
-            float dirToOpponent = (opponent != null && opponent.position.x > transform.position.x) ? 1f : -1f;
-            MoveInput = new Vector2(dirToOpponent, 0f);
-        }
-
-        protected override void PerformMeleePoke()
-        {
-            // Heavy punches and jabs up close
-            if (Random.value < 0.50f)
-            {
-                HeavyAttackPressed = true;
-            }
-            else
-            {
-                LightAttackPressed = true;
-            }
-        }
-
-        protected override void PerformMeleeCombo()
+        protected override void PerformCloseRangeAttack()
         {
             float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
 
-            // Serious Punch: 100-Ki instant lethal KO strike!
-            if (currentKi >= UltimateCost)
+            // Serious Punch Finisher: If 80 Ki is available, drop the lethal 90-damage strike!
+            if (currentKi >= UltimateCost && Random.value < (profile.comboChance * 1.1f))
             {
-                // Saitama unleashes Serious Punch when in range!
-                UltimatePressed = true;
+                TriggerUltimate();
                 return;
             }
 
-            // Consecutive Normal Punches (Skill flurry)
+            // Consecutive Normal Punches: 15 rapid-fire punches advancing forward (30 damage)
             if (currentKi >= SkillCost && Random.value < profile.comboChance)
             {
-                SkillPressed = true;
+                TriggerSkill();
                 return;
             }
 
-            // Heavy haymaker into light attack
+            // Heavy haymaker or fast Light jab opener
             if (Random.value < 0.55f)
             {
-                HeavyAttackPressed = true;
+                TriggerLightAttack();
             }
             else
             {
-                LightAttackPressed = true;
+                TriggerHeavyAttack();
             }
         }
 

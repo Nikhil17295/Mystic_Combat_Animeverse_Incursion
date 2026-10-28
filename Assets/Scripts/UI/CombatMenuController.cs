@@ -113,10 +113,10 @@ namespace MysticCombat.UI
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
 
-            // 1. In-Combat Pause Toggle (ESC or P)
+            // 1. In-Combat Pause Toggle (ESC only)
             if (!isMatchOver)
             {
-                if (kb.escapeKey.wasPressedThisFrame || kb.pKey.wasPressedThisFrame)
+                if (kb.escapeKey.wasPressedThisFrame)
                 {
                     if (isPaused)
                     {
@@ -624,6 +624,30 @@ namespace MysticCombat.UI
             // Bind Button Click Events
             BindPauseButtonEvents();
             BindResultsButtonEvents();
+
+            // Dynamic Font Scale Upgrade for Victory / Results Menu elements
+            if (resultsMenuRoot != null)
+            {
+                if (resultsEpithetText != null) resultsEpithetText.fontSize = Mathf.Max(resultsEpithetText.fontSize, 18.5f);
+                if (resultsScoreText != null) resultsScoreText.fontSize = Mathf.Max(resultsScoreText.fontSize, 21.0f);
+                foreach (var btnTxt in resultsButtonTexts)
+                {
+                    if (btnTxt != null) btnTxt.fontSize = Mathf.Max(btnTxt.fontSize, 22.0f);
+                }
+                Transform microH = resultsMenuRoot.transform.Find("Results_ModalBox/Micro_Header");
+                if (microH != null)
+                {
+                    var mTmp = microH.GetComponent<TextMeshProUGUI>();
+                    if (mTmp != null) mTmp.fontSize = Mathf.Max(mTmp.fontSize, 16.0f);
+                }
+                Transform footH = resultsMenuRoot.transform.Find("Results_ModalBox/Footer_Hints");
+                if (footH != null)
+                {
+                    var fTmp = footH.GetComponent<TextMeshProUGUI>();
+                    if (fTmp != null) fTmp.fontSize = Mathf.Max(fTmp.fontSize, 15.0f);
+                }
+            }
+
             SanitizeAndHealUIHierarchy();
         }
 
@@ -932,11 +956,11 @@ namespace MysticCombat.UI
             microObj.transform.SetParent(box.transform, false);
             RectTransform microRt = microObj.AddComponent<RectTransform>();
             microRt.anchoredPosition = new Vector2(0f, 260f);
-            microRt.sizeDelta = new Vector2(580f, 20f);
+            microRt.sizeDelta = new Vector2(580f, 26f);
             TextMeshProUGUI microTmp = microObj.AddComponent<TextMeshProUGUI>();
             microTmp.text = "* ANIMEVERSE MARTIAL ARTS TOURNAMENT *";
             if (bodyFont != null) microTmp.font = bodyFont;
-            microTmp.fontSize = 11.5f;
+            microTmp.fontSize = 16f;
             microTmp.alignment = TextAlignmentOptions.Center;
             microTmp.color = new Color(0f, 0.96f, 1f, 0.95f); // Electric Cyan
 
@@ -994,11 +1018,11 @@ namespace MysticCombat.UI
             epithetObj.transform.SetParent(box.transform, false);
             RectTransform epRt = epithetObj.AddComponent<RectTransform>();
             epRt.anchoredPosition = new Vector2(0f, 22f);
-            epRt.sizeDelta = new Vector2(580f, 24f);
+            epRt.sizeDelta = new Vector2(580f, 28f);
             resultsEpithetText = epithetObj.AddComponent<TextMeshProUGUI>();
             resultsEpithetText.text = "HOPE OF THE UNIVERSE | TOURNAMENT VICTOR";
             if (bodyFont != null) resultsEpithetText.font = bodyFont;
-            resultsEpithetText.fontSize = 13.5f;
+            resultsEpithetText.fontSize = 18.5f;
             resultsEpithetText.alignment = TextAlignmentOptions.Center;
             resultsEpithetText.color = new Color(1f, 0.85f, 0.3f, 0.95f);
 
@@ -1018,7 +1042,7 @@ namespace MysticCombat.UI
             resultsScoreText = scoreObj.AddComponent<TextMeshProUGUI>();
             resultsScoreText.text = "FINAL SCORE:  2 - 1";
             if (bodyFont != null) resultsScoreText.font = bodyFont;
-            resultsScoreText.fontSize = 15f;
+            resultsScoreText.fontSize = 21f;
             resultsScoreText.alignment = TextAlignmentOptions.Center;
             resultsScoreText.color = new Color(0.85f, 0.95f, 1f, 1f);
 
@@ -1057,7 +1081,7 @@ namespace MysticCombat.UI
                 TextMeshProUGUI lblTmp = lblObj.AddComponent<TextMeshProUGUI>();
                 lblTmp.text = resultsLabels[i];
                 if (bodyFont != null) lblTmp.font = bodyFont;
-                lblTmp.fontSize = 19f;
+                lblTmp.fontSize = 22f;
                 lblTmp.alignment = TextAlignmentOptions.Center;
                 lblTmp.color = Color.white;
 
@@ -1070,11 +1094,11 @@ namespace MysticCombat.UI
             footerObj.transform.SetParent(box.transform, false);
             RectTransform footerRt = footerObj.AddComponent<RectTransform>();
             footerRt.anchoredPosition = new Vector2(0f, -260f);
-            footerRt.sizeDelta = new Vector2(580f, 30f);
+            footerRt.sizeDelta = new Vector2(580f, 32f);
             TextMeshProUGUI footerTmp = footerObj.AddComponent<TextMeshProUGUI>();
             footerTmp.text = "[W/S or ARROWS] Navigate   |   [ENTER] Confirm   |   [ESC] Main Menu";
             if (bodyFont != null) footerTmp.font = bodyFont;
-            footerTmp.fontSize = 11.5f;
+            footerTmp.fontSize = 15f;
             footerTmp.alignment = TextAlignmentOptions.Center;
             footerTmp.color = new Color(0.65f, 0.72f, 0.85f, 0.85f);
 

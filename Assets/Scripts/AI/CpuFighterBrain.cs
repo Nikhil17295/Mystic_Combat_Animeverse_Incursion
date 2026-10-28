@@ -2,39 +2,42 @@ using UnityEngine;
 using MysticCombat.Input;
 using MysticCombat.Fighter;
 using MysticCombat.Systems;
+using MysticCombat.Core;
 
 namespace MysticCombat.AI
 {
     /// <summary>
-    /// Base Hierarchical Finite State Machine (HFSM) controlling CPU fighters.
-    /// Implements IFighterInput to emit virtual controller button presses and sticks.
+    /// Advanced Hierarchical Finite State Machine (HFSM) controlling CPU fighters.
+    /// Implements IFighterInput to emit frame-reliable virtual controller button presses.
     /// 
-    /// Layer 1 (Macro): Tactical Posture (Neutral Spacing, Rushdown, Ki Hoarding, Defensive Retreat).
-    /// Layer 2 (Micro): Concrete input actuation (Light, Heavy, Skill, Ultimate, Meditate, Jump, Crouch).
+    /// Layer 1: Tactical Postures (Rushdown, Punish, Spacing, KiCharge, ExhaustionRecovery).
+    /// Layer 2: Frame-latched virtual input actuator (guarantees inputs are never dropped
+    ///          regardless of Unity component execution order).
+    /// Layer 3: Dynamic combo engine utilizing hit-confirms and chain-canceling.
     /// </summary>
     [RequireComponent(typeof(FighterController))]
     public class CpuFighterBrain : MonoBehaviour, IFighterInput
     {
-        #region Macro States
+        #region Tactical States
 
-        public enum MacroState
+        public enum TacticalState
         {
+            RushdownPressure,
+            PunishOpening,
             SpacingNeutral,
-            AggressiveRushdown,
-            KiHoarding,
-            DefensiveRetreat,
-            PunishOpening
+            KiCharge,
+            ExhaustionRecovery
         }
 
         #endregion
 
-        #region Serialized Fields & Profile
+        #region Serialized Fields & Profiles
 
         [Header("AI Profile & Tuning")]
         [SerializeField] protected CpuBrainProfile profile = new CpuBrainProfile();
 
         [Header("Current Tactical State (Debug View)")]
-        [SerializeField] private MacroState currentMacroState = MacroState.SpacingNeutral;
+        [SerializeField] private TacticalState currentState = TacticalState.RushdownPressure;
 
         #endregion
 
@@ -49,63 +52,70 @@ namespace MysticCombat.AI
         protected HealthSystem opponentHealth;
         protected EnergySystem opponentEnergy;
 
-        #endregion
-
-        #region Timers & Internal State
-
-        private float reactionTimer;
-        private float spacingOscillationTimer;
-        private float spacingOscillationDir = 1f;
-        private bool isHesitating;
-        private float hesitationTimer;
-        private float jumpCooldownTimer;
-        private float attackCooldownTimer;
-        private float crouchDefenseTimer;
+        private MatchManager cachedMatchManager;
 
         #endregion
 
-        #region IFighterInput Implementation
+        #region Input Latching (Guarantees Zero Dropped Inputs)
+
+        private int jumpLatch;
+        private int lightLatch;
+        private int heavyLatch;
+        private int skillLatch;
+        private int ultimateLatch;
 
         public Vector2 MoveInput { get; protected set; }
-        public bool JumpPressed { get; protected set; }
+        public bool JumpPressed => jumpLatch > 0;
         public bool CrouchHeld { get; protected set; }
-        public bool LightAttackPressed { get; protected set; }
-        public bool HeavyAttackPressed { get; protected set; }
-        public bool SkillPressed { get; protected set; }
-        public bool UltimatePressed { get; protected set; }
+        public bool LightAttackPressed => lightLatch > 0;
+        public bool HeavyAttackPressed => heavyLatch > 0;
+        public bool SkillPressed => skillLatch > 0;
+        public bool UltimatePressed => ultimateLatch > 0;
         public bool MeditateHeld { get; protected set; }
 
         #endregion
 
-        #region Character-Specific Virtual Hooks (Customized by Subclasses)
+        #region Timers & Internal Counters
+
+        private float reactionTimer;
+        private float decisionTimer;
+        private float attackCooldownTimer;
+        private float jumpCooldownTimer;
+        private float crouchDefenseTimer;
+        private float footsiesTimer;
+        private float footsiesDir = 1f;
+
+        #endregion
+
+        #region Character Overrides (Customized by GokuBrain & SaitamaBrain)
 
         /// <summary>
-        /// Preferred combat engagement distance from the opponent.
+        /// Ideal neutral combat spacing.
         /// </summary>
-        protected virtual float PreferredDistance => 1.6f;
+        protected virtual float PreferredDistance => 1.45f;
 
         /// <summary>
-        /// Maximum horizontal distance for basic melee attacks (Light/Heavy).
+        /// Maximum range where basic melee attacks reliably land (matches actual hitbox overlap).
         /// </summary>
-        protected virtual float MeleeRange => 1.15f;
+        protected virtual float MeleeStrikeRange => 1.55f;
 
         /// <summary>
-        /// Effective horizontal distance for special skill attacks.
+        /// Maximum horizontal range for special skills.
         /// </summary>
-        protected virtual float SkillRange => 2.2f;
+        protected virtual float SkillStrikeRange => 2.2f;
 
         /// <summary>
-        /// Ki required to activate special skill.
+        /// Ki required for special skill.
         /// </summary>
         protected virtual float SkillCost => 20f;
 
         /// <summary>
-        /// Ki required to activate ultimate move.
+        /// Ki required for ultimate finisher.
         /// </summary>
         protected virtual float UltimateCost => 80f;
 
         /// <summary>
-        /// Target Ki amount this character actively tries to build up and hoard.
+        /// Target Ki amount before looking for ultimate finish.
         /// </summary>
         protected virtual float TargetKiHoard => 80f;
 
@@ -128,52 +138,90 @@ namespace MysticCombat.AI
 
         protected virtual void Update()
         {
-            // Ensure opponent references are resolved
-            if (opponent == null || opponentController == null)
-            {
-                FindOpponentReferences();
-                if (opponent == null) return;
-            }
+            // Decrement input latch counters frame by frame
+            // Latching for 2 frames guarantees FighterController.Update sees the button press
+            // whether FighterController runs before or after CpuFighterBrain.
+            if (jumpLatch > 0) jumpLatch--;
+            if (lightLatch > 0) lightLatch--;
+            if (heavyLatch > 0) heavyLatch--;
+            if (skillLatch > 0) skillLatch--;
+            if (ultimateLatch > 0) ultimateLatch--;
 
-            // Cooldown timers
-            if (jumpCooldownTimer > 0f) jumpCooldownTimer -= Time.deltaTime;
+            // Timers
             if (attackCooldownTimer > 0f) attackCooldownTimer -= Time.deltaTime;
+            if (jumpCooldownTimer > 0f) jumpCooldownTimer -= Time.deltaTime;
             if (crouchDefenseTimer > 0f)
             {
                 crouchDefenseTimer -= Time.deltaTime;
                 if (crouchDefenseTimer <= 0f) CrouchHeld = false;
             }
 
-            // Humanized reaction tick timer
+            // Ensure opponent references are valid
+            if (opponent == null || opponentController == null)
+            {
+                FindOpponentReferences();
+                if (opponent == null) return;
+            }
+
+            // Verify match is actively running
+            if (!IsRoundActive())
+            {
+                ClearAllInputs();
+                return;
+            }
+
+            // High-frequency hit-confirm chain canceling (Checked every frame!)
+            CheckHitConfirmComboChain();
+
+            // Tactical decision evaluation tick
             reactionTimer -= Time.deltaTime;
             if (reactionTimer <= 0f)
             {
-                reactionTimer = profile.reactionDelay * Random.Range(0.85f, 1.20f);
-                EvaluateTacticalPosture();
+                reactionTimer = profile.reactionDelay * Random.Range(0.85f, 1.15f);
+                EvaluateTacticalState();
             }
 
-            // Execute tactical movements and virtual button actions
-            ExecuteMacroState();
-        }
-
-        protected virtual void LateUpdate()
-        {
-            // Single-frame button pulses are cleared at the end of the frame
-            // so FighterController sees them as a single clean key-press (just like wasPressedThisFrame).
-            JumpPressed = false;
-            LightAttackPressed = false;
-            HeavyAttackPressed = false;
-            SkillPressed = false;
-            UltimatePressed = false;
+            // Execute tactical state movements & actuation
+            ExecuteTacticalState();
         }
 
         #endregion
 
-        #region Initialization & Configuration
+        #region Match State Tracking
 
-        /// <summary>
-        /// Configures the brain with a specific difficulty preset.
-        /// </summary>
+        private bool IsRoundActive()
+        {
+            if (Time.timeScale == 0f) return false;
+
+            if (cachedMatchManager == null)
+            {
+                cachedMatchManager = Object.FindAnyObjectByType<MatchManager>();
+            }
+
+            if (cachedMatchManager != null)
+            {
+                return cachedMatchManager.CurrentMatchState == MatchManager.MatchState.RoundInProgress;
+            }
+
+            return true;
+        }
+
+        private void ClearAllInputs()
+        {
+            MoveInput = Vector2.zero;
+            CrouchHeld = false;
+            MeditateHeld = false;
+            jumpLatch = 0;
+            lightLatch = 0;
+            heavyLatch = 0;
+            skillLatch = 0;
+            ultimateLatch = 0;
+        }
+
+        #endregion
+
+        #region Initialization & Scaling
+
         public void Configure(CpuDifficulty difficulty)
         {
             profile = CpuBrainProfile.GetPreset(difficulty);
@@ -181,9 +229,6 @@ namespace MysticCombat.AI
             Debug.Log($"<color=#00e676>[CpuFighterBrain]</color> Configured {gameObject.name} with {difficulty} difficulty.");
         }
 
-        /// <summary>
-        /// Sets a custom profile directly.
-        /// </summary>
         public void SetProfile(CpuBrainProfile customProfile)
         {
             profile = customProfile ?? CpuBrainProfile.GetPreset(CpuDifficulty.Easy);
@@ -194,7 +239,6 @@ namespace MysticCombat.AI
         {
             if (profile == null) return;
 
-            // Extreme / Boss mode stat modifications
             if (profile.healthMultiplier > 1.01f && myHealth != null)
             {
                 int scaledMaxHp = Mathf.RoundToInt(myHealth.MaxHealth * profile.healthMultiplier);
@@ -213,7 +257,6 @@ namespace MysticCombat.AI
                 return;
             }
 
-            // Fallback scene search
             FighterController[] allFighters = FindObjectsByType<FighterController>(FindObjectsInactive.Exclude);
             foreach (var f in allFighters)
             {
@@ -231,271 +274,129 @@ namespace MysticCombat.AI
 
         #endregion
 
-        #region Layer 1: Macro Tactical HFSM
+        #region Tactical HFSM State Evaluation
 
-        private void EvaluateTacticalPosture()
+        private void EvaluateTacticalState()
         {
             if (opponent == null) return;
 
-            // Hesitation logic (simulates human indecision on Easy/Medium)
-            if (hesitationTimer > 0f)
-            {
-                hesitationTimer -= profile.reactionDelay;
-                return;
-            }
-
-            if (Random.value < profile.mistakeChance)
-            {
-                isHesitating = true;
-                hesitationTimer = Random.Range(0.15f, 0.40f);
-                MoveInput = Vector2.zero;
-                MeditateHeld = false;
-                CrouchHeld = false;
-                return;
-            }
-            isHesitating = false;
-
             float dist = Mathf.Abs(transform.position.x - opponent.position.x);
-            float myHpPct = (myHealth != null && myHealth.MaxHealth > 0) ? (float)myHealth.CurrentHealth / myHealth.MaxHealth : 1f;
-            float oppHpPct = (opponentHealth != null && opponentHealth.MaxHealth > 0) ? (float)opponentHealth.CurrentHealth / opponentHealth.MaxHealth : 1f;
             float myKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
             bool isMeExhausted = myEnergy != null && myEnergy.IsInRedZone;
             bool isOpponentExhausted = opponentEnergy != null && opponentEnergy.IsInRedZone;
+            bool isOpponentVulnerable = IsOpponentVulnerable();
 
-            // Strategy Rule 1: Opponent is in Red Zone or low HP -> AGGRESSIVE RUSHDOWN (Smell blood in the water)
-            if (isOpponentExhausted || (oppHpPct < 0.25f && myHpPct > oppHpPct))
-            {
-                currentMacroState = MacroState.AggressiveRushdown;
-                return;
-            }
-
-            // Strategy Rule 2: I am in Red Zone (Exhausted) -> DEFENSIVE RETREAT or MEDITATE
+            // Priority 1: Self Exhausted in Red Zone
             if (isMeExhausted)
             {
-                currentMacroState = (dist > profile.safeMeditateDistance) ? MacroState.KiHoarding : MacroState.DefensiveRetreat;
+                currentState = TacticalState.ExhaustionRecovery;
                 return;
             }
 
-            // Strategy Rule 3: Opponent is whiffing or in recovery -> PUNISH OPENING
-            if (dist <= SkillRange && IsOpponentInVulnerableAnimation())
+            // Priority 2: Opponent is in Red Zone, in HitStun, or Whiffing -> PUNISH OPENING!
+            if (isOpponentExhausted || isOpponentVulnerable)
             {
-                currentMacroState = MacroState.PunishOpening;
+                currentState = TacticalState.PunishOpening;
                 return;
             }
 
-            // Strategy Rule 4: Safe distance + Low Ki + Desires Ki Hoard -> KI HOARDING
+            // Priority 3: Safe distance + Low Ki -> Meditate to charge Ki
             if (dist >= profile.safeMeditateDistance && myKi < TargetKiHoard && Random.value < profile.kiHoardingBias)
             {
-                currentMacroState = MacroState.KiHoarding;
+                currentState = TacticalState.KiCharge;
                 return;
             }
 
-            // Strategy Rule 5: I have high Ki or Opponent is Meditating -> AGGRESSIVE RUSHDOWN
-            if (myKi >= UltimateCost || (opponentController != null && opponentController.CurrentState == FighterState.Meditating))
+            // Priority 4: Default combat posture is AGGRESSIVE RUSHDOWN
+            // The bot actively seeks out combat rather than backing away
+            if (dist > MeleeStrikeRange * 1.15f || myKi >= UltimateCost)
             {
-                currentMacroState = MacroState.AggressiveRushdown;
+                currentState = TacticalState.RushdownPressure;
                 return;
             }
 
-            // Default State: SPACING NEUTRAL (Footsies & Spacing)
-            currentMacroState = MacroState.SpacingNeutral;
+            // Priority 5: Close-range neutral footsies
+            currentState = TacticalState.SpacingNeutral;
         }
 
-        private bool IsOpponentInVulnerableAnimation()
+        private bool IsOpponentVulnerable()
         {
             if (opponentController == null) return false;
             FighterState s = opponentController.CurrentState;
-            return s == FighterState.HeavyAttack || s == FighterState.Ultimate || s == FighterState.Exhausted;
+            return s == FighterState.HitStun || 
+                   s == FighterState.KnockBack || 
+                   s == FighterState.Exhausted ||
+                   s == FighterState.HeavyAttack || 
+                   s == FighterState.Ultimate || 
+                   s == FighterState.Meditating;
         }
 
         #endregion
 
-        #region Layer 2: Micro Action Execution
+        #region Tactical State Execution
 
-        private void ExecuteMacroState()
+        private void ExecuteTacticalState()
         {
-            if (opponent == null || isHesitating) return;
+            if (opponent == null) return;
 
-            float dist = Mathf.Abs(transform.position.x - opponent.position.x);
-            float dirToOpponent = (opponent.position.x > transform.position.x) ? 1f : -1f;
+            float dx = opponent.position.x - transform.position.x;
+            float dist = Mathf.Abs(dx);
+            float dirToOpponent = (dx >= 0f) ? 1f : -1f;
 
-            switch (currentMacroState)
+            // Defensive crouch reaction to incoming heavy/ultimate attacks
+            TryDefensiveCrouchDuck(dist);
+
+            switch (currentState)
             {
-                case MacroState.SpacingNeutral:
+                case TacticalState.RushdownPressure:
+                    ExecuteRushdownPressure(dist, dirToOpponent);
+                    break;
+
+                case TacticalState.PunishOpening:
+                    ExecutePunishOpening(dist, dirToOpponent);
+                    break;
+
+                case TacticalState.SpacingNeutral:
                     ExecuteSpacingNeutral(dist, dirToOpponent);
                     break;
 
-                case MacroState.AggressiveRushdown:
-                    ExecuteAggressiveRushdown(dist, dirToOpponent);
+                case TacticalState.KiCharge:
+                    ExecuteKiCharge(dist, dirToOpponent);
                     break;
 
-                case MacroState.KiHoarding:
-                    ExecuteKiHoarding(dist, dirToOpponent);
-                    break;
-
-                case MacroState.DefensiveRetreat:
-                    ExecuteDefensiveRetreat(dist, dirToOpponent);
-                    break;
-
-                case MacroState.PunishOpening:
-                    ExecutePunishOpening(dist, dirToOpponent);
+                case TacticalState.ExhaustionRecovery:
+                    ExecuteExhaustionRecovery(dist, dirToOpponent);
                     break;
             }
         }
 
-        private void ExecuteSpacingNeutral(float dist, float dirToOpponent)
-        {
-            MeditateHeld = false;
-
-            // Defensive Crouch Duck: occasional duck under opponent attack
-            if (opponentController != null && 
-               (opponentController.CurrentState == FighterState.LightAttack || opponentController.CurrentState == FighterState.HeavyAttack) &&
-               dist <= 1.4f && crouchDefenseTimer <= 0f && Random.value < (0.45f * (1f - profile.mistakeChance)))
-            {
-                CrouchHeld = true;
-                crouchDefenseTimer = Random.Range(0.25f, 0.45f);
-                MoveInput = Vector2.zero;
-                return;
-            }
-
-            // Weave back and forth around preferred distance
-            float distanceError = dist - PreferredDistance;
-
-            if (Mathf.Abs(distanceError) > profile.spacingTolerance)
-            {
-                // Move towards preferred spacing
-                float moveX = Mathf.Sign(distanceError) * dirToOpponent;
-                MoveInput = new Vector2(moveX, 0f);
-            }
-            else
-            {
-                // Opponent-relative footsies oscillation (step in to threaten, step back to bait)
-                spacingOscillationTimer -= Time.deltaTime;
-                if (spacingOscillationTimer <= 0f)
-                {
-                    spacingOscillationTimer = Random.Range(0.35f, 0.65f);
-                    spacingOscillationDir *= -1f;
-                }
-                float relativeStep = (spacingOscillationDir > 0f) ? dirToOpponent * 0.45f : -dirToOpponent * 0.35f;
-                MoveInput = new Vector2(relativeStep, 0f);
-
-                // In spacing range, attack with humanized rhythm
-                if (attackCooldownTimer <= 0f)
-                {
-                    if (dist <= MeleeRange)
-                    {
-                        PerformMeleePoke();
-                        attackCooldownTimer = profile.reactionDelay * Random.Range(1.3f, 2.0f);
-                    }
-                    else if (dist <= SkillRange)
-                    {
-                        PerformMidRangeAction();
-                        attackCooldownTimer = profile.reactionDelay * Random.Range(1.5f, 2.4f);
-                    }
-                }
-            }
-        }
-
-        private void ExecuteAggressiveRushdown(float dist, float dirToOpponent)
+        private void ExecuteRushdownPressure(float dist, float dirToOpponent)
         {
             MeditateHeld = false;
             CrouchHeld = false;
 
-            if (dist > MeleeRange)
+            if (dist > MeleeStrikeRange)
             {
-                // Sprint / Walk forward
+                // Advance forward with intent
                 MoveInput = new Vector2(dirToOpponent, 0f);
 
-                // Tactical jump-in with strict cooldown gating
-                if (jumpCooldownTimer <= 0f && dist > 1.8f && dist < 3.2f && Random.value < 0.25f)
+                // Tactical jump-in when closing medium distance
+                if (jumpCooldownTimer <= 0f && dist > 2.0f && dist < 3.5f && Random.value < 0.20f)
                 {
-                    JumpPressed = true;
-                    jumpCooldownTimer = Random.Range(2.0f, 3.2f);
+                    TriggerJump();
+                    jumpCooldownTimer = Random.Range(2.5f, 4.0f);
                 }
             }
             else
             {
-                // Close range: execute combo pressure with natural cadence
-                MoveInput = new Vector2(dirToOpponent * 0.2f, 0f);
-                if (attackCooldownTimer <= 0f)
+                // In close strike range: attack relentlessly!
+                MoveInput = new Vector2(dirToOpponent * 0.15f, 0f);
+
+                if (attackCooldownTimer <= 0f && CanAttackGrounded())
                 {
-                    PerformMeleeCombo();
-                    attackCooldownTimer = profile.reactionDelay * Random.Range(0.8f, 1.4f);
+                    PerformCloseRangeAttack();
+                    attackCooldownTimer = profile.reactionDelay * Random.Range(0.6f, 1.1f);
                 }
-            }
-        }
-
-        private void ExecuteKiHoarding(float dist, float dirToOpponent)
-        {
-            bool isCornered = (dirToOpponent > 0 && transform.position.x < -7.2f) || (dirToOpponent < 0 && transform.position.x > 7.2f);
-
-            if (isCornered || dist < profile.safeMeditateDistance)
-            {
-                // Cannot retreat further into wall or opponent is too close!
-                MeditateHeld = false;
-                if (isCornered)
-                {
-                    // Escape jump over opponent if ready, else fight out of corner
-                    if (jumpCooldownTimer <= 0f)
-                    {
-                        MoveInput = new Vector2(dirToOpponent, 0f);
-                        JumpPressed = true;
-                        jumpCooldownTimer = 2.5f;
-                    }
-                    else
-                    {
-                        currentMacroState = MacroState.AggressiveRushdown;
-                    }
-                }
-                else
-                {
-                    MoveInput = new Vector2(-dirToOpponent, 0f);
-                }
-            }
-            else
-            {
-                // Safe distance: Hold meditation!
-                MoveInput = Vector2.zero;
-                MeditateHeld = true;
-
-                // Stop meditating if Ki reached target
-                if (myEnergy != null && myEnergy.CurrentKi >= TargetKiHoard)
-                {
-                    MeditateHeld = false;
-                    currentMacroState = MacroState.SpacingNeutral;
-                }
-            }
-        }
-
-        private void ExecuteDefensiveRetreat(float dist, float dirToOpponent)
-        {
-            MeditateHeld = false;
-            bool isCornered = (dirToOpponent > 0 && transform.position.x < -7.2f) || (dirToOpponent < 0 && transform.position.x > 7.2f);
-
-            if (isCornered)
-            {
-                // If pinned to the boundary wall, jump out or punish!
-                if (jumpCooldownTimer <= 0f)
-                {
-                    MoveInput = new Vector2(dirToOpponent, 0f);
-                    JumpPressed = true;
-                    jumpCooldownTimer = 2.5f;
-                }
-                else
-                {
-                    currentMacroState = MacroState.PunishOpening;
-                }
-                return;
-            }
-
-            // Move away from opponent
-            MoveInput = new Vector2(-dirToOpponent, 0f);
-
-            // Occasional defensive escape jump with cooldown gate
-            if (jumpCooldownTimer <= 0f && dist < 1.4f && Random.value < 0.35f)
-            {
-                JumpPressed = true;
-                jumpCooldownTimer = Random.Range(2.0f, 3.0f);
             }
         }
 
@@ -506,90 +407,250 @@ namespace MysticCombat.AI
 
             float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
 
-            // If in lethal range and have Ki for Ultimate, PUNISH WITH ULTIMATE!
-            if (currentKi >= UltimateCost && dist <= SkillRange && attackCooldownTimer <= 0f)
+            // Close in fast to punish
+            if (dist > MeleeStrikeRange)
             {
-                UltimatePressed = true;
-                attackCooldownTimer = 1.0f;
-                currentMacroState = MacroState.SpacingNeutral;
+                MoveInput = new Vector2(dirToOpponent, 0f);
+            }
+            else
+            {
+                MoveInput = Vector2.zero;
+            }
+
+            if (attackCooldownTimer <= 0f && CanAttackGrounded())
+            {
+                // Punish with Ultimate if affordable and in range
+                if (currentKi >= UltimateCost && dist <= SkillStrikeRange)
+                {
+                    TriggerUltimate();
+                    attackCooldownTimer = 1.0f;
+                    currentState = TacticalState.RushdownPressure;
+                    return;
+                }
+
+                // Punish with Skill if affordable
+                if (currentKi >= SkillCost && dist <= SkillStrikeRange)
+                {
+                    TriggerSkill();
+                    attackCooldownTimer = 0.8f;
+                    currentState = TacticalState.RushdownPressure;
+                    return;
+                }
+
+                // Melee punish with Heavy attack or Light jab
+                if (dist <= MeleeStrikeRange)
+                {
+                    if (Random.value < 0.70f)
+                    {
+                        TriggerHeavyAttack();
+                    }
+                    else
+                    {
+                        TriggerLightAttack();
+                    }
+                    attackCooldownTimer = 0.5f;
+                    currentState = TacticalState.RushdownPressure;
+                }
+            }
+        }
+
+        private void ExecuteSpacingNeutral(float dist, float dirToOpponent)
+        {
+            MeditateHeld = false;
+
+            // If player walks right up into melee range, counter-attack immediately!
+            if (dist <= MeleeStrikeRange && attackCooldownTimer <= 0f && CanAttackGrounded())
+            {
+                PerformCloseRangeAttack();
+                attackCooldownTimer = profile.reactionDelay * Random.Range(0.7f, 1.2f);
                 return;
             }
 
-            // If have Ki for Skill, punish with Skill!
-            if (currentKi >= SkillCost && dist <= SkillRange && attackCooldownTimer <= 0f)
+            // Footsies: step back and forward around PreferredDistance
+            footsiesTimer -= Time.deltaTime;
+            if (footsiesTimer <= 0f)
             {
-                SkillPressed = true;
-                attackCooldownTimer = 0.8f;
-                currentMacroState = MacroState.SpacingNeutral;
+                footsiesTimer = Random.Range(0.25f, 0.55f);
+                footsiesDir *= -1f;
+            }
+
+            float offsetFromPreferred = dist - PreferredDistance;
+            if (Mathf.Abs(offsetFromPreferred) > profile.spacingTolerance)
+            {
+                MoveInput = new Vector2(Mathf.Sign(offsetFromPreferred) * dirToOpponent, 0f);
+            }
+            else
+            {
+                MoveInput = new Vector2(footsiesDir * dirToOpponent * 0.35f, 0f);
+            }
+        }
+
+        private void ExecuteKiCharge(float dist, float dirToOpponent)
+        {
+            // If opponent gets too close, immediately drop meditation!
+            if (dist < 2.4f)
+            {
+                MeditateHeld = false;
+                currentState = TacticalState.RushdownPressure;
                 return;
             }
 
-            // Melee range punish with Heavy Attack
-            if (dist <= MeleeRange && attackCooldownTimer <= 0f)
+            // Safe distance: hold meditation
+            MoveInput = Vector2.zero;
+            MeditateHeld = true;
+
+            // Stop when Ki reached target
+            if (myEnergy != null && myEnergy.CurrentKi >= TargetKiHoard)
             {
-                HeavyAttackPressed = true;
-                attackCooldownTimer = 0.6f;
-                currentMacroState = MacroState.SpacingNeutral;
-                return;
+                MeditateHeld = false;
+                currentState = TacticalState.RushdownPressure;
+            }
+        }
+
+        private void ExecuteExhaustionRecovery(float dist, float dirToOpponent)
+        {
+            // Meditating while exhausted accelerates Red Zone recovery by 1.5x!
+            if (dist >= 2.2f)
+            {
+                MoveInput = Vector2.zero;
+                MeditateHeld = true;
+            }
+            else
+            {
+                // Opponent is close: retreat or defend
+                MeditateHeld = false;
+                bool isCornered = (dirToOpponent > 0 && transform.position.x < -7.0f) || (dirToOpponent < 0 && transform.position.x > 7.0f);
+
+                if (isCornered && jumpCooldownTimer <= 0f)
+                {
+                    MoveInput = new Vector2(dirToOpponent, 0f);
+                    TriggerJump();
+                    jumpCooldownTimer = 2.5f;
+                }
+                else
+                {
+                    MoveInput = new Vector2(-dirToOpponent, 0f);
+                }
             }
 
-            // Otherwise, close in fast
-            MoveInput = new Vector2(dirToOpponent, 0f);
+            // Recovered from Red Zone!
+            if (myEnergy != null && !myEnergy.IsInRedZone)
+            {
+                MeditateHeld = false;
+                currentState = TacticalState.RushdownPressure;
+            }
         }
 
         #endregion
 
-        #region Attack Routines & Virtual Hooks
+        #region Hit-Confirm & Chain-Canceling Engine
 
-        protected virtual void PerformMeleePoke()
+        /// <summary>
+        /// Checked every frame: If currently in LightAttack and a hit is confirmed on the opponent,
+        /// immediately chain-cancel into Heavy or Skill before the opponent recovers!
+        /// </summary>
+        private void CheckHitConfirmComboChain()
         {
-            // Light jab poke
-            if (Random.value < 0.65f)
+            if (myController == null) return;
+            if (myController.CurrentState != FighterState.LightAttack) return;
+
+            bool hitConfirmed = myController.HasHitTargetThisSwing || 
+                                (opponentController != null && opponentController.CurrentState == FighterState.HitStun);
+
+            if (!hitConfirmed) return;
+
+            // Decide whether to chain-cancel based on combo profile
+            if (Random.value < profile.comboChance)
             {
-                LightAttackPressed = true;
-            }
-            else
-            {
-                HeavyAttackPressed = true;
+                float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
+
+                // Chain-cancel into Skill if affordable
+                if (currentKi >= SkillCost && Random.value < 0.65f)
+                {
+                    TriggerSkill();
+                }
+                else
+                {
+                    // Chain-cancel into Heavy attack
+                    TriggerHeavyAttack();
+                }
             }
         }
 
-        protected virtual void PerformMeleeCombo()
+        #endregion
+
+        #region Virtual Input Trigger Helpers (Guaranteed 2-Frame Latch)
+
+        protected void TriggerLightAttack()
+        {
+            lightLatch = 2;
+        }
+
+        protected void TriggerHeavyAttack()
+        {
+            heavyLatch = 2;
+        }
+
+        protected void TriggerSkill()
+        {
+            skillLatch = 2;
+        }
+
+        protected void TriggerUltimate()
+        {
+            ultimateLatch = 2;
+        }
+
+        protected void TriggerJump()
+        {
+            jumpLatch = 2;
+        }
+
+        private bool CanAttackGrounded()
+        {
+            if (myController == null || !myController.IsGrounded) return false;
+            FighterState s = myController.CurrentState;
+            return s == FighterState.Idle || s == FighterState.Walking;
+        }
+
+        private void TryDefensiveCrouchDuck(float dist)
+        {
+            if (opponentController == null || dist > 1.6f) return;
+
+            FighterState os = opponentController.CurrentState;
+            if ((os == FighterState.HeavyAttack || os == FighterState.Ultimate) && 
+                crouchDefenseTimer <= 0f && 
+                Random.value < (0.50f * (1f - profile.mistakeChance)))
+            {
+                CrouchHeld = true;
+                crouchDefenseTimer = Random.Range(0.25f, 0.45f);
+                MoveInput = Vector2.zero;
+            }
+        }
+
+        #endregion
+
+        #region Virtual Attack Hooks (Overridden by GokuBrain & SaitamaBrain)
+
+        protected virtual void PerformCloseRangeAttack()
         {
             float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
 
-            // Ultimate check (if affordable and confirmed)
+            // If we have Ultimate Ki and high combo chance, strike with Ultimate!
             if (currentKi >= UltimateCost && Random.value < profile.comboChance)
             {
-                UltimatePressed = true;
+                TriggerUltimate();
                 return;
             }
 
-            // Skill check (if affordable and confirmed)
-            if (currentKi >= SkillCost && Random.value < profile.comboChance)
+            // Open with fast Light jab (which triggers chain-canceling on hit!)
+            if (Random.value < 0.65f)
             {
-                SkillPressed = true;
-                return;
-            }
-
-            // Regular hit chain
-            if (Random.value < 0.5f)
-            {
-                LightAttackPressed = true;
+                TriggerLightAttack();
             }
             else
             {
-                HeavyAttackPressed = true;
-            }
-        }
-
-        protected virtual void PerformMidRangeAction()
-        {
-            // Base behavior: poke if affordable
-            float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
-            if (currentKi >= SkillCost && Random.value < (profile.comboChance * 0.7f))
-            {
-                SkillPressed = true;
+                TriggerHeavyAttack();
             }
         }
 
