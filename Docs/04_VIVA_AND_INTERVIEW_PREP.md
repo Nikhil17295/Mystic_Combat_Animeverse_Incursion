@@ -683,12 +683,299 @@ When demonstrating the game to evaluators:
 >    - **Scene-Aware Guarding:** Replaced the brittle `GameState.MainMenu` flag with a direct scene check (`gameObject.scene.name == 'MainMenuScene'`).
 >    - **Stateful Self-Healing in `Start()`:** In `MatchAudioController.Start()`, we check `if (matchManager.CurrentMatchState == MatchState.RoundInProgress && !musicSource.isPlaying) PlayBattleMusic();`. If the event was missed during scene load, `Start()` catches the in-progress round and immediately kicks off the battle soundtrack with zero frame silence."*
 
+---
+
+### Question 28: How does your game handle hit feedback and "Game Feel" without causing Garbage Collection frame drops?
+**Answer for Judges:**
+> *"In fighting games, game feel—or 'juice'—is what separates a stiff prototype from an authentic arcade fighter. We built a dedicated `VFXManager` that combines four synchronized layers on every hit:
+> 1. **Hitstop:** A 65ms micro-pause (`Time.timeScale = 0.04f`) on impact that gives punches visceral physical weight.
+> 2. **Camera Shake:** A decay-curve orthographic camera shake on the Main Camera.
+> 3. **Hit Sparks & Shockwaves:** High-contrast particle starbursts spawned at the exact intersection between the attacking Hitbox and defending Hurtbox.
+> 4. **Pre-warmed Object Pooling:** Spawning and destroying GameObjects at 60 FPS causes GC stutter. We pre-warm 32 reusable emitters in memory during scene load, cycling them with zero allocations during live combat."*
+
+---
+
+### Question 29: How did you ensure sprite animations don't jitter or hop when switching between Base, Super Saiyan, Hurt, and Knockout states?
+**Answer for Judges:**
+> *"Different action poses have different bounding box sizes (e.g., crouching is 45px tall while jumping is 60px tall). If you crop sprites to their tightest bounding box and use center pivots, the character's feet will visibly hop and jitter off the ground.
+> We solved this through **Standardized Baseline Canvas Anchoring**:
+> - Every frame is normalized to a fixed canvas ($128 \times 128$ for Goku, $160 \times 160$ for Saitama).
+> - The lowest foot pixel is strictly anchored to a standardized baseline coordinate ($Y = 105$ for Goku, $Y = 135$ for Saitama).
+> This guarantees that regardless of whether Goku is idling, walking, flinching in hitstun, or transforming into Super Saiyan, his feet stay locked to the arena floor."*
+
+---
+
+### Question 30: How did you implement the dramatic slow-motion K.O. sequence without causing animations to stutter or skip frames?
+**Answer for Judges:**
+> *"In authentic arcade fighters (Street Fighter, Guilty Gear), the final knockout blow triggers cinematic slow motion to let the impact register before the next round begins.
+>
+> However, a classic Unity beginner trap is simply setting `Time.timeScale = 0.28f`. Because sprite animation scripts typically accumulate `Time.deltaTime`, slowing the physics engine by 72% makes the animation update 72% slower! An 11-frame knockout collapse that should look smooth turns into a choppy, slideshow-like 2 FPS crawl.
+>
+> We solved this through **Decoupled Animation Delta Time (`Time.unscaledDeltaTime`)**:
+> 1. In `MatchManager.cs`, we orchestrate a 4-phase sequence:
+>    - **Phase 1 (Slow-Mo Collapse):** Loser enters `Knockout`, `Time.timeScale` drops to $0.28\text{f}$, triggering screen shake and an impact flash.
+>    - **Phase 2 (Decoupled Playback):** In `FighterAnimator.cs`, `PlayOnce` uses `Time.unscaledDeltaTime` for knockout and victory states, dynamically adjusting FPS (`ko.Count / 1.7f`) so all 11 frames play smoothly across the 1.8-second slow-motion window.
+>    - **Phase 3 (Floor Impact & Normalization):** When the loser hits the mat, `Time.timeScale` snaps back to $1.0\text{f}$, triggering a floor dust puff.
+>    - **Phase 4 (Staggered Celebration):** The winner then begins their celebratory victory loop while the loser stays pinned on the ground. A 2.8-second dramatic hold lets players absorb the win before advancing."*
+
+---
+
+### Question 31: Why did Goku's Kamehameha jump 16 pixels into the air, and how did you debug and fix the sprite sheet ripping artifact?
+**Answer for Judges:**
+> *"This was a fascinating pixel-level forensic bug:
+> 1. **The Bug:** During Kamehameha charge frames (`ultimate_1..3`), Goku hopped 16 pixels straight up into the air, hung hovering, and then crashed down on frame 4.
+> 2. **Root Cause Analysis:** We wrote a Python inspection script to analyze the alpha channels across all raw frames. We discovered that in frames 1, 2, and 3, there were 6 stray non-zero pixels from an adjacent sprite below Goku on the original rip sheet at $Y = 73..74$. Because our previous normalization script calculated the bounding box bottom and aligned it to baseline $Y = 105$, those 6 stray pixels were anchored to $Y = 105$, which pushed Goku's actual feet (at $Y = 58$) up to $Y = 89$ (16 pixels into the air!).
+> 3. **The Solution:** We cropped all raw frames strictly at $Y < 60$ (discarding the rip artifact) and locked Goku's back planted foot to a fixed canvas coordinate ($X = 41$, $Y = 105$). This completely eliminated the vertical 16px hop and fixed horizontal stance skating."*
+
+---
+
+### Question 32: How did you create an authentic Dragon Ball Z spiky flame aura instead of generic particle puffs?
+**Answer for Judges:**
+> *"Authentic Dragon Ball Z Super Saiyan auras are not soft radial smoke puffs; they are violent, jagged, spiky golden flame cocoons that lick upward around the fighter's silhouette.
+> We implemented this in `FighterKiAura.cs` using a **Dual-Layer Oscillating Shell**:
+> 1. **Spiky Flame Cocoon:** A custom high-res sprite (`dbz_spiky_aura.png`) with 26 jagged upward flame spires and a white-hot inner core. In `Update()`, we apply high-frequency dual-Perlin noise ($24\text{–}28\text{ Hz}$) to scale and alpha, creating raging, licking fire flicker.
+> 2. **Speed-Streak Sub-Emitter:** A particle system emitting vertical stretched needle particles shooting rapidly upward from the feet past the head.
+> 3. **Dynamic Palette Tinting:** Because the base sprite is authored in master grayscale with alpha, Unity's `SpriteRenderer.color` tints it with 100% color vibrancy: Radiant Gold for Super Saiyan Goku, Electric Cyan for Base Goku meditation, and Blazing Crimson for Saitama."*
+
+---
+
+### Question 33: How do you synchronize attack animations and hitboxes with voice audio clips so moves don't finish before the character stops speaking?
+**Answer for Judges:**
+> *"In fighting games, a common immersion-breaking bug is when a character finishes their special move animation and returns to their idle stance while their voice line is still shouting in the background (e.g. Goku walking around while still screaming 'ME... HA!').
+>
+> We resolved this through **Audio-Calibrated State Timers**:
+> 1. We inspected the exact duration of each vocal asset (e.g., `goku_voice_kamehameha.wav` is $3.36\text{s}$, `consecutive_normal_punches.mp3` is $2.70\text{s}$).
+> 2. In `FighterController.cs`, we matched `attackTimer` directly to the clip duration ($3.36\text{s}$).
+> 3. We partitioned the attack into exact acoustic phases:
+>    - **Startup Phase ($2.15\text{s}$):** Goku holds his charging pose in cupped hands while shouting the chant ('KA... ME... HA... ME...').
+>    - **Active Phase ($1.21\text{s}$):** Hitbox activates and beam fires exactly as 'HA!' explodes.
+> 4. In `FighterAnimator.cs`, the 10-frame animation playback rate is mathematically derived from `(float)frames.Count / attackDuration`, ensuring the sprite sequence and audio finish at the exact same millisecond."*
+
+---
+
+### Question 34: Why was Saitama jumping erratically in his victory animation, and how did you implement his celebratory jump with single-turn round transitions?
+**Answer for Judges:**
+> *"When creating sprite animations from fighting game sprite sheets, celebratory animations often depict a dynamic gesture (e.g. crouching down, jumping high into the air with a victory punch, and landing).
+>
+> In our prototype, two flaws originally ruined this sequence:
+> 1. **Looping Incompatible Keyframes:** Because `FighterAnimator` was set to `PlayLoop`, Saitama repeatedly collapsed to the floor and sprang into the air in an erratic, continuous pogo-stick cycle for 4 seconds.
+> 2. **Rigid Round Delay:** The round manager paused for an arbitrary 4.0 seconds regardless of how long the celebration actually took.
+>
+> We resolved this through **Single-Turn Celebration & Mathematical Canvas Anchoring**:
+> 1. In `FighterAnimator.cs`, victory celebrations play via `PlayOnce` rather than `PlayLoop`, completing exactly one turn ($1.50\text{s}$ at 6 FPS) and cleanly holding the final proud pose.
+> 2. In `MatchManager.cs`, `RoundEndSequence` waits for `winnerAnimator.VictoryDuration`. The instant that single turn concludes, `CheckWinCondition()` is called, immediately initiating the next round!
+> 3. For the jump arc itself, we anchored the 9 frames mathematically on our $160 \times 160\text{px}$ canvas ($Y = 135 \to 120 \to 104 \to 135$), delivering an authentic airborne leap ($31\text{px}$ off the floor) and clean landing with zero physics jitter."*
 
 
+---
+
+### Question 35: What happens when two fighters hit each other at the exact same frame (Double-Hit Clash), and how did you prevent the game from getting permanently frozen in slow-motion?
+**Answer for Judges:**
+> *"When two fighters trade hits simultaneously in fighting games, both hitboxes trigger HitStop (a micro-freeze that drops `Time.timeScale` to $0.04\times$ physics speed for visceral impact).
+>
+> In an unshielded coroutine implementation, Hit 1 sets `Time.timeScale = 0.04f` and records `prevScale = 1.0f`. When Hit 2 lands a fraction of a second later, it cancels Hit 1's coroutine and starts a new one. The new coroutine reads `Time.timeScale`, which is ALREADY $0.04\text{f}$! When Hit 2 finishes, it restores `Time.timeScale` back to $0.04\text{f}$, trapping the entire game in slow-motion forever.
+>
+> We solved this through **Re-Entrant HitStop Management** in `VFXManager.cs`:
+> 1. We maintain an `isHitStopActive` state boolean.
+> 2. We only sample `originalTimeScale` when entering hitstop from normal gameplay (`!isHitStopActive` and `Time.timeScale > 0.1f`).
+> 3. If a second hit lands while hitstop is active, we refresh the freeze timer without overwriting the cached baseline scale.
+> 4. On completion, `Time.timeScale` safely restores to `1.0f`. We also added an `OnDisable()` safeguard to ensure timeScale never leaks across scenes."*
+
+---
+
+### Question 36: Why were knockbacks sending fighters flying off the stage, and how did you balance vertical lift across different attack types?
+**Answer for Judges:**
+> *"Our fighting arena is 17 world units wide ($X = -8.5$ to $+8.5$). Originally, our hitbox controller applied a monolithic vertical velocity of $3.2\text{ m/s}$ to every hit, alongside massive horizontal velocities ($24\text{f}$ on Serious Punch, $6\text{f}$ on each punch of Saitama's 15-hit flurry).
+>
+> This caused two gameplay issues:
+> 1. Simple light jabs launched opponents into the sky, breaking combo opportunities.
+> 2. Saitama's Consecutive Normal Punches blasted the target up and out of the flurry on punch #1, making the remaining 14 punches whiff completely.
+>
+> We resolved this by decoupling knockback into distinct horizontal and vertical components (`knockbackX` and `knockbackY` in `ConfigureAttack`):
+> - **Light Jab:** Tuned to $2.2\text{f}$ horizontal, $0.8\text{f}$ vertical for responsive ground flinching.
+> - **Saitama Flurry:** Tuned to $1.2\text{f}$ horizontal, $0.4\text{f}$ vertical. This traps and juggles the target directly in front of Saitama throughout all 15 punches.
+> - **Heavy & Ultimates:** Scaled appropriately ($5.0\text{f}$ Heavy, $8.5\text{f}$ Kamehameha, $12.0\text{f}$ Serious Punch), preserving cinematic impact without blasting fighters off-screen."*
+
+---
+
+### Question 35: How does the game guarantee that switching between Base Goku and Super Saiyan does not cause sprite popping, floating feet, or visual foot sliding?
+
+**Answer:**
+1. **Shared 128x128 Canvas & Baseline Standard (Y = 105):**
+   - In 2D pixel-art fighting games, raw sprite crops vary wildly in dimensions (e.g. an idle pose might be 34x63px, a crouch 47x40px, and a kick 63x54px).
+   - If imported with naive center/bottom pivots, the character's feet will hop vertically by 10-20px on every state change.
+   - We normalize every single frame across both Base and Super Saiyan forms onto a uniform 128x128px canvas where the lowest grounded foot pixel is pinned strictly at baseline $Y = 105$.
+   - In `FighterAnimator.cs`, `pivot` is set to `(0.5f, (128f - 105f) / 128f) = (0.5f, 0.1797f)`. This guarantees the character's feet touch the exact same world-space floor coordinate ($Y = 0$) across all animations and form transformations.
+
+2. **Fixed Back-Foot Anchoring for Directional Attacks:**
+   - When Goku executes his punch combo, his fist lunges forward by 19 pixels.
+   - Centering by image width causes the entire sprite—including the planted foot—to shift backward, causing "ice-skating".
+   - Instead, the planted back foot is locked to $X = 42$, allowing the punch to reach outward to $X = 105$ without the grounded foot budging.
+
+3. **Dynamic Frame-Rate Normalization:**
+   - Attack animations adapt their playback speed dynamically using:
+     $$\text{speed} = \frac{\text{frameCount}}{\text{moveDuration}}$$
+   - A 6-frame Super Saiyan punch flurry completes in $0.44\text{s}$ ($13.6\text{ FPS}$), while a 7-frame heavy kick sequence plays at $8.0\text{ FPS}$ over $0.88\text{s}$.
+   - The 12-frame knockout sequence unhurriedly unfolds across the full $3.8\text{s}$ slow-motion collapse window ($3.15\text{ FPS}$), perfectly synchronized with hit impacts and camera shake.
+
+4. **Godot Equivalent:**
+   - In Godot, this is equivalent to configuring an `AtlasTexture` with uniform region cell sizes or adjusting the `offset` vector on an `AnimatedSprite2D` to align the feet of each frame with the node's origin `(0, 0)`.
 
 
+---
+
+### Question 37: Why did you remove particle effects from the Ki aura, and how does the pure sprite flame cocoon work?
+**Answer for Judges:**
+> *"In 2D retro fighting games, pixel-art readability is paramount. Standard Unity particle systems emit billboarded, non-pixelated textured quads that clash with the sharp 16-bit aesthetic and obscure character silhouettes during combat.
+>
+> We replaced particle streaks with a pure sprite-driven oscillating flame shell (`FighterKiAura.cs`):
+> 1. A hand-drawn spiky flame texture (`dbz_spiky_aura.png`) wraps snugly around the fighter's silhouette, anchored at their feet.
+> 2. In `Update()`, high-frequency sine/cosine oscillation ($16\text{ Hz}$) subtly flickers the X and Y scale while alpha pulses between $0.80$ and $0.98$, perfectly simulating raging anime fire.
+> 3. Dynamic single-pass color tinting adjusts the aura to Super Saiyan Gold, Base Goku Cyan, or Saitama Crimson without any particle emitter overhead or visual noise."*
 
 
+---
+
+### Question 37: How does your tournament match system handle simultaneous Double K.O.s and Time-Out Draws without awarding an unfair win to whoever died one millisecond later?
+**Answer for Judges:**
+> *"In fighting games, simultaneous fatal hits ('trades') are common when both fighters attack at once. If your event system immediately grants the round win to whoever's death event fires first, you create an unfair race condition where Player 2 wins simply because Player 1's script happened to execute a millisecond earlier.
+>
+> We solved this through **Deferred End-of-Frame Arbitration** in `MatchManager.cs`:
+> 1. When a fighter's health reaches zero, we do not end the round immediately. Instead, we initiate a coroutine that waits for `yield return new WaitForEndOfFrame()`.
+> 2. This guarantees that all hitboxes, physics collisions, and damage events within that frame have fully resolved.
+> 3. We then inspect both fighters' health states:
+>    - If **both** are at 0 HP, we declare a **Double K.O.**: both fighters collapse into slow-mo collapse simultaneously, and both players are awarded 1 point (`p1RoundWins++`, `p2RoundWins++`).
+>    - If only one is dead, the surviving player is awarded the win.
+>
+> For time-outs where neither fighter is defeated:
+> - When the 199s timer expires, we grant a **+100s Sudden Death Overtime extension**.
+> - If both fighters survive overtime, both receive 1 point as an honorable Time-Out Draw, and the tournament proceeds to a sudden-death tiebreaker if tied at match point."*
+
+---
+
+### Question 38: Why was the round timer showing 99 even when the script had 199, and how did you implement the +100s Sudden Death Overtime extension?
+**Answer for Judges:**
+> *"This was an example of **Unity Scene Serialization Overriding Code Defaults**:
+> 1. In Unity, when a script field is serialized in the Inspector, Unity stores that value directly inside the `.unity` scene YAML file. Even if a developer updates the C# script default (`roundDuration = 199f`), loading the scene deserializes the scene's saved value (`roundDuration: 99`).
+> 2. We fixed this by synchronizing `roundDuration: 199` directly in `SampleScene.unity` and updating fallback defaults in `HUDController.cs`.
+>
+> For the **Overtime Extension**:
+> - We added an `isOvertime` state boolean in `MatchManager.cs`.
+> - In `TickRoundTimer()`, if the timer reaches 0 and both fighters have $> 0\text{ HP}$, we check `!isOvertime`.
+> - We set `roundTimer = 100f`, set `isOvertime = true`, fire `OnOvertimeStarted`, and trigger a screen flash and camera shake.
+> - The HUD controller catches this event, changes the timer digits to Warning Gold (`#FFD726`), and updates the round title to 'OVERTIME • SUDDEN DEATH'."*
+
+---
+
+### Question 36: Why can traditional fighting game hitstop (freeze frames) break rapid multi-hit moves like flurry punches, and how did you resolve it?
+
+**Answer:**
+1. **The Multi-Hit Hitstop Trap:**
+   - In 2D fighting games, **HitStop** (impact pause) momentarily drops `Time.timeScale` to near-zero (e.g., $0.04	ext{f}$ for $0.065	ext{s}$) to give single heavy strikes weight and impact crunch.
+   - However, when applied to a rapid-fire flurry (like Saitama's 10-punch Consecutive Normal Punches), triggering hitstop on every single punch causes $10 	imes 0.065	ext{s} = 0.65	ext{s}$ of freeze time. Because the physics simulation is virtually paused, the game engine stutters violently and feels unresponsive.
+2. **Selective Hitstop Parameterization:**
+   - In `HitboxController.cs` and `VFXManager.cs`, we parameterized `enableHitStop` and `shakeMultiplier`.
+   - Single heavy blows (e.g., Serious Punch, Kamehameha) retain full hitstop ($0.065	ext{s}	ext{–}0.09	ext{s}$) and camera shake.
+   - Rapid-fire flurries explicitly set `enableHitStop = false`, keeping `Time.timeScale = 1.0f` (100% full speed) while triggering light visual sparks and an attenuated 20% camera vibration.
+3. **Discrete Hit Budgeting via Staggered Timers:**
+   - Rather than relying on continuous collider overlap, `FighterController.cs` maintains a strict hit budget (`flurryHitsRemaining = 10`) and pulse timer (`flurryHitTimer = 0.23f`).
+   - Every $0.23	ext{s}$, `HitboxController.ResetHitTargets()` allows exactly one new punch to register ($2	ext{ damage}$, $0.35	ext{m/s}$ micro-knockback), cleanly shutting down the hitbox once the 10-punch quota is met.
+4. **Godot Equivalent:**
+   - In Godot, you avoid calling `Engine.time_scale` inside the `area_entered` callback for multi-hit flurries, using an animated `MethodCallTrack` or repeating `Timer` to pulse `Area2D.monitoring` for $N$ discrete damage ticks.
 
 
+---
 
+### Question 39: How did you implement Goku's Kamehameha beam to ensure it looks like authentic DBZ anime and hits targets once across the entire screen without infinitely grinding their health?
+**Answer for Judges:**
+> *"In fighting games, implementing full-screen beam attacks requires solving two distinct challenges: visual authenticity and hitbox arbitration.
+>
+> 1. **Visual Authenticity (Two-Phase Anime Staging):**
+>    - **Charge Phase (2.15s):** Goku draws his cupped hands back to his hip while chanting 'KA... ME... HA... ME...'. We spawn a pulsing Ki sphere (`kamehameha_charge_orb.png`) that expands from a spark to a crackling electric cyan sphere at his palms.
+>    - **Blast Phase (1.21s):** On 'HA!', the orb erupts into a solid light-blue energy beam composed of three coordinated layers: an origin muzzle flare, a thick horizontal energy cylinder (`kamehameha_beam_body.png`) with an ultra-white core and cyan outer plasma, and an aerodynamic leading dome head (`kamehameha_beam_head.png`). We add camera rumble (0.30 intensity) and a 2-frame impact flash.
+> 2. **Single-Hit AoE Arbitration:**
+>    - Because the beam persists on screen for 1.21 seconds, a standard trigger would deal damage every frame (over 70 hits!).
+>    - In `HitboxController.cs`, we register struck targets in a `HashSet<Transform> hitTargetsThisSwing`.
+>    - When the opponent enters any part of the 8.5m beam, they take the full 45 damage and normal knockback (8.5f X / 2.2f Y) exactly once. They are immediately recorded in the set, preventing multi-frame hit recursion."*
+
+---
+
+### Question 40: Why did you use Left-Center sprite pivots for the beam shaft, and how does the interruption-safe architecture work?
+**Answer for Judges:**
+> *"Unity sprites default to a center pivot `(0.5f, 0.5f)`. If you scale a center-pivoted beam horizontally, it expands in both directions, protruding through the back of the character.
+> By authoring the sprite with a **Left-Center pivot (`0.0f, 0.5f`)**:
+> - The origin is anchored to Goku's palms.
+> - Setting scale $X$ directly extends the beam forward across the arena.
+> - Flipping direction is as simple as multiplying scale $X$ by `facingDir` (-1 or +1), automatically adapting to Goku facing left or right.
+>
+> For **Interruption Safety**:
+> In `KamehamehaBeamVFX.cs`, the component continuously inspects `FighterController.CurrentState`. If Goku takes a counter-hit or gets knocked down while charging or firing, `CurrentState` changes to `HitStun` or `Knockout`. The VFX component detects this on the exact same frame and instantly deactivates all beam and charge sprites, ensuring no floating beams remain on stage."*
+
+---
+
+### Question 41: How did you implement Goku's Super Saiyan transformation to ensure zero delay, zero accidental damage, and immediate transition to the Super Saiyan Idle stance?
+
+**Answer:**
+1. **The Fighting Game Problem:**
+   In anime and competitive fighting games, transformation mechanics (like Dragon Ball Z's Super Saiyan or Guilty Gear's Dragon Install) serve as power-ups rather than offensive strikes. If implemented through a standard `FighterState.Skill` state machine branch, two critical issues arise:
+   - **Unintended Hitbox Damage:** Standard skill states often configure offensive hitboxes. Goku could damage an opponent simply by powering up in place, conflicting with the canonical nature of the move.
+   - **Animation Lockout & Asset Drift:** If old prototype animation frames (`skill_0..3.png`) linger in the directory, the animator plays an outdated attack sequence before transitioning, causing a jarring visual delay before the player sees the Super Saiyan form.
+
+2. **The Direct Ascension Solution in `FighterController.cs`:**
+   When Goku presses Skill (`E` / `U`), the transformation pipeline executes an atomic transition:
+   ```csharp
+   if (isGoku)
+   {
+       if (!isSuperSaiyan) ActivateSuperSaiyan(15f);
+       else { superSaiyanTimer = 15f; fighterAudio?.StartKiMeditationAura(); }
+
+       if (attackHitbox != null) attackHitbox.Deactivate();
+       attackTimer = 0.0f;
+       attackStartupTimer = 0.0f;
+       attackActiveTimer = 0.0f;
+       flurryHitsRemaining = 0;
+       TransitionTo(FighterState.Idle);
+       return;
+   }
+   ```
+   - **`attackHitbox.Deactivate()` & Zeroed Timers:** Guarantees zero damage and zero active hitboxes.
+   - **`TransitionTo(FighterState.Idle)`:** Instead of locking into an attack animation, Goku directly enters `Idle`.
+   - **Same-Frame Visual Switch in `FighterAnimator.cs`:** Because `isSuperSaiyan` is immediately set to `true`, `UpdateAnimation()` evaluates `GetFrames(ssjIdleFrames, idleFrames)`. On that very same frame, the renderer swaps to `ssjIdleFrames[0]`, presenting Goku instantly in his golden Super Saiyan stance with the crackling aura with zero ms delay.
+   - **Asset Cleanliness:** All legacy `skill_*.png` frames were purged from Goku's runtime directory, eliminating redundant disk overhead and preventing sprite loader fallbacks.
+
+3. **Comparison to Godot:**
+   In Godot, this is equivalent to an `AnimationTree` with a blend state or a state machine where entering `Ascend` immediately updates an exported boolean `is_super_saiyan = true` and transitions the state machine back to `Idle` on the same frame, while calling `get_node("Hitbox").monitoring = false`.
+
+
+---
+
+## Question 38: Why was the text in the Pause and Victory menus rendering as solid colored rectangles/blocks, and how does TextMeshPro's Distance Field shader work?
+
+### Short Answer (30-second elevator pitch):
+"TextMeshPro uses Signed Distance Field (SDF) shaders where each pixel in the font atlas represents the distance to the letter's edge. Our retro font asset materials had their `_MainTex` property disconnected (`fileID: 0`), so Unity bound a default white 1x1 dummy texture. When the shader sampled this dummy texture, every pixel returned maximum distance ($1.0 > 0.5$), making the shader evaluate that every point inside the character quad was solid ink. We solved this by reconnecting `_MainTex` to the atlas sub-asset in YAML, configuring `LiberationSans SDF` as an automatic fallback for missing glyphs, sanitizing all strings to ASCII, and adding a runtime self-healing validation method in `CombatMenuController`."
+
+### Detailed Technical Explanation:
+
+1. **How SDF Font Rendering Works:**
+   - In traditional bitmap fonts, characters are pixel grids that become blurry or pixelated when enlarged.
+   - TextMeshPro pre-computes a mathematical distance transform for every character. Pixels inside the glyph have positive distance values; pixels outside have negative distance values.
+   - The GPU fragment shader evaluates:
+     ```hlsl
+     float distance = tex2D(_MainTex, i.uv).a;
+     float alpha = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance);
+     ```
+   - If distance $> 0.5$, the pixel is inside the glyph contour and rendered opaque.
+
+2. **The Root Cause of the Solid Block Bug:**
+   - TextMeshPro font assets store the `TMP_FontAsset`, `Texture2D`, and `Material` as sub-assets inside the `.asset` file.
+   - In `ArcadeClassic_SDF.asset` and `RetroGaming_SDF.asset`, the Material's `m_TexEnvs._MainTex.m_Texture` was set to `{fileID: 0}`.
+   - When Unity renders a material with a null `_MainTex`, it passes an internal $1 \times 1$ white texture where $\alpha = 1.0$.
+   - Because distance is evaluated as $1.0 > 0.5$ across 100% of the character quad, the shader renders the **entire bounding rectangle** of each letter as solid color.
+
+3. **Incomplete Font Atlases & Missing Glyphs:**
+   - Retro fonts like `Arcade Classic` only bake uppercase letters (`!12:ACDEGHIKLMNOPRSTUWY_`) and lack digits `0, 3-9` and symbols.
+   - When a font has no fallback configured in `m_FallbackFontAssetTable`, missing characters render as tofu boxes.
+   - We resolved this by chaining `LiberationSans SDF` as an explicit fallback in YAML and C#, ensuring missing glyphs always render cleanly.
+
+4. **Comparison to Godot:**
+   In Godot, font rendering is handled by `FontFile` and `FontVariation` resources. Godot manages MSDF textures and shader parameters under the hood without exposing sub-asset materials that can lose their texture pointers. Fallbacks in Godot are set directly via `FontFile.fallbacks = [fallback_font]`, allowing Godot to traverse the fallback chain automatically.

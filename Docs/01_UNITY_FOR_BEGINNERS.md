@@ -1039,3 +1039,190 @@ Never rely solely on an event if the underlying system has a persistent state!
 
 
 
+
+
+---
+
+## 40. TimeScale Corruption, Nested Coroutines & Knockback Vectors (Godot vs Unity)
+
+### The Beginner Trap: Storing `Time.timeScale` Inside an Interrupted Coroutine
+In fighting games, "HitStop" (a micro-freeze of $0.05\text{s}\text{--}0.08\text{s}$ upon hit impact) gives attacks visceral weight.
+Developers typically implement this with a Unity coroutine:
+```csharp
+private IEnumerator DoHitStop(float duration) {
+    float prevScale = Time.timeScale;
+    Time.timeScale = 0.04f;
+    yield return new WaitForSecondsRealtime(duration);
+    Time.timeScale = prevScale;
+}
+```
+**The Deadly Bug (Simultaneous Clash):**
+1. Player 1 hits Player 2 $\rightarrow$ Coroutine 1 starts. `prevScale` is recorded as `1.0f`. `Time.timeScale` becomes `0.04f`.
+2. Player 2 hits Player 1 on the exact same frame or during the hitstop $\rightarrow$ `StopCoroutine(activeHitstop)` cancels Coroutine 1.
+3. Coroutine 2 starts. It executes:
+   ```csharp
+   float prevScale = Time.timeScale; // Time.timeScale is ALREADY 0.04f!
+   ```
+4. Coroutine 2 finishes and runs:
+   ```csharp
+   Time.timeScale = prevScale; // Sets Time.timeScale to 0.04f PERMANENTLY!
+   ```
+5. **Result:** The game runs at $4\%$ speed forever!
+
+### The Solution: Re-Entrant HitStop Management
+Never sample `Time.timeScale` while a HitStop is already active!
+- Maintain an `isHitStopActive` boolean and cache `originalTimeScale` (defaulting safely to `1.0f`).
+- Only sample `originalTimeScale` when `!isHitStopActive` and `Time.timeScale > 0.1f`.
+- If an overlapping hitstop arrives, refresh the timer without overwriting the clean baseline.
+- Add an `OnDisable()` safeguard so scene transitions or component toggles always restore `Time.timeScale = 1.0f`.
+
+### Knockback Vectors: Why 2D Fighters Need Decoupled X and Y Velocities
+- If an attack engine sets `linearVelocity = new Vector2(knockbackX, 3.2f)`, every light jab pops the opponent into the sky with $3.2\text{ m/s}$ vertical lift.
+- Light jabs should flinch horizontally ($2.2\text{f}$) with minimal lift ($0.8\text{f}$).
+- Multi-hit flurry moves (like Saitama's Consecutive Normal Punches) must have low horizontal knockback ($1.2\text{f}$) and gentle lift ($0.4\text{f}$) so the opponent stays trapped inside the flurry rather than rocketing out on hit 1.
+
+> **Godot Comparison:**
+> In **Godot**, you modify `Engine.time_scale` for hitstop, and create a realtime timer via `await get_tree().create_timer(duration, true, false, true).timeout` (`ignore_time_scale = true`). Just like in Unity, if multiple timers overlap, overwriting a local `var prev_scale = Engine.time_scale` causes permanent slow-mo. Godot developers maintain a stateful `HitStopManager` Autoload that preserves the clean baseline scale.
+
+---
+
+## 41. Single-Turn Animation Pacing, Sprite Jumps & Particle Hygiene (Godot vs Unity)
+
+### The Mistake: Looping Non-Loopable Celebrations
+In fighting games, characters perform celebratory gestures upon winning a round (e.g., Goku's thumbs-up, Saitama's celebratory jump and fist pump).
+A common rookie mistake is setting the animator to `PlayLoop` during a fixed duration hold (e.g., 4.0 seconds):
+1. **The Pogo-Stick Trap:** If an animation contains a jump (squat $\to$ leap $\to$ land $\to$ pose), running it in a loop causes the character to continuously jump, land, jump, land over and over like a pogo stick.
+2. **The Stagnant Hold:** If the animation is frozen or looped endlessly, the pacing feels sluggish as players wait around doing nothing before the next round begins.
+
+### The Solution: Single-Turn Animation Completion
+1. **PlayOnce Architecture:** Set victory animations to `PlayOnce`. The sequence plays from frame $0$ through $N-1$, holding cleanly on the final triumphant frame.
+2. **Dynamic Duration Derivation:** Derive the exact round-end transition duration dynamically:
+   $$\text{VictoryDuration} = \frac{\text{FrameCount}}{\text{FPS}}$$
+3. **Instant Next-Round Transition:** As soon as the animation completes its single turn, `MatchManager` immediately starts the next round. The flow is crisp, dynamic, and arcade-authentic.
+
+### Sprite-Based Jump Offsets vs Physics Leaps
+When a character jumps in a post-round celebration:
+- **Rookie Approach (Physical Rigidbody Impulse):** Applying physics velocity (`rb.linearVelocity.y = 8f`) can cause the winner to land on top of the fallen opponent's collider, slide awkwardly down slopes, or jitter against boundaries.
+- **Pro Approach (Mathematical Canvas Anchoring):** Anchor the sprite frames relative to the ground baseline ($Y = 135$ on a $160 \times 160\text{px}$ canvas):
+  - **Squat windup:** Feet at $Y = 135$ (solid ground).
+  - **Takeoff:** Feet launch to $Y = 120$ ($15\text{px}$ above ground).
+  - **Mid-air Apex:** Feet peak at $Y = 104$ ($31\text{px}$ airborne) while the arm punches the sky.
+  - **Landing & Pose:** Feet touch down at $Y = 135$ (ground impact) and hold.
+  - *Result:* Zero physics collision bugs, perfect deterministic timing, and flawless landing.
+
+### Particle Hygiene: When Pure Sprite Cocoon Trumps Particle Systems
+Many beginners think adding more `ParticleSystem` emitters makes every effect look better. In retro pixel-art games:
+- Particle emitters often emit blurred, unscaled particles that clash with razor-sharp pixel grids.
+- Speed streaks floating around a fighter's body can obscure character silhouettes and readability.
+- A well-crafted oscillating sprite cocoon (`dbz_spiky_aura.png`) with sine/cosine scale flickering and alpha ping-ponging produces authentic anime fire while keeping the scene visually clean and performant.
+
+> **Godot Comparison:**
+> In **Godot**, you achieve single-turn celebration pacing using `AnimatedSprite2D` or `AnimationPlayer`:
+> ```gdscript
+> # Play victory animation once without looping
+> $AnimatedSprite2D.play("victory")
+> await $AnimatedSprite2D.animation_finished
+> # Next round starts immediately the moment the turn completes!
+> MatchManager.start_next_round()
+> ```
+> Deleting the particle streaks corresponds to removing a `GPUParticles2D` child node and keeping only a `Sprite2D` flame aura with a custom shader or scale `Tween`.
+
+
+---
+
+## 41. Round Timers, Sudden Death Overtime Extensions & Double-KO Arbitration (Godot vs Unity)
+
+### The Beginner Trap: Resolving Fatal Events Immediately on the First Event Call
+In fighting games, two fighters attacking at the same time can both hit and kill each other in the exact same physics frame.
+If you wire an immediate callback:
+```csharp
+private void HandleP1Death() => EndRound(winner: 2);
+private void HandleP2Death() => EndRound(winner: 1);
+```
+- **The Trap:** If Player 1's death event fires first by $1\text{ millisecond}$ (due to internal collection iteration order), Player 2 is immediately declared the winner!
+- Player 2's death event is either ignored because `currentMatchState` is already `RoundEnd`, or Player 2 gets awarded a win while collapsing into a corpse on the floor!
+
+### The Professional Solution: End-of-Frame Arbitration
+Never crown a winner on the very first death notification!
+1. When either fighter dies, schedule a coroutine that waits for `yield return new WaitForEndOfFrame()`.
+2. This allows all damage calculations, counter-hits, and health updates across both fighters during that physics frame to resolve cleanly.
+3. At the end of the frame, inspect both fighters:
+   - If **both** are dead $\rightarrow$ Declare **Double K.O.!** Both fighters collapse into slow-mo knockout, and both players receive $1\text{ point}$.
+   - If only one is dead $\rightarrow$ Award the round win to the surviving fighter.
+
+### The Sudden Death Overtime Extension Pattern
+- If neither fighter is knocked out when the $199\text{s}$ round timer expires:
+  - Do not arbitrarily hand a victory to higher HP!
+  - Grant an **Overtime / Sudden Death Extension of $+100\text{s}$**.
+  - Flash the HUD timer in Warning Gold (`#FFD726`) and announce Sudden Death.
+- If the extra $100\text{s}$ expires and both fighters **still remain undefeated**:
+  - The round ends in an honorable **Time-Out Draw**.
+  - Both fighters receive $1\text{ point}$ (`p1RoundWins++` and `p2RoundWins++`), neither collapses, and the match proceeds to the next round or sudden-death tiebreaker!
+
+> **Godot Comparison:**
+> In **Godot**, you achieve end-of-frame arbitration by using `call_deferred("_evaluate_round_end")` when a `died` signal is received, or checking both fighters' health states inside `_physics_process(delta)` after `move_and_slide()` and hit detection have run for all scene tree nodes.
+
+
+---
+
+## 42. Layered Anime Energy Beams, Multi-Sprite Assemblies & Single-Hit AoE Colliders (Godot vs Unity)
+
+### The Multi-Sprite Beam Assembly Pattern
+In 2D fighting games (such as *Dragon Ball FighterZ* and *Jump Ultimate Stars*), a cinematic energy beam cannot be rendered as a simple stretched rectangle. To achieve authentic anime weight, it is constructed from four coordinated sprite layers:
+1. **The Charge Orb:** A radial Ki sphere (`kamehameha_charge_orb.png`) gathering at the attacker's cupped palms during the voice chant ("KA... ME... HA... ME...").
+2. **The Muzzle Flare:** A bright starburst flare (`kamehameha_muzzle_flare.png`) anchored at the palm release point.
+3. **The Beam Shaft:** A horizontal energy cylinder (`kamehameha_beam_body.png`) with an ultra-white core encased in electric cyan plasma, scaled along the $X$-axis.
+4. **The Leading Impact Head:** An aerodynamic energy dome (`kamehameha_beam_head.png`) capping the forward tip of the beam.
+
+### The Left-Center Pivot Trick (`Vector2(0.0f, 0.5f)`)
+- **The Beginner Trap:** By default, Unity sprites use a center pivot `(0.5f, 0.5f)`. If you scale a beam with a center pivot, the beam expands equally backwards through the fighter's back as it does forwards!
+- **The Solution:** Set the sprite pivot to **Left-Center (`0.0f, 0.5f`)**:
+  - The left edge remains permanently locked to the fighter's hands.
+  - Scaling $X$ directly extends the beam forward across the stage.
+  - Multiplying scale $X$ by `facingDir` ($-1$ or $+1$) automatically mirrors the entire beam when facing left or right with zero math overhead.
+
+### Single-Hit AoE vs Multi-Hit Drilling
+- When an attack beam stays on screen for $1.21\text{ seconds}$ (over 70 frames at 60 FPS), an unshielded trigger collider will deal damage 70 times, instantly annihilating any fighter in its path.
+- **Single-Hit AoE Guarantee:** In `HitboxController.cs`, we register hit targets in a `HashSet<Transform> hitTargetsThisSwing`. When an opponent touches any part of the $8.5\text{m}$ beam, they take the $45\text{ damage}$ once, receive normal knockback ($8.5\text{f}, 2.2\text{f}$), and enter hitstun. Subsequent frames ignore them because their transform is already in the set!
+
+> **Godot Comparison:**
+> In **Godot**, a beam is commonly built using a `Line2D` with a `Gradient` texture and texture mode `TILE` or `STRETCH`, or an `Area2D` containing child `Sprite2D` nodes with `offset` set to `(width / 2, 0)` to emulate left-aligned pivoting. Single-hit detection is handled by tracking hit bodies in an `Array` during the `body_entered` signal.
+
+
+---
+
+## 33. TextMeshPro, Font Assets, and the "Solid Block" Bug (Why Text Turned Into Filled Boxes)
+
+### How TextMeshPro Actually Draws Text (Signed Distance Fields - SDF)
+Unlike traditional 2D game text which draws low-resolution bitmaps that get blurry when scaled up, modern engines use **Signed Distance Field (SDF)** rendering:
+1. When you bake a font in Unity, it doesn't store standard pixels. Instead, it generates a high-resolution gradient texture where each pixel's alpha channel stores the **distance to the nearest edge of the letter**.
+2. Inside the letter, distance is high ($1.0$); outside the letter, distance is low ($0.0$). The exact contour/edge of the letter is precisely at $0.5$.
+3. When rendering on screen, a special GPU pixel shader samples this texture and applies a threshold function:
+   $$\text{alpha} = \text{smoothstep}(0.5 - \text{smoothing}, 0.5 + \text{smoothing}, \text{distance})$$
+   Because it's mathematical distance rather than raw pixels, text remains razor-sharp at 4K resolutions or when zoomed in!
+
+### The Three-Part Font Asset Structure
+Inside Unity, a TextMeshPro font asset file (e.g., `ArcadeClassic_SDF.asset`) contains **three separate sub-assets** bundled together:
+1. **`TMP_FontAsset` (Class 114):** The metadata table containing character codes, glyph sizes, UV coordinates, and line heights.
+2. **`Texture2D` (Class 28):** The 1024x1024 grayscale distance-field bitmap.
+3. **`Material` (Class 21):** The material running the `TextMeshPro/Distance Field` shader.
+
+### The Rookie Trap: The Disconnected `_MainTex`
+When font assets are created or copied improperly, the internal YAML link between the `Material` and the `Texture2D` can break, setting:
+```yaml
+- _MainTex:
+    m_Texture: {fileID: 0}   # Null reference!
+```
+- When `_MainTex` is null, Unity supplies a default solid white $1 \times 1$ pixel dummy texture.
+- Every single pixel sampled by the GPU returns a distance value of $1.0$.
+- Because $1.0 > 0.5$, the shader calculates that **every single pixel inside the character's bounding quad is solid ink**.
+- **Result:** Instead of rendering the outline of letters like 'P', 'A', 'U', 'S', 'E', 'D', TextMeshPro draws **solid, filled colored rectangles**!
+
+### Why Missing Glyphs Turn Into "Tofu" Boxes
+Many retro arcade fonts (like `Arcade Classic` or `Retro Gaming`) only contain uppercase English letters and a few punctuation marks:
+- If a menu tries to print characters not present in the font atlas (such as special Unicode symbols like `▶`, `◀`, `★`, `—`, `•`, or missing lowercase letters), TextMeshPro cannot find the glyph.
+- If the font's `m_FallbackFontAssetTable` is empty, TMP draws the "missing character" glyph (a square tofu box).
+- Combined with a broken material texture, that square tofu box is rendered as a solid colored block!
+
+> **Godot Comparison:**
+> In **Godot Engine**, font handling is managed through `FontFile` and `FontVariation` resources. Godot automatically binds MSDF (Multi-channel Signed Distance Field) textures under the hood inside `CanvasItem` without exposing disconnected sub-asset materials. In Godot, you configure fallback fonts using `FontFile.fallbacks = [fallback_font]`. If a glyph is missing, Godot automatically walks down the array to find the character in the fallback font.

@@ -871,12 +871,298 @@ Ensures that the arena combat soundtrack (*Double Dragon 2 - Final Battle 2*) be
 4. **Explicit State Setting in MatchManager:**
    - In [`MatchManager.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchManager.cs), `StartMatch()` explicitly sets `GameManager.Instance.SetState(GameState.InMatch)` to keep game state synchronized across the engine.
 
+---
+
+## 21. Super Saiyan Transformation Mode (Goku Special Skill)
+
+### Feature Overview:
+In *Mystic Combat: Animeverse Incursion*, Goku's special skill (`U` key / `E` key) is not a generic projectile — it is a mid-match transformation into **Super Saiyan**!
+
+### Combat Parameters & Tuning:
+- **Activation Cost:** 35 Ki (requires at least 35% of energy gauge).
+- **Transformation Startup:** 0.65s roar pose with golden Ki aura activation (`dbz_super_saiyan_aura.mp3`).
+- **Form Duration:** 15.0 seconds.
+- **Combat Multipliers:**
+  - **Movement Speed:** $+25\%$ linear velocity multiplier.
+  - **Damage:** $+25\%$ damage output on all punches, kicks, and strikes.
+  - **Visual:** Golden spiky hair and pulsing Ki aura.
+- **Auto-Reversion:**
+  - Automatically reverts to Base Goku when the 15-second timer expires.
+  - Automatically reverts if a round ends (via `ResetForNewRound`).
+
+---
+
+## 30. Dramatic 4-Phase Slow-Mo Knockout & Staggered Victory Flow (`MatchManager.cs`, `FighterAnimator.cs`)
+
+### Feature Overview:
+In arcade fighting classics like *Street Fighter III: 3rd Strike*, *Guilty Gear*, and *Dragon Ball FighterZ*, the final blow that finishes a round is never cut off instantly. It is given dramatic, cinematic weight.
+
+### The 4-Phase Sequence:
+1. **Phase 1: Cinematic Slow-Motion Collapse (1.8s Real-Time)**
+   - Defeated character immediately enters `FighterState.Knockout`.
+   - Engine slows down to slow motion (`Time.timeScale = 0.28f`).
+   - Impact flash (white overlay for $0.12\text{s}$) and camera shake ($0.40$ intensity).
+   - Defeated fighter plays their full multi-frame knockdown animation (11 frames for Goku, 5 frames for Saitama) in slow motion as they fly back and collapse.
+   - `FighterAnimator.cs` plays this using `unscaled: true` so the sprite frame rate remains fluid and uninterrupted over the 1.8-second slow-motion window.
+2. **Phase 2: Floor Impact & Normalization**
+   - The moment the character's body strikes the arena floor, `Time.timeScale` snaps back to $1.0\text{f}$ normal speed.
+   - A ground dust puff and secondary impact camera shake trigger at the landing coordinates.
+3. **Phase 3: Staggered Victorious Celebration (Single Turn)**
+   - Winner transitions to `FighterState.Victory`.
+   - Defeated character remains lying flat on the mat (pinned on their final knockout frame).
+   - Victorious character performs their full celebratory animation once (thumbs up for Goku, 9-frame jump celebration for Saitama).
+4. **Phase 4: Exact Single-Turn Duration Hold (`VictoryDuration`)**
+   - The engine waits exactly for the character's single-turn victory animation to complete ($1.50\text{s}$ for Saitama, $1.00\text{s}$ for Goku) via `anim.VictoryDuration`.
+   - The instant that turn finishes, `MatchManager` immediately initiates the next round (or advances to the match-over screen if tournament is clinched).
+
+---
+
+## 31. DBZ Spiky Flame Cocoon & Speed-Streak Ki Aura System (`FighterKiAura.cs`)
+
+### Feature Overview:
+Replaces generic soft particles with the authentic Dragon Ball Z Super Saiyan flame cocoon matching Akira Toriyama's manga and anime aesthetic.
+
+### Visual Architecture:
+1. **Jagged Spiky Flame Cocoon:**
+   - Custom sprite texture (`Assets/Sprites/Effects/dbz_spiky_aura.png`) featuring 26 jagged upward flame spires and an intense white-hot energy core.
+   - Fluctuates and flickers rapidly ($24\text{–}28\text{ Hz}$) using dual Perlin oscillation to simulate turbulent licking fire.
+   - Pulsing alpha energy envelope ($0.80\text{–}0.98$).
+2. **Clean Pure-Sprite Anime Cocoon (Zero Emitter Clutter):**
+   - Particle streaks were removed to eliminate visual clutter and ensure hand-crafted pixel art fighters remain crisp and legible at all times.
+   - Ground baseline rests cleanly at the fighter's feet without dipping below the floor plane.
+3. **Dynamic Color Adaptation:**
+   - **Super Saiyan Goku:** Radiant DBZ Gold (`Color(1.0f, 0.88f, 0.22f)`).
+   - **Base Goku Meditation:** Electric Cyan (`Color(0.18f, 0.85f, 1.0f)`).
+   - **Saitama Pressure:** Blazing Crimson (`Color(1.0f, 0.18f, 0.15f)`).
+
+---
+
+## 32. Kamehameha 16px Stray Rip Artifact Fix & Zero-Skate Foot Anchoring
+
+### The Bug:
+In `Frames_Raw/ultimate_1..3.png`, 6 stray pixels from the adjacent sprite on the original sprite sheet were ripped at $Y = 73..74$. Because the standard canvas tool aligned bounding-box bottoms to baseline $Y = 105$, these 6 pixels pushed Goku's actual feet (at $Y = 58$) up into the air by 16 pixels. During charge frames, Goku hopped into the sky and slammed down on frame 4. Furthermore, blind horizontal centering caused foot skating.
+
+### The Fix:
+1. Cropped all raw frames strictly at $Y < 60$, stripping the 16px bottom rip artifact completely.
+2. Anchored the planted back foot to fixed canvas coordinates ($X = 41$, $Y = 105$ on a $128 \times 128$ canvas).
+3. Zero vertical hopping, zero horizontal foot skating across all 10 Kamehameha frames (`ultimate_0..9`).
+
+---
+
+## 33. Super Saiyan State Restrictions & 199s Round Timer Pacing
+
+### Super Saiyan Meditation Guard:
+- In anime canon, Super Saiyan is an explosive, raging combat form; Goku cannot calmly meditate to charge Ki while ascended.
+- In [`FighterController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs), meditation input is guarded: `if (inputHandler.MeditateHeld && IsGrounded && !isSuperSaiyan)`.
+- If meditation is active during transformation, the fighter immediately cancels meditation and transitions to Idle.
+
+### 199s Round Timer Pacing:
+- Set `roundDuration = 199f` in `MatchManager.cs`. Matches have ample time for deliberate neutral spacing, footsies, and strategic Ki management without artificial rushing.
 
 
+---
+
+## 34. Tuned Combat Knockback & Saitama Flurry Speed Normalization
+
+### 1. Knockback Rebalancing Across All Moves
+To prevent fighters from rocketing across the 17-unit arena floor into invisible boundary walls, horizontal and vertical knockback velocities were balanced:
+
+| Move | Character | Old Knockback (X, Y) | Tuned Knockback (X, Y) | Combat Feel / Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **Light Attack** | Both | $4.5\text{f},\ 3.2\text{f}$ | $\mathbf{2.2f},\ \mathbf{0.8f}$ | Fast, snappy jab; flinches opponent without launching them into air. |
+| **Heavy Attack** | Both | $8.0\text{f},\ 3.2\text{f}$ | $\mathbf{5.0f},\ \mathbf{2.0f}$ | Crushing blow; creates solid spacing and wall stagger. |
+| **Consecutive Punches** | Saitama (Skill) | $6.0\text{f},\ 3.2\text{f}$ (per hit!) | $\mathbf{1.2f},\ \mathbf{0.4f}$ | Traps the opponent in a sustained juggle barrage for all 15 punches. |
+| **Kamehameha** | Goku (Ultimate) | $14.0\text{f},\ 3.2\text{f}$ | $\mathbf{8.5f},\ \mathbf{2.2f}$ | High-impact energy blast pushing opponent to arena edge. |
+| **Serious Punch** | Saitama (Ultimate) | $24.0\text{f},\ 3.2\text{f}$ | $\mathbf{12.0f},\ \mathbf{3.0f}$ | Devastating screen-clearing knockout punch staying within bounds. |
+
+### 2. Saitama Forward Speed in Consecutive Normal Punches
+- **Previous Behavior:** Moved forward at `1.5f` velocity continuously for $2.70\text{s}$ ($4.05\text{ units}$ of distance), causing Saitama to skate past opponents.
+- **Tuned Behavior:** Forward flurry velocity tuned to `0.60f` ($1.62\text{ units}$ total), giving Saitama an intimidating, steady anime martial artist advance.
 
 
+---
+
+## 34. Saitama Celebratory Jump Arc & Single-Turn Round Transition (`FighterAnimator.cs`, `MatchManager.cs`)
+
+### Feature Overview:
+Restores Saitama's authentic 9-frame celebration sequence where he squats, springs into the air with a triumphant punch into the sky, lands on the mat, and raises his fist in victory—tuned to play for exactly one turn and immediately trigger the next round.
+
+### The 9-Frame Mathematical Jump Arc:
+All frames are normalized on a $160 \times 160\text{px}$ canvas with the ground baseline at $Y = 135$:
+1. **Frames 0–2 (Squat Windup):** Feet anchored to $Y = 135$. Saitama coils low into a compact spring ($H = 34\text{px} \to 25\text{px}$).
+2. **Frame 3 (Ascending Leap):** Springs upward with feet leaving the ground at $Y = 120$ ($15\text{px}$ above baseline).
+3. **Frame 4 (Apex Mid-Air Punch):** Peak airborne frame! Knees bent in mid-air with feet at $Y = 104$ ($31\text{px}$ above ground), right gloved fist thrusting high into the sky ($Y = 57$).
+4. **Frame 5 (Impact Landing):** Lands firmly back on the ground canvas ($Y = 135$) with cape billowing upward from kinetic momentum.
+5. **Frames 6–7 (Cape Settling):** Settles gracefully into stance as the cape flutters ($Y = 135$).
+6. **Frame 8 (Triumphant Fist Pump):** Stays standing proudly in his heroic victory pose with fist raised ($Y = 135$).
+
+### The Single-Turn Arcade Pacing:
+- In `FighterAnimator.cs`, `FighterState.Victory` executes via `PlayOnce` rather than `PlayLoop`.
+- In `MatchManager.cs`, `RoundEndSequence` waits for `anim.VictoryDuration` (derived as $\frac{\text{FrameCount}}{\text{FPS}} = \frac{9}{6.0} = 1.50\text{s}$).
+- The instant that single turn concludes, `CheckWinCondition()` immediately fires `StartRound()` without any awkward pause or repetitive bouncing.
+
+---
+
+## 35. Super Saiyan Complete Animation Suite & Zero-Jitter Baseline Synchronization (`Frames_SSJ/`)
+
+### Feature Overview
+Integrates a complete 44-frame custom pixel-art animation suite for Goku's Super Saiyan form, standardizing all frames onto $128 \times 128\text{px}$ transparent canvases with a strict ground plane baseline at $Y = 105$.
+
+### Track-by-Track Mathematical Synchronization:
+1. **Idle Cycle (`idle_0..3.png` - 4 Frames @ 5 FPS):**
+   - Height: $63\text{–}65\text{px}$, Width: $34\text{–}37\text{px}$.
+   - Stance center balanced at $X = 64$.
+   - Ground contact pinned at $Y = 105$. Breathing cycle oscillates at 5 FPS matching Base Goku's breathing rhythm.
+
+2. **Walk/Dash Cycle (`walk_0..5.png` - 6 Frames @ 8 FPS):**
+   - Height: $39\text{–}43\text{px}$, Width: $53\text{–}63\text{px}$.
+   - Goku's iconic low-profile forward ninja sprint from Jump Ultimate Stars.
+   - Feet anchored to $Y = 105$. Runs at 8 FPS smoothly synchronized with horizontal physics velocity.
+
+3. **Light Punch Flurry (`punch_0..5.png` - 6 Frames @ 13.6 FPS):**
+   - Height: $50\text{–}54\text{px}$.
+   - **Fixed Back-Foot Anchoring:** Planted back foot locked to $X = 42$ while the front punching fist extends forward from $X = 85$ to $X = 105$. Zero horizontal ice-skating.
+   - Duration: $0.44\text{s}$ total.
+
+4. **Heavy Spin Kick Combo (`heavy_0..6.png` - 7 Frames @ 8.0 FPS):**
+   - Height: $46\text{–}58\text{px}$, Width: $35\text{–}63\text{px}$.
+   - Startup charging pose $\to$ rising roundhouse $\to$ spinning kick $\to$ follow-through finish.
+   - Ground baseline locked to $Y = 105$, stance center balanced at $X = 64$.
+   - Duration: $0.88\text{s}$ total.
+
+5. **Physics Velocity Jump Curve (`jump_0..3.png` - 4 Frames):**
+   - In `FighterAnimator.cs`, `UpdateJumpPose()` dynamically evaluates vertical physics velocity ($vy$):
+     - $vy > 1.0\text{ m/s}$: Launch & Ascending (`jump_0`, `jump_1` with tucked knees 11px off baseline).
+     - $|vy| \le 1.0\text{ m/s}$: Apex hangtime (`jump_2`).
+     - $vy < -1.0\text{ m/s}$: Fast descent (`jump_3`).
+
+6. **Crouch Duck (`crouch.png` - 1 Frame):**
+   - Height: $40\text{px}$, Width: $47\text{px}$.
+   - Ground contact pinned at $Y = 105$. Dynamically shrinks hurtbox height to $0.78\text{m}$.
+
+7. **Hurt Flinch (`hurt_0..3.png` - 4 Frames @ 10 FPS):**
+   - Height: $50\text{–}56\text{px}$.
+   - Ground contact pinned at $Y = 105$. Plays during `FighterState.HitStun` and `KnockBack`.
+
+8. **Dramatic Slow-Mo Knockout (`knockout_0..11.png` - 12 Frames @ 3.15 FPS):**
+   - 12-stage collapse sequence perfectly mapped across the 3.8-second unscaled slow-motion window:
+     - Frames 0–4: Stumble backward and reel from impact (baseline $Y = 105$).
+     - Frames 5–6: Knees buckle (baseline $Y = 105$).
+     - Frame 7: Airborne arc falling backward (natural 9px air elevation above ground).
+     - Frame 8: Impact on the mat ($Y = 105$).
+     - Frame 9: 3px elastic mat bounce ($Y = 102$).
+     - Frames 10–11: Motionless collapse flat on the arena floor ($Y = 105$).
 
 
+---
+
+## 35. 199s Round Timer, +100s Sudden Death Overtime & Double K.O. Draw Scoring
+
+### 1. 199s Canonical Round Timer
+- **Scene Serialization Synchronization:** Resolved discrepancy where [`SampleScene.unity`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scenes/SampleScene.unity) had `roundDuration: 99`. Serialized value updated to `199` to match [`MatchManager.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchManager.cs).
+- **HUD Synchronization:** Fallback timers in [`HUDController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/HUDController.cs) updated from `99f` to `199f`.
+
+### 2. Sudden Death Overtime Extension (+100s)
+- **Trigger:** Regular round timer expires ($0\text{s}$) while both fighters are still standing (`p1Health.CurrentHealth > 0 && p2Health.CurrentHealth > 0`) and `!isOvertime`.
+- **Action:**
+  - `roundTimer = 100f`
+  - `isOvertime = true`
+  - Screen impact flash ($0.08\text{s}$) + camera rumble ($0.30\text{ intensity}$).
+  - HUD timer font shifts to Warning Gold (`#FFD726`) and header updates to `★ OVERTIME • SUDDEN DEATH (+100s) ★`.
+
+### 3. Time-Out Survival Draw (+1 Point to Each)
+- **Trigger:** Timer expires ($0\text{s}$) after +100s overtime has elapsed and both fighters remain unbeaten.
+- **Action:**
+  - `p1RoundWins++` and `p2RoundWins++`.
+  - Both fighters remain standing in pride (neither collapses).
+  - Both player score gems light up on HUD.
+  - Check win conditions or proceed to sudden-death round.
+
+### 4. Double K.O. Simultaneous Death (+1 Point to Each)
+- **Trigger:** Both fighters suffer fatal damage on the same frame or within trading windows.
+- **Action:**
+  - Both `FighterController` components transition to `Knockout` simultaneously.
+  - Cinematic slow-motion collapse ($0.12\times$ speed for $4.0\text{s}$).
+  - `p1RoundWins++` and `p2RoundWins++`.
+  - Both player score gems light up on HUD.
+
+### 5. Sudden Death Tiebreaker Progression
+- If a Double K.O. or Draw pushes both players to match point simultaneously (e.g., tied 2-2 in a Best of 3):
+  - Instead of ending abruptly, `CheckWinCondition()` triggers a **Sudden Death Final Round** via `StartRound()`.
+  - If a player holds a point advantage (e.g., 2-1), that player is crowned Tournament Champion.
+
+---
+
+## 36. 10-Hit Calibrated Flurry & Non-Damaging Transformation Pipeline (`FighterController.cs`, `HitboxController.cs`)
+
+### 1. Goku's Pure Super Saiyan Transformation (Zero Damage & Direct-to-Idle)
+- **Role:** Skill button (`E` / `U`) triggers Goku's Super Saiyan power-up.
+- **Hitbox Deactivation:** `attackHitbox.Deactivate()` is executed immediately on state transition.
+- **Direct-to-Idle State Machine:** Rather than entering `FighterState.Skill` and triggering an attack duration lockout, `FighterController.cs` transitions directly to `FighterState.Idle`.
+- **Legacy Asset Purge:** Deleted legacy `skill_0..3.png` from `Assets/Sprites/Fighters/Goku/Frames/`.
+- **Zero Offensive Reach:** `attackStartupTimer = 0f` and `attackActiveTimer = 0f`. No hitbox activates, zero damage is inflicted, and forward surge speed is zeroed out (0.0 m/s), ensuring Goku plants his feet solidly during his transformation.
+- **Instantaneous SSJ Visuals:** Because `controller.IsSuperSaiyan` is asserted immediately, `FighterAnimator.cs` loads `ssjIdleFrames` on the exact same frame, seamlessly rendering Goku in his blazing Super Saiyan stance with 0ms visual delay.
+
+### 2. Saitama's Calibrated 10-Hit Flurry (Consecutive Normal Punches)
+- **Hit Budget:** Exactly **10 punches** delivered across the 2.30s active window ($0.23	ext{s}$ interval between hits).
+- **Damage per Punch:** Exactly **2 damage** ($10 	imes 2 = 20	ext{ total damage}$).
+- **Engine HitStop Disabled:** `enableHitStop = false` bypasses the `Time.timeScale = 0.04f` freeze. The game engine runs at 100% speed throughout the entire move with zero frame stutter.
+- **Attenuated Camera Vibration:** Screen shake intensity scaled down to $20\%$ (`shakeMult = 0.20f`), preventing exponential camera oscillation over 10 rapid strikes.
+- **Micro-Knockback:** $X = 0.35	ext{m/s}, Y = 0.0	ext{m/s}$. Keeps the opponent neatly trapped in the flurry without launching them away.
+- **Hitbox Expiration:** The moment the 10th punch connects, `attackHitbox.Deactivate()` shuts down offensive collision, allowing Saitama to conclude his vocal shout cleanly.
 
 
+---
 
+## 36. Authentic Anime Kamehameha VFX & AoE Beam Specification
+
+### 1. Visual & Acoustic Specifications
+- **Total Duration:** $3.36\text{ seconds}$ (100% synchronized with `goku_voice_kamehameha.wav`).
+- **Phase 1: Gathering Ki Charge Orb ($2.15\text{s}$):**
+  - Texture: `Assets/Sprites/Effects/kamehameha_charge_orb.png` ($128 \times 128$).
+  - Position: Cupped hands at hip ($(X = -0.35\text{m}, Y = 0.88\text{m})$ relative to pivot when facing right).
+  - Animation: Non-linear expansion from $0.20\text{m} \rightarrow 0.88\text{m}$ with $30\text{ Hz}$ sine vibration.
+- **Phase 2: Solid Light-Blue Energy Beam Blast ($1.21\text{s}$):**
+  - Muzzle Flare: `kamehameha_muzzle_flare.png` at $(X = +0.55\text{m}, Y = 0.95\text{m})$.
+  - Beam Body: `kamehameha_beam_body.png` ($7.2\text{m}$ length, Left-Center pivot).
+  - Beam Head: `kamehameha_beam_head.png` ($1.3\text{m}$ length, aerodynamic energy dome).
+  - Total Beam Span: **$8.5\text{ world units}$** (covers half the entire tournament arena).
+  - Roaring Plasma Oscillation: $1.35\text{m} \pm 0.08\text{m}$ vertical breathing at $26\text{ Hz}$.
+  - Screen Shake: $0.30\text{ intensity}, 0.38\text{s}$ duration on eruption.
+  - Impact Flash: 2-frame fullscreen white flash ($0.04\text{s}$).
+
+### 2. Combat Mechanics
+- **Damage:** $45\text{ HP}$ (Ultimate attack tier).
+- **Knockback Vector:** $8.5\text{f}$ horizontal, $2.2\text{f}$ vertical lift ("normal knockback" that pushes target to wall without launching off-screen).
+- **Single-Hit AoE:** Opponent is hit exactly once upon touching the beam and cannot be multi-hit by the same beam blast.
+- **Ki Cost:** $80\text{ Ki}$.
+
+
+---
+
+## 42. In-Combat Pause Menu & Post-Match Results Screen Text Architecture
+
+### Overview
+The combat menu system (`CombatMenuController.cs`) governs two critical modal states:
+1. **In-Combat Pause Menu (`PauseMenu_Root`):** Triggered by `ESC` or `P`. Freezes `Time.timeScale = 0f` and `AudioListener.pause = true` while keeping UI interactive.
+2. **Post-Match Results Screen (`ResultsMenu_Root`):** Triggered after the final round K.O. Slides down from off-screen ($Y=+950\text{px}$) with winner portrait, tournament epithet, final round score, and rematch options.
+
+### Visual & Typography Specifications
+
+| Element | Primary Font | Fallback Font | Display Text | Color Styling |
+| :--- | :--- | :--- | :--- | :--- |
+| **Pause Header** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `PAUSED` | Electric Cyan (`#00F5FF`) |
+| **Pause Subtitle** | `RetroGaming_SDF` | `LiberationSans SDF` | `- COMBAT FROZEN -` | Crisp Ice (`#D9EBFF`) |
+| **Pause Selection** | `RetroGaming_SDF` | `LiberationSans SDF` | `>  RESUME  <` | Solar Gold (`#FFE040`) |
+| **Pause Navigation**| `RetroGaming_SDF` | `LiberationSans SDF` | `[W/S or ARROWS] Navigate \| [ENTER] Select \| [ESC] Resume` | Muted Silver |
+| **Victory Header** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `* WORLD CHAMPION *` | Solar Gold (`#FFE040`) |
+| **Winner Title** | `ArcadeClassic_SDF` | `LiberationSans SDF` | `PLAYER 1: GOKU WINS!` | Cyan (`#00F5FF`) or Gold |
+| **Winner Epithet** | `RetroGaming_SDF` | `LiberationSans SDF` | `HOPE OF THE UNIVERSE \| TOURNAMENT VICTOR` | Crisp Ice |
+| **Final Score** | `RetroGaming_SDF` | `LiberationSans SDF` | `FINAL SCORE:  2 - 1` | Crisp Ice |
+| **Results Selection**| `RetroGaming_SDF` | `LiberationSans SDF` | `>  REMATCH  <` | Solar Gold with Gold Glow |
+
+### Zero-Block Guarantee
+1. **Direct YAML `_MainTex` Connection:** `ArcadeClassic_SDF.asset` and `RetroGaming_SDF.asset` have their Material `_MainTex` connected directly to their sub-asset `Texture2D` fileIDs.
+2. **Automatic Fallback Chaining:** All characters missing from the retro font atlas automatically fall back to `LiberationSans SDF`.
+3. **Pure ASCII Strings:** All typography uses universal ASCII characters (`>`, `<`, `*`, `-`, `|`), eliminating missing glyph tofu errors.
+4. **Runtime Self-Healing:** Every call to `Awake()`, `Start()`, `PauseGame()`, and `ShowResultsSequence()` triggers `SanitizeAndHealUIHierarchy()`, ensuring text meshes never enter a corrupted state.

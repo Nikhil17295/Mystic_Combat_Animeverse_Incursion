@@ -783,3 +783,293 @@ ull. Because AssetDatabase is stripped from runtime player builds, runtime scrip
   3. **Continuous Failsafe in `Update()`:** Added an automatic playback recovery check in `Update()` if a round is in progress and the music source is silent.
   4. **State Synchronization in `MatchManager`:** In `MatchManager.StartMatch()`, explicitly calls `GameManager.Instance.SetState(GameState.InMatch)`.
   5. **Compiler Verification:** Clean compilation with **0 errors** across both `Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`.
+
+---
+
+### Bug 27: Kamehameha 16px Stray Rip Artifact, Skated Footing & Instant Round-End Visual Cut
+
+- **Symptom:**
+  1. Goku's Kamehameha charge (`ultimate_1..3`) hopped 16 pixels straight up into the air, hung briefly, and then slammed back down on frame 4. Furthermore, his stance skated horizontally while lunging forward.
+  2. When a fighter's HP reached 0, the round ended abruptly with no dramatic weight; the loser's 11-frame collapse animation was cut short, the winner had no time to perform their victory pose, and the round restarted almost instantly.
+  3. Aura visuals felt like soft generic smoke/dust clouds rather than authentic Dragon Ball Z jagged spiky flame energy.
+  4. Goku was able to charge Ki via meditation while in Super Saiyan mode, which contradicted authentic anime mechanics.
+  5. The default round timer of 99s caused matches to feel unnaturally rushed for a deliberate tactical fighting game.
+- **Root Cause:**
+  1. **Stray Sprite Rip Artifact at $Y = 73..74$:** In `Frames_Raw/ultimate_1..3.png`, 6 stray pixels from the adjacent sprite beneath it on the ripped sheet existed at $Y = 73..74$. Because the standard canvas script aligned bounding-box bottoms to baseline $Y = 105$, those 6 stray pixels were anchored to $Y = 105$, which lifted Goku's actual feet (at $Y = 58$) up to $Y = 89$ (16 pixels into the air). In frames 0 and 4..9, there was no bottom artifact ($Y \le 58$), so Goku's feet snapped back to the floor. Additionally, the ripped frames drifted horizontally by 1px per frame ($X = 13 	o 4$), causing foot skating when centered blindly.
+  2. **Coupled TimeScale & Premature Round Restart:** `Time.deltaTime` scaled animation updates directly with physics timescale. When slow-motion was triggered, animations crawled or skipped frames, and `RoundEndSequence` waited only 1.8 seconds in game time without letting the loser hit the floor before the winner started celebrating.
+  3. **Particle-Only Aura:** Soft radial particles cannot reproduce the iconic spiky golden flame cocoon of Akira Toriyama's Super Saiyan aesthetic.
+- **Resolution:**
+  1. **$Y < 60$ Crop & Fixed Foot Anchoring:**
+     - In `scratch/realign_kamehameha.py`, cropped all raw frames strictly at $Y < 60$, completely eliminating the 16px bottom stray artifact.
+     - Anchored Goku's planted back foot to a fixed canvas position ($X = 41$, $Y = 105$). Zero vertical hopping, zero horizontal foot skating.
+  2. **4-Phase Dramatic Slow-Mo K.O. State Machine:**
+     - In [`MatchManager.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/MatchManager.cs):
+       - **Phase 1 (Slow-Mo Collapse):** Loser enters `FighterState.Knockout`, `Time.timeScale = 0.28f`, camera shake ($0.40$), impact flash ($0.12\text{s}$). Waits $1.8\text{s}$ in real time (`WaitForSecondsRealtime(1.8f)`).
+       - **Phase 2 (Floor Impact & Normalization):** Loser hits the mat, ground dust puff triggers, and `Time.timeScale` snaps back to $1.0\text{f}$.
+       - **Phase 3 (Staggered Victory Celebration):** Winner transitions to `FighterState.Victory` to perform their full victory animation loop.
+       - **Phase 4 (Dramatic Hold):** Holds for $2.8\text{s}$ in real time before calling `CheckWinCondition()`.
+     - In [`FighterAnimator.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterAnimator.cs): Added `unscaled: true` to `PlayOnce` and `PlayLoop` for `Knockout` and `Victory` states, ensuring all 11 knockout frames and 9 victory frames play smoothly at full framerate regardless of timescale.
+  3. **Authentic DBZ Dual-Layer Spiky Flame Aura:**
+     - Created `Assets/Sprites/Effects/dbz_spiky_aura.png` with 26 jagged flame spires, elongated upward flare, and bright inner core.
+     - In [`FighterKiAura.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterKiAura.cs), built a dual-layer system:
+       - Oscillating spiky shell ($24\text{–}28\text{ Hz}$ flame vibration, alpha pulse).
+       - Sub-emitter vertical needle speed streaks shooting upward from feet.
+       - Dynamic color tinting: Radiant Gold for SSJ Goku, Electric Cyan for Base Goku meditation, Blazing Crimson for Saitama.
+  4. **Super Saiyan Meditation Guard:** In [`FighterController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs), blocked meditation while `isSuperSaiyan` is active, and automatically reverted to Idle if meditation was active during transformation.
+  5. **Round Timer Set to 199s:** Set `roundDuration = 199f` in `MatchManager.cs` for deliberate, authentic arcade fighting pacing.
+  6. **Sprite Slicer Default to SSJ:** Updated `Tools/SpriteSlicer/index.html` to default to `goku_ssj` and cleared `Assets/Sprites/Fighters/Goku/Frames_SSJ/` so the user has a clean slate for manual slicing.
+  7. **Compiler Verification:** Clean compilation with **0 errors** across both `Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`.
+
+---
+
+### Bug 28: Voice-Line Animation Truncation, Victory Pogo-Sticking & Dedicated Slicer Architecture
+
+- **Symptom:**
+  1. Goku returned to his idle breathing stance only halfway through shouting his Kamehameha chant, walking around while the audio still blasted "ME... HA!".
+  2. Saitama's victory animation looked like erratic jumping/pogo-sticking rather than a stable, proud victory celebration.
+  3. The round-end K.O. sequence felt rushed, cutting to victory before the defeat settled in.
+  4. The aura had too many rigid spikes and extended below the fighter's feet through the floor.
+  5. Fighters occupied ~2.0 world units, making the stage feel cramped with little room for spacing.
+  6. The sprite slicer tool suffered from browser caching when attempting to toggle between Base and Super Saiyan modes.
+- **Root Cause:**
+  1. **Audio/State Duration Disconnect:** `goku_voice_kamehameha.wav` is $3.36\text{s}$ long, while `FighterController.attackTimer` was hardcoded to $1.45\text{s}$. The state machine exited the `Ultimate` state and resumed `Idle` before the audio finished.
+  2. **Looping Incompatible Poses:** The victory animation frames contained crouch frames ($34\text{px}$), mid-air leaps ($60\text{px}$), and standing poses ($49\text{px}$). Looping these in a cycle made Saitama jump up and down by $30\text{px}$ continuously.
+  3. **Premature TimeScale Restoration:** The knockout slow-motion sequence lasted only $1.8\text{s}$ in real time, rushing the physics and collapse.
+  4. **Rigid Spike Geometry:** Generating 26 mathematical polygon spikes produced a rigid cardboard shell rather than translucent, licking anime fire.
+  5. **Shared Single-Page State Mismatch:** Trying to swap sheets and characters inside a single HTML page caused browser caching collisions.
+- **Resolution:**
+  1. **Audio-Synchronized Attack Timings:**
+     - Goku Kamehameha: $3.36\text{s}$ total ($2.15\text{s}$ charging chant + $1.21\text{s}$ active blast).
+     - Saitama Consecutive Punches: $2.70\text{s}$ continuous looping flurry.
+     - Saitama Serious Punch: $3.80\text{s}$ ($2.40\text{s}$ chilling windup + $1.40\text{s}$ devastating punch).
+  2. **Zero-Jumping Victory Normalization:**
+     - Standardized Saitama's victory animation to his clean, heroic standing victory frames (hands on hips, cape fluttering).
+     - Feet locked to $Y = 135$ and head to $Y = 82$ across all frames. Zero jumping.
+  3. **9.5s Unhurried Cinematic Knockout:**
+     - $4.0\text{s}$ ultra slow-motion collapse (`Time.timeScale = 0.12f`).
+     - $1.5\text{s}$ motionless floor pause.
+     - $4.0\text{s}$ victory celebration hold.
+  4. **Fluid Translucent Anime Fire:**
+     - Redrew [`dbz_spiky_aura.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/Effects/dbz_spiky_aura.png) with a rounded ground base that never extends below the feet ($Y=0$) and 7 fluid, soft fire tongues.
+  5. **Fighter Scale Normalization:**
+  6. **Consolidation & Native Slicer Integration (index.html):**
+     - Deleted temporary redundant files (slicer_ssj.html and launch_ssj_slicer.bat) to eliminate tooling fragmentation.
+     - Fully integrated Super Saiyan Goku directly into canonical [Tools/SpriteSlicer/index.html](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Tools/SpriteSlicer/index.html) as the primary default character and sheet.
+     - Preserved the exact canonical UI, controls, toolbar, and canvas layout that developers expect.
+     - Updated [launch_slicer.bat](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Tools/SpriteSlicer/launch_slicer.bat) with cache-busting timestamping (http://localhost:8085/index.html?t=%RANDOM%) to guarantee the latest tool loads in any browser.
+     - Added destination folder selector to /api/export in the slicer UI for seamless exporting directly into either Frames (in-game) or Frames_SSJ (alternate).
+
+
+---
+
+### Bug 29: Simultaneous Hit Double-HitStop TimeScale Freeze & Knockback Launch Overshoot
+
+- **Symptom:**
+  1. When both fighters attacked and hit each other at the same time (or during Saitama's rapid punch flurry), the game slowed down to a crawl ($0.04\times$ speed) and never sped back up.
+  2. Knockbacks on simple attacks sent fighters flying across the entire screen; light jabs popped opponents high into the air.
+  3. During Saitama's Consecutive Normal Punches, Saitama skated forward too fast ($1.5\text{f}$ speed) and pushed the opponent across the arena, while the opponent was knocked into orbit on punch #1.
+- **Root Cause:**
+  1. **Nested HitStop TimeScale Leak:** In `VFXManager.DoHitStop`, `float prevScale = Time.timeScale;` was sampled inside the coroutine. When Hit 2 interrupted Hit 1, `Time.timeScale` was already $0.04\text{f}$. Hit 2 captured `prevScale = 0.04f` and restored it to $0.04\text{f}$ upon completion, permanently corrupting the game clock.
+  2. **Hardcoded Monolithic Vertical Lift:** `HitboxController.cs` applied `targetRb.linearVelocity = new Vector2(facingDir * knockback, 3.2f);` on every hit. Even light jabs applied $3.2\text{f}$ vertical lift.
+  3. **Excessive Forward Flurry Speed:** In `FighterController.cs`, `FighterState.Skill` assigned `rb.linearVelocity = new Vector2(surgeDir * 1.5f, rb.linearVelocity.y);` every frame for $2.7\text{s}$, moving Saitama over 4 world units forward.
+- **Resolution:**
+  1. **Re-Entrant Safe HitStop:** In `VFXManager.cs`, added `isHitStopActive` and `originalTimeScale`. Baseline time scale is only captured when hitstop is not already running. When overlapping hits arrive, the timer is refreshed without overwriting `originalTimeScale`. Added `OnDisable()` safeguard.
+  2. **Attack Interruption on Counter-Hit:** In `FighterController.TransitionTo()`, entering `HitStun`, `KnockBack`, or `Knockout` immediately deactivates `attackHitbox`.
+  3. **Decoupled 2D Knockback Tuning:** Added `knockbackY` to `HitboxController.Setup()` and `ConfigureAttack()`. Rebalanced all attack velocities:
+     - Light: $2.2\text{f}$ X, $0.8\text{f}$ Y (was $4.5\text{f},\ 3.2\text{f}$).
+     - Heavy: $5.0\text{f}$ X, $2.0\text{f}$ Y (was $8.0\text{f},\ 3.2\text{f}$).
+     - Saitama Flurry: $1.2\text{f}$ X, $0.4\text{f}$ Y (was $6.0\text{f},\ 3.2\text{f}$).
+     - Kamehameha: $8.5\text{f}$ X, $2.2\text{f}$ Y (was $14.0\text{f},\ 3.2\text{f}$).
+     - Serious Punch: $12.0\text{f}$ X, $3.0\text{f}$ Y (was $24.0\text{f},\ 3.2\text{f}$).
+  4. **Controlled Flurry Forward Advance:** Reduced Saitama's `surgeSpeed` during `FighterState.Skill` from `1.5f` to `0.60f`, delivering a tight, menacing forward step into the punch barrage.
+
+---
+
+### Bug 29: Super Saiyan Frame Aspect Ratio Skew, Transparent Margin Jitter & Jump Sprite Regression
+
+- **Symptom:**
+  1. Exported Super Saiyan sprite slices had non-uniform dimensions ( \times 90$,  \times 86$,  \times 71$) with bottom empty transparent margins ranging between \text{px}$ and \text{px}$. Without baseline correction, transitioning between Idle, Walk, and Attack caused the character to hop \text{–}15\text{px}$ up and down.
+  2. In UpdateJumpPose(), while all other states used GetFrames(ssj..., base...), the jump velocity evaluator checked jumpFrames.Count and assigned jumpFrames[frameIdx] (Base Goku), causing Goku's hair to flash back to black whenever he jumped in Super Saiyan form.
+  3. Directional lunge attacks (Punch combo) suffered from horizontal skating when centered blindly.
+- **Root Cause:**
+  1. **Atlas Crop Origin Disparity:** Sprite slicing from an unevenly spaced sheet captures tight bounding boxes rather than standardized canvas origins. Because LoadFrame() used pivot = (0.5f, 0.0f) for non-128px textures, variable bottom margins shifted the character's ground contact plane on every state transition.
+  2. **Variable Shadowing / Typo in UpdateJumpPose():** UpdateJumpPose() evaluated jumpFrames (Base Goku field) rather than the localized jFrames variable returned by GetFrames(ssjJumpFrames, jumpFrames).
+  3. **Foot-Anchoring vs Bounding-Box Centering:** In Goku's punch combo, frames 3 and 4 extend his fist 19 pixels forward. Centering by image width pushed his planted back foot backward, creating visual foot slippage.
+- **Resolution:**
+  1. ** \times 128$ Canvas Standardization Pipeline:**
+     - Backed up raw slices to Assets/Sprites/Fighters/Goku/Frames_SSJ_Raw/.
+     - Standardized all 44 frames onto uniform  \times 128\text{px}$ transparent RGBA canvases with the bottom foot strictly locked to baseline  = 105$.
+     - Mirrored all 12 knockout_*.png frames to death_*.png for bidirectional sequence loader compatibility.
+  2. **Fixed Back-Foot Anchoring:**
+     - For lunging attack frames (punch_0..5), anchored the planted back foot to  = 42$ while allowing the punching fist to extend freely to  = 105$, eliminating horizontal foot skating.
+  3. **UpdateJumpPose() Parameter Repair:**
+     - Replaced jumpFrames references with jFrames, cleanly interpolating Goku's 4 Super Saiyan jump frames across vertical physics velocity ($).
+  4. **Dynamic Duration FPS Calibration:**
+     - Configured LightAttack (.6\text{ FPS}$ over .44\text{s}$), HeavyAttack (.0\text{ FPS}$ over .88\text{s}$), and Knockout (.15\text{ FPS}$ over .8\text{s}$), maintaining exact frame duration synchronization.
+  5. **Compiler Verification:** Clean compilation with **0 errors** across both Assembly-CSharp.dll and Assembly-CSharp-Editor.dll.
+
+
+---
+
+### Bug 30: Saitama Celebratory Jump Arc Restoration, Single-Turn Round Transition & Ki Aura Particle De-Cluttering
+
+- **Symptom:**
+  1. In a previous fix, Saitama's victory animation was flattened to a static standing pose because the previous loop caused repetitive "pogo-sticking." However, Saitama's authentic celebratory gesture was supposed to include his dynamic jump.
+  2. Round end pauses were locked to a hardcoded 4.0-second delay in `MatchManager`, forcing players to wait through repetitive animation loops before Round 2 or Final Round began.
+  3. Rising vertical Ki particle streaks in `FighterKiAura.cs` cluttered character silhouettes and clashed with the clean, razor-sharp 16-bit pixel-art presentation.
+- **Root Cause:**
+  1. **Premature Jump Removal:** Rather than running the victory celebration as a single-turn sequence, the previous fix simply stripped the jumping frames from `victory_*.png`.
+  2. **Looping Non-Loopable Keyframes:** `FighterAnimator.cs` executed `FighterState.Victory` via `PlayLoop`. Because victory animations contain transition poses (squat $\to$ leap $\to$ land $\to$ pose), looping them continuously caused the character to bounce up and down endlessly until the timer ran out.
+  3. **Decoupled Round Reset Timer:** `MatchManager.cs` used a rigid serialized delay (`roundEndPauseDuration = 4.0f`) instead of observing the victor's actual single-turn animation completion.
+  4. **Over-Engineering with Particle Systems:** Spawning a runtime `ParticleSystem` (`Aura_Rising_Streaks`) overlaid unscaled particle textures on top of hand-drawn pixel sprites.
+- **Resolution:**
+  1. **9-Frame Mathematical Jump Arc (`victory_0..8.png`):**
+     - Sliced and standardized all 9 authentic frames on a $160 \times 160\text{px}$ canvas.
+     - Anchored frames 0–2 (squat) at $Y = 135$, frame 3 (takeoff) at $Y = 120$ ($15\text{px}$ lift), frame 4 (apex mid-air punch) at $Y = 104$ ($31\text{px}$ airborne), and frames 5–8 (landing impact, cape settling, and triumphant fist pump) at ground baseline $Y = 135$.
+  2. **Single-Turn Animation Pacing (`FighterAnimator.cs`):**
+     - Switched `FighterState.Victory` to `PlayOnce(vic, victoryFps, unscaled: true)`.
+     - Exposed `VictoryDuration => (float)vic.Count / victoryFps;` ($1.50\text{s}$ at 6.0 FPS).
+  3. **Immediate Next-Round Transition (`MatchManager.cs`):**
+     - Updated `RoundEndSequence` to yield exactly `winnerAnim.VictoryDuration`.
+     - The instant that single turn concludes, `CheckWinCondition()` immediately fires `StartRound()` without any awkward pause or repetitive bouncing.
+  4. **Pure Sprite Anime Fire Cocoon (`FighterKiAura.cs`):**
+     - Completely removed the `ParticleSystem` component, particle renderer, and speed-streak texture logic.
+     - Preserved the high-frequency ($16\text{ Hz}$) oscillating spiky flame shell cocoon (`dbz_spiky_aura.png`), ensuring pristine pixel-art readability.
+  5. **State-Entry Audio Trigger (`FighterController.cs`):**
+     - Added `fighterAudio?.PlayJump()` to `FighterState.Victory` for Saitama, providing a crisp audio whoosh as he leaps into the air.
+  6. **Compiler Verification:** Clean compilation with **0 errors** across both `Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`.
+
+
+---
+
+### Bug 30: Scene Serialization Timer Desync (99s vs 199s) & Simultaneous Death Single-Winner Race Condition
+
+- **Symptom:**
+  1. Round timer in `SampleScene` loaded with 99 seconds instead of the intended 199 seconds per round.
+  2. When both fighters killed each other simultaneously with heavy attacks, only one fighter was awarded the round win; the other fighter collapsed with zero points awarded.
+  3. When the round timer expired with both fighters alive, the game arbitrarily declared a winner based on slight health percentage rather than granting overtime or an honorable draw.
+- **Root Cause:**
+  1. **Scene YAML Override:** `SampleScene.unity` had `roundDuration: 99` serialized on the `MatchManager` GameObject, overriding the C# field default.
+  2. **First-Come Single-Winner Race Condition:** `HandleP1Death` immediately called `EndRound(2)` and locked `currentMatchState` to `RoundEnd`. Player 2's simultaneous death on the same frame was dropped.
+  3. **Premature Time-Up Resolution:** `TimeUp()` immediately compared health percentages without supporting overtime extensions or draw scoring.
+- **Resolution:**
+  1. **Scene & HUD Timer Synchronization:** Updated `roundDuration` in `SampleScene.unity` to `199` and adjusted HUD fallback timers.
+  2. **Deferred End-of-Frame Arbitration:** Replaced immediate death resolution with `EvaluateFighterDefeats()` coroutine (`yield return new WaitForEndOfFrame()`). If both fighters have $\le 0\text{ HP}$, `EndRoundDraw(isDoubleKO: true)` is triggered, collapsing both fighters in slow motion and awarding 1 point to each.
+  3. **+100s Sudden Death Overtime:** Added `isOvertime` flag. Expiration of regular 199s time grants +100 seconds with audio/visual feedback. If overtime expires and both remain alive, `EndRoundDraw(isDoubleKO: false)` awards 1 point each with zero collapse.
+  4. **Sudden Death Tiebreaker Progression:** In `CheckWinCondition()`, tied match point scores (e.g. 2-2) trigger a Sudden Death Final Round (`StartRound()`).
+
+---
+
+### Bug 30: Multi-Hit Hitstop Engine Freeze, Screen Shake Saturation & Transformation Hitbox Overlap
+
+- **Symptom:**
+  1. Activating Goku's Skill (Super Saiyan ascension) dealt damage to nearby opponents even though it is purely a transformation power-up rather than a melee attack.
+  2. Saitama's Consecutive Normal Punches caused the entire game engine to stutter and freeze.
+  3. Camera shake escalated into a disorienting, exponential tremor during the flurry.
+- **Root Cause:**
+  1. **Transformation / Attack Hitbox Coupling:** In `FighterController.cs`, `TransitionTo(FighterState.Skill)` entered the generic skill state without deactivating `attackHitbox`. If a previous attack had configured the hitbox, or if Goku was already in Super Saiyan, `ConfigureAttack()` configured 26 damage and 3.6m reach.
+  2. **Re-Entrant Hitstop Freezing (`Time.timeScale = 0.04f`):** Every registered punch called `VFXManager.TriggerHitStop(0.065s)`. Across rapid multi-hits, the physics engine was forced into near-zero time scale ($4\%$) repeatedly, virtually halting the game loop.
+  3. **Uncapped Camera Shake Accumulation:** Every hit triggered default camera shake ($0.132$), which stacked continuously over the 2.70-second flurry.
+- **Resolution:**
+  1. **Strict Non-Damaging Transformation Pipeline:**
+     - For Goku, `attackHitbox.Deactivate()` is immediately called on Skill activation.
+     - `attackStartupTimer` and `attackActiveTimer` set to `0.0f`, ensuring zero hitboxes activate during transformation.
+     - Goku's forward surge speed during transformation is zeroed out, preventing unwanted sliding while roaring.
+  2. **Selective Hitstop Bypassing (`enableHitStop`):**
+     - Added `hitStop = true` and `shakeMult = 1.0f` parameters to `HitboxController.ConfigureAttack()` and `VFXManager.PlayHitSpark()`.
+     - For Consecutive Normal Punches, `hitStop` is set to `false`, keeping `Time.timeScale = 1.0f` (100% full speed) with zero engine stutter.
+  3. **Attenuated Shake & Micro-Knockback:**
+     - Set `shakeMult = 0.20f` for a subtle, high-frequency vibration rather than a violent screen jolt.
+     - Configured knockback to $X = 0.35	ext{m/s}, Y = 0.0	ext{m/s}$, keeping the opponent neatly inside the flurry.
+  4. **Exactly 10 Hits @ 2 Damage:**
+     - Added `flurryHitsRemaining = 10` counter and `flurryHitTimer = 0.23f`.
+     - Delivers exactly 10 hits ($10 	imes 2 = 20$ damage) across the 2.30s active window, then cleanly deactivates the hitbox while the vocal shout completes.
+  5. **Compiler Verification:** Clean compilation with **0 errors** across both `Assembly-CSharp.dll` and `Assembly-CSharp-Editor.dll`.
+
+
+---
+
+### Bug 31: Full-Screen Beam Hitbox Alignment & Multi-Hit Recursion in Long-Duration Beams
+
+- **Symptom:**
+  1. Goku's Kamehameha lacked visual energy effects; Goku played his charging pose and beam stance, but no actual energy beam or charge orb appeared on screen.
+  2. The previous attack hitbox was only 3.0m wide, failing to cover the visual reach of a beam blast across the arena.
+  3. Long-duration beam attacks risked multi-hitting opponents on every physics frame, instantly draining 100% health in less than a second.
+- **Root Cause:**
+  1. **Missing Beam VFX Assembly:** No dedicated sprite hierarchy existed to render the charge orb, muzzle flare, and beam body.
+  2. **Hitbox Mismatch:** The hitbox offset ($1.8\text{m}$) and size ($3.0\text{m}$) were scaled for a short melee thrust rather than a full-screen energy projectile.
+  3. **Multi-Hit Vulnerability:** Attacks that stay active across multiple seconds must strictly guard against clearing hit targets unless designed as rapid flurries.
+- **Resolution:**
+  1. **Modular VFX Component (`KamehamehaBeamVFX.cs`):** Created a self-contained component driving the 2.15s Ki charge orb gathering and 1.21s solid light-blue energy beam with high-frequency plasma breathing ($26\text{ Hz}$).
+  2. **Generated 4 DBZ Effect Textures:** Programmatically generated `kamehameha_charge_orb.png`, `kamehameha_beam_body.png`, `kamehameha_beam_head.png`, and `kamehameha_muzzle_flare.png` in `Assets/Sprites/Effects/`.
+  3. **True AoE Hitbox Synchronization:** Configured hitbox offset to `new Vector2(4.6f, 0.95f)` and size to `new Vector2(8.5f, 1.6f)`, matching the full $8.5\text{m}$ visual beam.
+  4. **Single-Hit Guarantee:** Maintained `hitTargetsThisSwing` set persistence across the entire blast duration, guaranteeing exactly one hit per target.
+
+---
+
+### Bug 32: Goku Legacy Skill Animation Cleanup & Instant Direct-to-SSJ Idle Transition
+
+- **Symptom:**
+  1. When triggering Goku's Skill (Key `E` / `U`), Goku played an outdated charge/strike animation before transforming, rather than ascending directly into his Super Saiyan Idle stance.
+  2. Leftover skill sprite files (`skill_0..3.png`) lingered in Goku's runtime `Frames/` directory, creating technical debt and confusing the automatic sequence loader.
+- **Root Cause:**
+  1. **Residual Prototype Slices:** Goku's `Assets/Sprites/Fighters/Goku/Frames/` directory still contained leftover `skill_0.png` through `skill_3.png` and their corresponding `.meta` files from early prototype combat passes.
+  2. **Loader Sequence Auto-Discovery:** `FighterAnimator.cs` dynamically loaded all indexed `skill_*.png` files into `skillFrames`. If the fighter transitioned to `FighterState.Skill`, the animator played this old sequence.
+  3. **State Transition Lockout:** `FighterController.cs` originally assigned an `attackTimer = 0.65f` and called `TransitionTo(FighterState.Skill)`, which locked Goku into an attack state for over half a second before allowing idle.
+- **Resolution:**
+  1. **Purged Legacy Sprite Assets:** Deleted `skill_0..3.png` and `skill_0..3.png.meta` from `Assets/Sprites/Fighters/Goku/Frames/` (backed up in `Frames_Backup/`).
+  2. **Direct Super Saiyan Idle Transition:** In `FighterController.cs`, Goku's Skill pathway was rewritten to immediately deactivate `attackHitbox`, zero out all attack timers (`attackTimer = 0f`, `attackStartupTimer = 0f`, `attackActiveTimer = 0f`), and immediately call `TransitionTo(FighterState.Idle)`.
+  3. **Zero-Delay Visual Transformation:** Because `controller.IsSuperSaiyan` is asserted true before `TransitionTo(FighterState.Idle)`, `FighterAnimator.UpdateAnimation()` queries `ssjIdleFrames` on that exact frame, seamlessly snapping Goku directly into his iconic Super Saiyan golden idle stance with zero intermediate frames, zero hitbox latency, and zero damage dealt.
+  4. **Project Assembly Alignment:** Added missing `KamehamehaBeamVFX.cs` compile item to `Assembly-CSharp.csproj`, ensuring automated verification tools and IDE build systems pass with **0 errors**.
+
+
+---
+
+### Bug 31: TextMeshPro Menu Text Rendering as Solid Rectangles / Colored Blocks (The Missing _MainTex & Empty Fallback Bug)
+
+- **Date:** October 28, 2026
+- **Severity:** High (UI Visual & Readability Defect)
+- **Component:** `Assets/Fonts/TMP_Assets/`, `Assets/Prefabs/UI/HUD_Canvas.prefab`, `CombatMenuController.cs`
+
+#### Symptom:
+When pausing combat (`ESC` / `P`) or concluding a tournament match, all text elements across the modal window—including `"PAUSED"`, selection buttons (`"RESUME"`, `"RESTART MATCH"`), and post-match victory cards—rendered as solid colored rectangles/blocks of color rather than legible letterforms.
+
+#### Root Causes:
+1. **Disconnected `_MainTex` on Font Asset Materials:**
+   In `ArcadeClassic_SDF.asset`, `RetroGaming_SDF.asset`, and `PressStart2P_SDF.asset`, the embedded Material sub-assets had:
+   ```yaml
+   - _MainTex:
+       m_Texture: {fileID: 0}
+   ```
+   When `_MainTex` is null, the TextMeshPro Distance Field pixel shader samples Unity's default $1 \times 1$ white texture, returning a distance value of $1.0$ across the entire glyph quad. Because $1.0 > 0.5$ threshold, every pixel in the quad is rendered at 100% opacity, creating solid blocks.
+2. **Missing Glyphs in Retro Atlases:**
+   `ArcadeClassic_SDF` only contained 25 uppercase characters; `RetroGaming_SDF` only contained 44 characters (missing `D`, `G`, `K`, `X`, `Y`, `Q` and digits `3-9`). Both had `m_FallbackFontAssetTable: []` empty.
+3. **Non-ASCII Unicode Symbols:**
+   Code and prefabs contained Unicode symbols (`▶`, `◀`, `★`, `—`, `•`) that did not exist in the retro font character sets.
+4. **Missing Resources Directory:**
+   `CombatMenuController.LoadFont()` attempted `Resources.Load<TMP_FontAsset>("Fonts/...")`, but `Assets/Resources/Fonts/` did not exist.
+
+#### Resolution:
+1. **Reconnected `_MainTex` in YAML:**
+   - In `ArcadeClassic_SDF.asset`: Set `_MainTex` to `{fileID: -3925478913968619439}`.
+   - In `RetroGaming_SDF.asset`: Set `_MainTex` to `{fileID: -1603636736672497938}`.
+   - In `PressStart2P_SDF.asset`: Set `_MainTex` to `{fileID: -6318304193973382029}`.
+2. **Configured Fallback Chaining:**
+   Added `LiberationSans SDF` (`guid: 8f586378b4e144a9851e7b34d9b748ee`) to `m_FallbackFontAssetTable` in both retro font assets.
+3. **Created `Assets/Resources/Fonts/`:**
+   Populated `Assets/Resources/Fonts/` with font assets so `Resources.Load<TMP_FontAsset>()` succeeds reliably.
+4. **Sanitized Typography to Universal ASCII:**
+   Replaced all Unicode symbols in `HUD_Canvas.prefab` and `CombatMenuController.cs`:
+   - `▶ ... ◀` -> `> ... <`
+   - `★` -> `*`
+   - `—` -> `-`
+   - `•` -> `|`
+5. **Implemented Runtime Self-Healing (`CombatMenuController.cs`):**
+   - Added `EnsureFontIntegrity()` to re-link material textures dynamically if missing.
+   - Added `SanitizeAndHealUIHierarchy()` called during `Awake()`, `Start()`, `PauseGame()`, and `ShowResultsSequence()` to validate all labels and enforce mesh updates.
+   - Added hierarchy auto-wiring in `EnsureUIHierarchyBuilt()` to automatically bind buttons and labels if unassigned in scene prefabs.
+
+#### Verification:
+- All assemblies compiled cleanly with **ZERO errors** via `verify_compilation.py`.
+- Verified font asset `_MainTex` points to Texture2D sub-assets.
+- Verified pure ASCII encoding across `CombatMenuController.cs` and `HUD_Canvas.prefab`.

@@ -71,6 +71,7 @@ namespace MysticCombat.UI
         {
             SetupAudio();
             EnsureUIHierarchyBuilt();
+            SanitizeAndHealUIHierarchy();
         }
 
         private void Start()
@@ -92,6 +93,7 @@ namespace MysticCombat.UI
 
             if (pauseMenuRoot != null) pauseMenuRoot.SetActive(false);
             if (resultsMenuRoot != null) resultsMenuRoot.SetActive(false);
+            SanitizeAndHealUIHierarchy();
         }
 
         private void OnDestroy()
@@ -162,6 +164,7 @@ namespace MysticCombat.UI
                 pauseMenuRoot.SetActive(true);
             }
 
+            SanitizeAndHealUIHierarchy();
             selectedPauseIndex = 0;
             UpdatePauseSelectionVisuals();
             Debug.Log("<color=#00e676>[CombatMenuController]</color> Game PAUSED. Physics and clocks frozen.");
@@ -223,7 +226,7 @@ namespace MysticCombat.UI
 
                 if (isSel)
                 {
-                    label.text = $"▶  {pauseLabels[i]}  ◀";
+                    label.text = $">  {pauseLabels[i]}  <";
                     label.color = new Color(1f, 0.88f, 0.25f, 1f); // Solar Gold
                     if (bg != null) bg.color = new Color(0.18f, 0.32f, 0.52f, 0.95f); // Glowing Accent Slate
                     pauseButtons[i].transform.localScale = new Vector3(1.04f, 1.04f, 1f);
@@ -285,24 +288,39 @@ namespace MysticCombat.UI
                 ? GameManager.Instance.P2SelectedCharacterId.ToLower()
                 : "saitama";
 
-            string winnerChar = winnerPlayerIndex == 1 ? p1Char : p2Char;
+            string winnerChar = winnerPlayerIndex == 1 ? p1Char : (winnerPlayerIndex == 2 ? p2Char : p1Char);
             string winnerName = winnerChar == "goku" ? "GOKU" : "SAITAMA";
             bool isVsCpu = GameManager.Instance != null && GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu;
 
-            string titlePrefix = (winnerPlayerIndex == 2 && isVsCpu) ? "CPU " : $"PLAYER {winnerPlayerIndex}: ";
-            if (resultsWinnerText != null)
+            if (winnerPlayerIndex == 0)
             {
-                resultsWinnerText.text = $"{titlePrefix}{winnerName} WINS!";
-                resultsWinnerText.color = winnerChar == "goku"
-                    ? new Color(0f, 0.96f, 1f, 1f) // Electric Cyan
-                    : new Color(1f, 0.88f, 0.25f, 1f); // Solar Gold
+                if (resultsWinnerText != null)
+                {
+                    resultsWinnerText.text = "DRAW MATCH!";
+                    resultsWinnerText.color = new Color(1f, 0.85f, 0.2f, 1f); // Solar Gold
+                }
+                if (resultsEpithetText != null)
+                {
+                    resultsEpithetText.text = "HONORABLE DRAW | UNSTOPPABLE FORCE MET IMMOVABLE OBJECT";
+                }
             }
-
-            if (resultsEpithetText != null)
+            else
             {
-                resultsEpithetText.text = winnerChar == "goku"
-                    ? "HOPE OF THE UNIVERSE • TOURNAMENT VICTOR"
-                    : "HERO FOR FUN • ONE PUNCH CHAMPION";
+                string titlePrefix = (winnerPlayerIndex == 2 && isVsCpu) ? "CPU " : $"PLAYER {winnerPlayerIndex}: ";
+                if (resultsWinnerText != null)
+                {
+                    resultsWinnerText.text = $"{titlePrefix}{winnerName} WINS!";
+                    resultsWinnerText.color = winnerChar == "goku"
+                        ? new Color(0f, 0.96f, 1f, 1f) // Electric Cyan
+                        : new Color(1f, 0.88f, 0.25f, 1f); // Solar Gold
+                }
+
+                if (resultsEpithetText != null)
+                {
+                    resultsEpithetText.text = winnerChar == "goku"
+                        ? "HOPE OF THE UNIVERSE | TOURNAMENT VICTOR"
+                        : "HERO FOR FUN | ONE PUNCH CHAMPION";
+                }
             }
 
             if (resultsScoreText != null && matchManager != null)
@@ -337,6 +355,7 @@ namespace MysticCombat.UI
                 }
             }
 
+            SanitizeAndHealUIHierarchy();
             PlaySound(victorySfx, 0.75f);
 
             selectedResultsIndex = 0;
@@ -405,7 +424,7 @@ namespace MysticCombat.UI
 
                 if (isSel)
                 {
-                    label.text = $"▶  {resultsLabels[i]}  ◀";
+                    label.text = $">  {resultsLabels[i]}  <";
                     if (i == 0)
                     {
                         label.color = new Color(1f, 0.88f, 0.25f, 1f); // Solar Gold
@@ -534,6 +553,28 @@ namespace MysticCombat.UI
                 }
             }
 
+            // Auto-wire Pause Menu elements if unassigned
+            if (pauseButtons.Count == 0 || pauseButtonTexts.Count == 0)
+            {
+                pauseButtons.Clear();
+                pauseButtonTexts.Clear();
+                if (pauseMenuRoot != null)
+                {
+                    string[] btnNames = { "Btn_Pause_Resume", "Btn_Pause_Restart", "Btn_Pause_CharSelect", "Btn_Pause_MainMenu" };
+                    foreach (string bName in btnNames)
+                    {
+                        Transform t = pauseMenuRoot.transform.Find($"Pause_ModalBox/{bName}");
+                        if (t != null)
+                        {
+                            Button btn = t.GetComponent<Button>();
+                            if (btn != null) pauseButtons.Add(btn);
+                            TextMeshProUGUI txt = t.GetComponentInChildren<TextMeshProUGUI>(true);
+                            if (txt != null) pauseButtonTexts.Add(txt);
+                        }
+                    }
+                }
+            }
+
             // 2. Results Menu Root
             if (resultsMenuRoot == null)
             {
@@ -548,9 +589,42 @@ namespace MysticCombat.UI
                 }
             }
 
+            // Auto-wire Results Menu elements if unassigned
+            if (resultsButtons.Count == 0 || resultsButtonTexts.Count == 0)
+            {
+                resultsButtons.Clear();
+                resultsButtonTexts.Clear();
+                if (resultsMenuRoot != null)
+                {
+                    Transform box = resultsMenuRoot.transform.Find("Results_ModalBox");
+                    if (box != null)
+                    {
+                        if (resultsTitleText == null) resultsTitleText = box.Find("Results_Title")?.GetComponent<TextMeshProUGUI>();
+                        if (resultsWinnerText == null) resultsWinnerText = box.Find("Results_Winner")?.GetComponent<TextMeshProUGUI>();
+                        if (resultsEpithetText == null) resultsEpithetText = box.Find("Results_Epithet")?.GetComponent<TextMeshProUGUI>();
+                        if (resultsScoreText == null) resultsScoreText = box.Find("Results_Score")?.GetComponent<TextMeshProUGUI>();
+                        if (resultsAvatarImage == null) resultsAvatarImage = box.Find("Results_AvatarCard/Avatar_Image")?.GetComponent<Image>();
+
+                        string[] rBtnNames = { "Btn_Results_Rematch", "Btn_Results_CharSelect", "Btn_Results_MainMenu" };
+                        foreach (string bName in rBtnNames)
+                        {
+                            Transform t = box.Find(bName);
+                            if (t != null)
+                            {
+                                Button btn = t.GetComponent<Button>();
+                                if (btn != null) resultsButtons.Add(btn);
+                                TextMeshProUGUI txt = t.GetComponentInChildren<TextMeshProUGUI>(true);
+                                if (txt != null) resultsButtonTexts.Add(txt);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Bind Button Click Events
             BindPauseButtonEvents();
             BindResultsButtonEvents();
+            SanitizeAndHealUIHierarchy();
         }
 
         private TMP_FontAsset LoadFont(string fontName)
@@ -560,10 +634,122 @@ namespace MysticCombat.UI
             {
                 foreach (var f in Resources.FindObjectsOfTypeAll<TMP_FontAsset>())
                 {
-                    if (f.name == fontName) return f;
+                    if (f.name == fontName)
+                    {
+                        font = f;
+                        break;
+                    }
                 }
             }
+
+            TMP_FontAsset defaultFallback = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF") ?? TMP_Settings.defaultFontAsset;
+
+            if (font != null)
+            {
+                EnsureFontIntegrity(font, defaultFallback);
+            }
+            else
+            {
+                font = defaultFallback;
+            }
+
             return font;
+        }
+
+        /// <summary>
+        /// Scans all TextMeshProUGUI components in the pause and results menus,
+        /// verifies font material texture bindings, replaces missing glyphs,
+        /// sanitizes Unicode characters to standard ASCII, and ensures no blocks can ever render.
+        /// </summary>
+        public void SanitizeAndHealUIHierarchy()
+        {
+            TMP_FontAsset defaultFallback = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            if (defaultFallback == null)
+            {
+                defaultFallback = TMP_Settings.defaultFontAsset;
+            }
+
+            List<GameObject> roots = new List<GameObject>();
+            if (pauseMenuRoot != null) roots.Add(pauseMenuRoot);
+            if (resultsMenuRoot != null) roots.Add(resultsMenuRoot);
+
+            foreach (var root in roots)
+            {
+                TextMeshProUGUI[] labels = root.GetComponentsInChildren<TextMeshProUGUI>(true);
+                foreach (var label in labels)
+                {
+                    if (label == null) continue;
+
+                    // 1. Sanitize text string characters
+                    if (!string.IsNullOrEmpty(label.text))
+                    {
+                        string sanitized = label.text
+                            .Replace('>', '>')
+                            .Replace('<', '<')
+                            .Replace('*', '*')
+                            .Replace('-', '-')
+                            .Replace('|', '|');
+
+                        if (sanitized != label.text)
+                        {
+                            label.text = sanitized;
+                        }
+                    }
+
+                    // 2. Ensure font asset integrity
+                    TMP_FontAsset font = label.font;
+                    if (font == null)
+                    {
+                        if (defaultFallback != null) label.font = defaultFallback;
+                        continue;
+                    }
+
+                    EnsureFontIntegrity(font, defaultFallback);
+
+                    // 3. Check Material texture connection
+                    Material mat = label.fontSharedMaterial;
+                    if (mat != null)
+                    {
+                        Texture mainTex = mat.GetTexture("_MainTex");
+                        if (mainTex == null && font.atlasTexture != null)
+                        {
+                            mat.SetTexture("_MainTex", font.atlasTexture);
+                            label.fontSharedMaterial = mat;
+                        }
+                    }
+
+                    label.SetAllDirty();
+                    label.ForceMeshUpdate();
+                }
+            }
+        }
+
+        private void EnsureFontIntegrity(TMP_FontAsset font, TMP_FontAsset defaultFallback)
+        {
+            if (font == null) return;
+
+            // Reconnect _MainTex on material if null
+            if (font.material != null)
+            {
+                Texture currentTex = font.material.GetTexture("_MainTex");
+                if (currentTex == null && font.atlasTexture != null)
+                {
+                    font.material.SetTexture("_MainTex", font.atlasTexture);
+                }
+            }
+
+            // Ensure fallback font table has a robust full-character fallback
+            if (defaultFallback != null && font != defaultFallback)
+            {
+                if (font.fallbackFontAssetTable == null)
+                {
+                    font.fallbackFontAssetTable = new List<TMP_FontAsset>();
+                }
+                if (!font.fallbackFontAssetTable.Contains(defaultFallback))
+                {
+                    font.fallbackFontAssetTable.Add(defaultFallback);
+                }
+            }
         }
 
         private GameObject BuildPauseMenuHierarchy(TMP_FontAsset titleFont, TMP_FontAsset bodyFont)
@@ -617,7 +803,7 @@ namespace MysticCombat.UI
             subRt.anchoredPosition = new Vector2(0f, 115f);
             subRt.sizeDelta = new Vector2(460f, 25f);
             TextMeshProUGUI subTmp = subObj.AddComponent<TextMeshProUGUI>();
-            subTmp.text = "— COMBAT FROZEN —";
+            subTmp.text = "- COMBAT FROZEN -";
             if (bodyFont != null) subTmp.font = bodyFont;
             subTmp.fontSize = 13f;
             subTmp.alignment = TextAlignmentOptions.Center;
@@ -680,7 +866,7 @@ namespace MysticCombat.UI
             footerRt.anchoredPosition = new Vector2(0f, -185f);
             footerRt.sizeDelta = new Vector2(460f, 30f);
             TextMeshProUGUI footerTmp = footerObj.AddComponent<TextMeshProUGUI>();
-            footerTmp.text = "[W/S or ARROWS] Navigate   •   [ENTER] Select   •   [ESC] Resume";
+            footerTmp.text = "[W/S or ARROWS] Navigate   |   [ENTER] Select   |   [ESC] Resume";
             if (bodyFont != null) footerTmp.font = bodyFont;
             footerTmp.fontSize = 11f;
             footerTmp.alignment = TextAlignmentOptions.Center;
@@ -748,7 +934,7 @@ namespace MysticCombat.UI
             microRt.anchoredPosition = new Vector2(0f, 260f);
             microRt.sizeDelta = new Vector2(580f, 20f);
             TextMeshProUGUI microTmp = microObj.AddComponent<TextMeshProUGUI>();
-            microTmp.text = "★ ANIMEVERSE MARTIAL ARTS TOURNAMENT ★";
+            microTmp.text = "* ANIMEVERSE MARTIAL ARTS TOURNAMENT *";
             if (bodyFont != null) microTmp.font = bodyFont;
             microTmp.fontSize = 11.5f;
             microTmp.alignment = TextAlignmentOptions.Center;
@@ -761,7 +947,7 @@ namespace MysticCombat.UI
             titleRt.anchoredPosition = new Vector2(0f, 225f);
             titleRt.sizeDelta = new Vector2(580f, 48f);
             resultsTitleText = titleObj.AddComponent<TextMeshProUGUI>();
-            resultsTitleText.text = "★ WORLD CHAMPION ★";
+            resultsTitleText.text = "* WORLD CHAMPION *";
             if (titleFont != null) resultsTitleText.font = titleFont;
             resultsTitleText.fontSize = 34f;
             resultsTitleText.alignment = TextAlignmentOptions.Center;
@@ -810,7 +996,7 @@ namespace MysticCombat.UI
             epRt.anchoredPosition = new Vector2(0f, 22f);
             epRt.sizeDelta = new Vector2(580f, 24f);
             resultsEpithetText = epithetObj.AddComponent<TextMeshProUGUI>();
-            resultsEpithetText.text = "HOPE OF THE UNIVERSE • TOURNAMENT VICTOR";
+            resultsEpithetText.text = "HOPE OF THE UNIVERSE | TOURNAMENT VICTOR";
             if (bodyFont != null) resultsEpithetText.font = bodyFont;
             resultsEpithetText.fontSize = 13.5f;
             resultsEpithetText.alignment = TextAlignmentOptions.Center;
@@ -886,7 +1072,7 @@ namespace MysticCombat.UI
             footerRt.anchoredPosition = new Vector2(0f, -260f);
             footerRt.sizeDelta = new Vector2(580f, 30f);
             TextMeshProUGUI footerTmp = footerObj.AddComponent<TextMeshProUGUI>();
-            footerTmp.text = "[W/S or ARROWS] Navigate   •   [ENTER] Confirm   •   [ESC] Main Menu";
+            footerTmp.text = "[W/S or ARROWS] Navigate   |   [ENTER] Confirm   |   [ESC] Main Menu";
             if (bodyFont != null) footerTmp.font = bodyFont;
             footerTmp.fontSize = 11.5f;
             footerTmp.alignment = TextAlignmentOptions.Center;

@@ -29,8 +29,8 @@
     "name": "Consecutive Normal Punches",
     "type": "instant",
     "kiCost": 20,
-    "damage": 12,
-    "hits": 3,
+    "damage": 2,
+    "hits": 10,
     "startupFrames": 4,
     "activeFrames": 12,
     "recoveryFrames": 8

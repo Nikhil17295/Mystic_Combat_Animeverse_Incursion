@@ -8,6 +8,6 @@ echo =========================================================
 echo Starting server at http://localhost:8085 ...
 echo.
 
-start "" "http://localhost:8085"
+start "" cmd /c "timeout /t 1 /nobreak >nul && start http://localhost:8085/index.html?t=%RANDOM%"
 python server.py
 pause

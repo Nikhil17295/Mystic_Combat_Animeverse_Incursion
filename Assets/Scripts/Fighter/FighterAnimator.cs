@@ -38,9 +38,18 @@ namespace MysticCombat.Fighter
         [Tooltip("Ki meditation channel loop speed.")]
         [SerializeField] private float meditateFps = 7f;
 
+        [Tooltip("Hurt reaction playback speed (snappy read).")]
+        [SerializeField] private float hurtFps = 8.5f;
+
+        [Tooltip("Knockout collapse speed.")]
+        [SerializeField] private float deathFps = 6f;
+
+        [Tooltip("Victory celebratory loop speed.")]
+        [SerializeField] private float victoryFps = 6f;
+
         [Header("Sprite Scaling")]
         [Tooltip("Pixels per unit for crisp pixel scaling. Lower = bigger on screen.")]
-        [SerializeField] private float pixelsPerUnit = 24f;
+        [SerializeField] private float pixelsPerUnit = 29.5f;
 
         #endregion
 
@@ -62,7 +71,24 @@ namespace MysticCombat.Fighter
         private readonly List<Sprite> ultimateFrames = new List<Sprite>();
         private readonly List<Sprite> jumpFrames = new List<Sprite>();
         private readonly List<Sprite> meditateFrames = new List<Sprite>();
+        private readonly List<Sprite> hurtFrames = new List<Sprite>();
+        private readonly List<Sprite> knockoutFrames = new List<Sprite>();
+        private readonly List<Sprite> victoryFrames = new List<Sprite>();
         private Sprite crouchSprite;
+
+        // Super Saiyan Animation Sequences (Goku)
+        private readonly List<Sprite> ssjIdleFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjWalkFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjPunchFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjHeavyFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjSkillFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjUltimateFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjJumpFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjMeditateFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjHurtFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjKnockoutFrames = new List<Sprite>();
+        private readonly List<Sprite> ssjVictoryFrames = new List<Sprite>();
+        private Sprite ssjCrouchSprite;
 
         private float animTimer;
         private int currentFrameIndex;
@@ -105,6 +131,35 @@ namespace MysticCombat.Fighter
 
         #endregion
 
+        #region Public Properties
+
+        /// <summary>
+        /// Total real duration of one complete turn of the character's victory animation.
+        /// </summary>
+        public float VictoryDuration
+        {
+            get
+            {
+                var vic = GetFrames(ssjVictoryFrames, victoryFrames);
+                return (vic != null && vic.Count > 0) ? (float)vic.Count / victoryFps : 1.5f;
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the victory animation has completed all frames of its single turn.
+        /// </summary>
+        public bool IsVictoryFinished
+        {
+            get
+            {
+                var vic = GetFrames(ssjVictoryFrames, victoryFrames);
+                return controller != null && controller.CurrentState == FighterState.Victory &&
+                       vic != null && vic.Count > 0 && currentFrameIndex >= vic.Count - 1;
+            }
+        }
+
+        #endregion
+
         #region Frame Loading
 
         /// <summary>
@@ -123,11 +178,11 @@ namespace MysticCombat.Fighter
             // Adjust PPU so both fighters occupy ~2 world units height
             if (characterFolder.ToLower().Contains("saitama"))
             {
-                pixelsPerUnit = 28f; // 55px body / 28 = ~1.96 world units
+                pixelsPerUnit = 34.5f; // 55px body / 28 = ~1.96 world units
             }
             else
             {
-                pixelsPerUnit = 24f; // 47px body / 24 = ~1.96 world units
+                pixelsPerUnit = 29.5f; // 47px body / 24 = ~1.96 world units
             }
 
             // Load multi-frame sequences
@@ -139,9 +194,48 @@ namespace MysticCombat.Fighter
             LoadSequence(framesDir, "ultimate", ultimateFrames);
             LoadSequence(framesDir, "jump", jumpFrames);
             LoadSequence(framesDir, "meditate", meditateFrames);
+            LoadSequence(framesDir, "hurt", hurtFrames);
+            LoadSequence(framesDir, "death", knockoutFrames);
+            if (knockoutFrames.Count == 0) LoadSequence(framesDir, "knockout", knockoutFrames);
+            if (knockoutFrames.Count == 0) LoadSequence(framesDir, "ko", knockoutFrames);
+            LoadSequence(framesDir, "victory", victoryFrames);
+
+            // Check for new_ultimate frames (e.g. Saitama serious punch windup)
+            List<Sprite> newUlt = new List<Sprite>();
+            LoadSequence(framesDir, "new_ultimate", newUlt);
+            if (newUlt.Count > 0)
+            {
+                ultimateFrames.InsertRange(0, newUlt);
+            }
 
             // Load crouch pose
             crouchSprite = LoadSingleOrFirst(framesDir, "crouch");
+
+            // Load Super Saiyan frames if available (for Goku)
+            if (characterFolder.ToLower().Contains("goku"))
+            {
+                string ssjDir = Path.Combine(Application.dataPath, "Sprites", "Fighters", "Goku", "Frames_SSJ");
+                if (Directory.Exists(ssjDir))
+                {
+                    LoadSequence(ssjDir, "idle", ssjIdleFrames);
+                    LoadSequence(ssjDir, "walk", ssjWalkFrames);
+                    LoadSequence(ssjDir, "punch", ssjPunchFrames);
+                    LoadSequence(ssjDir, "heavy", ssjHeavyFrames);
+                    LoadSequence(ssjDir, "skill", ssjSkillFrames);
+                    LoadSequence(ssjDir, "ultimate", ssjUltimateFrames);
+                    LoadSequence(ssjDir, "jump", ssjJumpFrames);
+                    LoadSequence(ssjDir, "meditate", ssjMeditateFrames);
+                    LoadSequence(ssjDir, "hurt", ssjHurtFrames);
+                    LoadSequence(ssjDir, "death", ssjKnockoutFrames);
+                    if (ssjKnockoutFrames.Count == 0) LoadSequence(ssjDir, "knockout", ssjKnockoutFrames);
+                    if (ssjKnockoutFrames.Count == 0) LoadSequence(ssjDir, "ko", ssjKnockoutFrames);
+                    LoadSequence(ssjDir, "victory", ssjVictoryFrames);
+                    ssjCrouchSprite = LoadSingleOrFirst(ssjDir, "crouch");
+
+                    Debug.Log($"[FighterAnimator] Loaded Goku SSJ: {ssjIdleFrames.Count} idle, {ssjWalkFrames.Count} walk, " +
+                              $"{ssjPunchFrames.Count} punch, {ssjHeavyFrames.Count} heavy, {ssjSkillFrames.Count} skill frames.");
+                }
+            }
 
             // Set initial sprite
             if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
@@ -255,15 +349,17 @@ namespace MysticCombat.Fighter
                 lastState = currentState;
             }
 
+            bool isSSJ = controller != null && controller.IsSuperSaiyan;
+
             switch (currentState)
             {
                 case FighterState.Idle:
                 case FighterState.Exhausted:
-                    PlayLoop(idleFrames, idleFps);
+                    PlayLoop(GetFrames(ssjIdleFrames, idleFrames), idleFps);
                     break;
 
                 case FighterState.Walking:
-                    PlayLoop(walkFrames, walkFps);
+                    PlayLoop(GetFrames(ssjWalkFrames, walkFrames), walkFps);
                     break;
 
                 case FighterState.Jumping:
@@ -272,30 +368,80 @@ namespace MysticCombat.Fighter
                     break;
 
                 case FighterState.Crouching:
-                    if (crouchSprite != null) spriteRenderer.sprite = crouchSprite;
+                    Sprite cSprite = (isSSJ && ssjCrouchSprite != null) ? ssjCrouchSprite : crouchSprite;
+                    if (cSprite != null) spriteRenderer.sprite = cSprite;
                     break;
 
                 case FighterState.Meditating:
-                    if (meditateFrames.Count > 0)
-                        PlayLoop(meditateFrames, meditateFps);
+                    var med = GetFrames(ssjMeditateFrames, meditateFrames);
+                    if (med.Count > 0) PlayLoop(med, meditateFps);
                     break;
 
                 case FighterState.LightAttack:
-                    PlayOnce(punchFrames, lightAttackFps);
+                    var lightFrames = GetFrames(ssjPunchFrames, punchFrames);
+                    float lightSpeed = lightFrames.Count > 0 ? Mathf.Max(6f, (float)lightFrames.Count / 0.44f) : lightAttackFps;
+                    PlayOnce(lightFrames, lightSpeed);
                     break;
 
                 case FighterState.HeavyAttack:
-                    PlayOnce(heavyFrames.Count > 0 ? heavyFrames : punchFrames, heavyAttackFps);
+                    var heavy = GetFrames(ssjHeavyFrames, heavyFrames);
+                    var heavyList = heavy.Count > 0 ? heavy : GetFrames(ssjPunchFrames, punchFrames);
+                    float heavySpeed = heavyList.Count > 0 ? Mathf.Max(5f, (float)heavyList.Count / 0.88f) : heavyAttackFps;
+                    PlayOnce(heavyList, heavySpeed);
                     break;
 
                 case FighterState.Skill:
-                    PlayOnce(skillFrames.Count > 0 ? skillFrames : punchFrames, skillFps);
+                    if (gameObject.name.ToLower().Contains("saitama"))
+                    {
+                        var skill = GetFrames(ssjSkillFrames, skillFrames);
+                        var skillList = skill.Count > 0 ? skill : punchFrames;
+                        // Rapid looping punch flurry for the entire 2.70s shout
+                        PlayLoop(skillList, 11f);
+                    }
+                    else
+                    {
+                        // Goku has no separate skill attack animation; his skill is pure Super Saiyan transformation.
+                        var idle = GetFrames(ssjIdleFrames, idleFrames);
+                        PlayLoop(idle, idleFps);
+                    }
                     break;
 
                 case FighterState.Ultimate:
-                    PlayOnce(ultimateFrames.Count > 0 ? ultimateFrames : heavyFrames, ultimateFps);
+                    var ult = GetFrames(ssjUltimateFrames, ultimateFrames);
+                    var ultList = ult.Count > 0 ? ult : GetFrames(ssjHeavyFrames, heavyFrames);
+                    // Match animation progression to exact voice audio duration!
+                    float ultDuration = gameObject.name.ToLower().Contains("goku") ? 3.36f : 3.80f;
+                    float ultSpeed = ultList.Count > 0 ? Mathf.Max(2.5f, (float)ultList.Count / ultDuration) : ultimateFps;
+                    PlayOnce(ultList, ultSpeed);
+                    break;
+
+                case FighterState.HitStun:
+                case FighterState.KnockBack:
+                    var hurt = GetFrames(ssjHurtFrames, hurtFrames);
+                    if (hurt.Count > 0) PlayOnce(hurt, hurtFps);
+                    break;
+
+                case FighterState.Knockout:
+                    var ko = GetFrames(ssjKnockoutFrames, knockoutFrames);
+                    if (ko.Count > 0)
+                    {
+                        // Unhurried cinematic collapse over 3.8 real seconds
+                        float koSpeed = Mathf.Max(2.5f, (float)ko.Count / 3.8f);
+                        PlayOnce(ko, koSpeed, unscaled: true);
+                    }
+                    break;
+
+                case FighterState.Victory:
+                    var vic = GetFrames(ssjVictoryFrames, victoryFrames);
+                    if (vic.Count > 0) PlayOnce(vic, victoryFps, unscaled: true);
                     break;
             }
+        }
+
+        private List<Sprite> GetFrames(List<Sprite> ssjList, List<Sprite> baseList)
+        {
+            bool isSSJ = controller != null && controller.IsSuperSaiyan;
+            return (isSSJ && ssjList != null && ssjList.Count > 0) ? ssjList : baseList;
         }
 
         /// <summary>
@@ -303,47 +449,49 @@ namespace MysticCombat.Fighter
         /// </summary>
         private void UpdateJumpPose()
         {
-            if (jumpFrames == null || jumpFrames.Count == 0) return;
+            var jFrames = GetFrames(ssjJumpFrames, jumpFrames);
+            if (jFrames == null || jFrames.Count == 0) return;
 
             float vy = rb != null ? rb.linearVelocity.y : 0f;
 
-            if (jumpFrames.Count >= 5)
+            if (jFrames.Count >= 5)
             {
                 if (vy > 4.0f)
                 {
-                    spriteRenderer.sprite = jumpFrames[0]; // Launch
+                    spriteRenderer.sprite = jFrames[0]; // Launch
                 }
                 else if (vy > 1.0f)
                 {
-                    spriteRenderer.sprite = jumpFrames[1]; // Ascending
+                    spriteRenderer.sprite = jFrames[1]; // Ascending
                 }
                 else if (Mathf.Abs(vy) <= 1.0f)
                 {
-                    spriteRenderer.sprite = jumpFrames[2]; // Apex hangtime
+                    spriteRenderer.sprite = jFrames[2]; // Apex hangtime
                 }
                 else if (vy >= -5.0f)
                 {
-                    spriteRenderer.sprite = jumpFrames[3]; // Descent
+                    spriteRenderer.sprite = jFrames[3]; // Descent
                 }
                 else
                 {
-                    spriteRenderer.sprite = jumpFrames[jumpFrames.Count - 1]; // Fast descent
+                    spriteRenderer.sprite = jFrames[jFrames.Count - 1]; // Fast descent
                 }
             }
             else
             {
                 // Smooth normalized mapping for any count of jump frames
                 float t = Mathf.InverseLerp(12f, -12f, vy);
-                int frameIdx = Mathf.Clamp(Mathf.FloorToInt(t * jumpFrames.Count), 0, jumpFrames.Count - 1);
-                spriteRenderer.sprite = jumpFrames[frameIdx];
+                int frameIdx = Mathf.Clamp(Mathf.FloorToInt(t * jFrames.Count), 0, jFrames.Count - 1);
+                spriteRenderer.sprite = jFrames[frameIdx];
             }
         }
 
-        private void PlayLoop(List<Sprite> frames, float fps)
+        private void PlayLoop(List<Sprite> frames, float fps, bool unscaled = false)
         {
             if (frames == null || frames.Count == 0) return;
 
-            animTimer += Time.deltaTime;
+            float dt = unscaled ? Time.unscaledDeltaTime : Time.deltaTime;
+            animTimer += dt;
             float frameDuration = 1f / fps;
 
             if (animTimer >= frameDuration)
@@ -355,11 +503,12 @@ namespace MysticCombat.Fighter
             spriteRenderer.sprite = frames[currentFrameIndex];
         }
 
-        private void PlayOnce(List<Sprite> frames, float fps)
+        private void PlayOnce(List<Sprite> frames, float fps, bool unscaled = false)
         {
             if (frames == null || frames.Count == 0) return;
 
-            animTimer += Time.deltaTime;
+            float dt = unscaled ? Time.unscaledDeltaTime : Time.deltaTime;
+            animTimer += dt;
             float frameDuration = 1f / fps;
 
             if (animTimer >= frameDuration)

@@ -174,6 +174,21 @@ namespace MysticCombat.Core
             fc1.opponent = fighter2.transform;
             fc2.opponent = fighter1.transform;
 
+            // Ensure VFXManager is bootstrapped
+            if (Object.FindAnyObjectByType<Combat.VFXManager>() == null)
+            {
+                GameObject vfxObj = new GameObject("VFXManager");
+                vfxObj.AddComponent<Combat.VFXManager>();
+            }
+
+            // Ensure dynamic Ki particle aura is present on both fighters
+            if (fighter1.GetComponent<Combat.FighterKiAura>() == null) fighter1.AddComponent<Combat.FighterKiAura>();
+            if (fighter2.GetComponent<Combat.FighterKiAura>() == null) fighter2.AddComponent<Combat.FighterKiAura>();
+
+            // Ensure authentic Kamehameha Beam VFX is attached to Goku
+            if (fighter1.name.ToLower().Contains("goku") && fighter1.GetComponent<Combat.KamehamehaBeamVFX>() == null) fighter1.AddComponent<Combat.KamehamehaBeamVFX>();
+            if (fighter2.name.ToLower().Contains("goku") && fighter2.GetComponent<Combat.KamehamehaBeamVFX>() == null) fighter2.AddComponent<Combat.KamehamehaBeamVFX>();
+
             // Wire MatchManager if present
             MatchManager matchManager = FindAnyObjectByType<MatchManager>();
             if (matchManager == null)

@@ -17,6 +17,8 @@ namespace MysticCombat.Fighter
         HitStun,
         KnockBack,
         Meditating,
-        Exhausted
+        Exhausted,
+        Knockout,
+        Victory
     }
 }

@@ -19,7 +19,8 @@ namespace MysticCombat.Combat
         [SerializeField] private int damage = 10;
 
         [Tooltip("Knockback force applied to target.")]
-        [SerializeField] private float knockback = 6f;
+        [SerializeField] private float knockback = 4.5f;
+        [SerializeField] private float knockbackY = 1.0f;
 
         [Tooltip("Ki gained by attacker on hit.")]
         [SerializeField] private float kiGainOnHit = 6f;
@@ -47,6 +48,8 @@ namespace MysticCombat.Combat
         private readonly HashSet<Transform> hitTargetsThisSwing = new HashSet<Transform>();
         private EnergySystem ownerEnergy;
         private SpriteRenderer ownerSr;
+        private bool enableHitStop = true;
+        private float shakeIntensityMultiplier = 1.0f;
 
         #endregion
 
@@ -55,6 +58,7 @@ namespace MysticCombat.Combat
         public bool IsActive => isActive;
         public int Damage => damage;
         public float Knockback => knockback;
+        public float KnockbackY => knockbackY;
 
         #endregion
 
@@ -129,11 +133,12 @@ namespace MysticCombat.Combat
 
         #region Public Methods
 
-        public void Setup(Transform ownerTransform, int hitDamage, float hitKnockback, float kiGain)
+        public void Setup(Transform ownerTransform, int hitDamage, float hitKnockback, float kiGain, float hitKnockbackY = 1.0f)
         {
             owner = ownerTransform;
             damage = hitDamage;
             knockback = hitKnockback;
+            knockbackY = hitKnockbackY;
             kiGainOnHit = kiGain;
             if (owner != null)
             {
@@ -142,13 +147,16 @@ namespace MysticCombat.Combat
             }
         }
 
-        public void ConfigureAttack(int hitDamage, float hitKnockback, float kiGain, Vector2 offset, Vector2 size)
+        public void ConfigureAttack(int hitDamage, float hitKnockback, float kiGain, Vector2 offset, Vector2 size, float hitKnockbackY = 1.0f, bool hitStop = true, float shakeMult = 1.0f)
         {
             damage = hitDamage;
             knockback = hitKnockback;
+            knockbackY = hitKnockbackY;
             kiGainOnHit = kiGain;
             hitboxOffset = offset;
             hitboxSize = size;
+            enableHitStop = hitStop;
+            shakeIntensityMultiplier = shakeMult;
 
             if (hitboxCollider == null) hitboxCollider = GetComponent<BoxCollider2D>();
             if (hitboxCollider != null)
@@ -247,7 +255,7 @@ namespace MysticCombat.Combat
                 if (ownerSr != null && ownerSr.flipX) facingDir = -1f;
                 else if (target.position.x < owner.position.x) facingDir = -1f;
 
-                targetRb.linearVelocity = new Vector2(facingDir * knockback, 3.2f);
+                targetRb.linearVelocity = new Vector2(facingDir * knockback, knockbackY);
             }
 
             // 5. Play Visceral Hit Impact Audio Feedback
@@ -275,6 +283,25 @@ namespace MysticCombat.Combat
                 {
                     targetAudio.PlayLightHit();
                 }
+            }
+
+            // 6. Trigger Visual Combat Juice (Hit Sparks, Shockwaves, Camera Shake & Hitstop)
+            Vector2 hitCenter = Vector2.Lerp(GetHitboxWorldCenter(), (Vector2)target.position + new Vector2(0f, 0.9f), 0.5f);
+            if (VFXManager.Instance != null)
+            {
+                VFXManager.Instance.PlayHitSpark(hitCenter, isHeavy: damage >= 15, triggerHitStop: enableHitStop, shakeMultiplier: shakeIntensityMultiplier);
+                if (damage >= 35)
+                {
+                    VFXManager.Instance.TriggerImpactFlash();
+                }
+            }
+
+            // 7. Apply Hitstun & Hurt Reaction
+            Fighter.FighterController targetFc = target.GetComponent<Fighter.FighterController>();
+            if (targetFc != null)
+            {
+                float stun = damage >= 15 ? 0.42f : 0.25f;
+                targetFc.ApplyHit(damage, stun);
             }
 
             Debug.Log($"<color=#00e676>[COMBAT HIT RESOLVED]</color> {owner?.name} -> {target.name} | Damage: {damage} | New HP: {targetHealth.CurrentHealth}/{targetHealth.MaxHealth} | Attacker Ki: +{kiGainOnHit}");

@@ -292,6 +292,7 @@ namespace MysticCombat.UI
                 matchManager.OnTimerUpdate -= UpdateTimer;
                 matchManager.OnRoundEnd -= OnRoundFinished;
                 matchManager.OnRoundStart -= OnRoundStarted;
+                matchManager.OnOvertimeStarted -= HandleOvertimeStarted;
             }
             matchManager = mm;
             SubscribeMatchEvents();
@@ -342,6 +343,7 @@ namespace MysticCombat.UI
                 matchManager.OnTimerUpdate -= UpdateTimer;
                 matchManager.OnRoundEnd -= OnRoundFinished;
                 matchManager.OnRoundStart -= OnRoundStarted;
+                matchManager.OnOvertimeStarted -= HandleOvertimeStarted;
             }
 
             isSubscribed = false;
@@ -354,13 +356,15 @@ namespace MysticCombat.UI
             matchManager.OnTimerUpdate -= UpdateTimer;
             matchManager.OnRoundEnd -= OnRoundFinished;
             matchManager.OnRoundStart -= OnRoundStarted;
+            matchManager.OnOvertimeStarted -= HandleOvertimeStarted;
 
             matchManager.OnTimerUpdate += UpdateTimer;
             matchManager.OnRoundEnd += OnRoundFinished;
             matchManager.OnRoundStart += OnRoundStarted;
+            matchManager.OnOvertimeStarted += HandleOvertimeStarted;
 
             UpdateRoundScore(matchManager.P1RoundWins, matchManager.P2RoundWins);
-            UpdateTimer(matchManager.RoundTimer > 0f ? matchManager.RoundTimer : 99f);
+            UpdateTimer(matchManager.RoundTimer > 0f ? matchManager.RoundTimer : 199f);
         }
 
         /// <summary>
@@ -403,7 +407,7 @@ namespace MysticCombat.UI
             else
             {
                 UpdateRoundScore(0, 0);
-                UpdateTimer(99f);
+                UpdateTimer(199f);
             }
 
             SyncFighterAvatarsAndNames();
@@ -659,9 +663,26 @@ namespace MysticCombat.UI
         {
             ResetHealthBarsInstantly();
 
+            if (timerText != null)
+            {
+                timerText.color = Color.white;
+            }
+
             if (matchManager != null)
             {
                 UpdateRoundScore(matchManager.P1RoundWins, matchManager.P2RoundWins);
+            }
+        }
+
+        private void HandleOvertimeStarted()
+        {
+            if (timerText != null)
+            {
+                timerText.color = new Color(1f, 0.85f, 0.15f, 1f); // Warning Golden Yellow
+            }
+            if (roundTitleText != null)
+            {
+                roundTitleText.text = "★ OVERTIME • SUDDEN DEATH (+100s) ★";
             }
         }
 

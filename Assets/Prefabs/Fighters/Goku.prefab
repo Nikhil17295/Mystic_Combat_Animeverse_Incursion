@@ -108,8 +108,8 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.1796875}
-    oldSize: {x: 5.3333335, y: 5.3333335}
-    newSize: {x: 5.3333335, y: 5.3333335}
+    oldSize: {x: 4.338983, y: 4.338983}
+    newSize: {x: 4.338983, y: 4.338983}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
@@ -170,7 +170,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 5.3333335, y: 5.3333335}
+  m_Size: {x: 4.338983, y: 4.338983}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 0
@@ -215,6 +215,8 @@ MonoBehaviour:
   gravityScale: 3
   meditateKiPerSecond: 15
   redZoneSpeedMultiplier: 0.35
+  isSuperSaiyan: 0
+  superSaiyanTimer: 0
 --- !u!114 &1461611492751410668
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -234,7 +236,10 @@ MonoBehaviour:
   skillFps: 10
   ultimateFps: 6
   meditateFps: 7
-  pixelsPerUnit: 24
+  hurtFps: 8.5
+  deathFps: 6
+  victoryFps: 6
+  pixelsPerUnit: 29.5
 --- !u!114 &2215052640620348780
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -398,6 +403,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Combat.HitboxController
   damage: 10
   knockback: 5
+  knockbackY: 1
   kiGainOnHit: 6
   hitboxOffset: {x: 0.85, y: 0.9}
   hitboxSize: {x: 1.1, y: 0.85}

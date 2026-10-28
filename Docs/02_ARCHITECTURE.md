@@ -804,13 +804,363 @@ sequenceDiagram
    - The secondary fallback is state-driven (polling `matchManager.CurrentMatchState == RoundInProgress` in `Start()` and `Update()`).
    - This prevents silent Round 1s under any frame-timing or scene-load order variation.
 
+---
+
+## 20. Dual-Tier Character Transformation & Fallback Architecture (Super Saiyan Mode)
+
+Mystic Combat implements a decoupled, high-resilience transformation system allowing fighters to morph into elevated power forms (such as Goku ascending to Super Saiyan) without duplicating character prefabs, corrupting game loops, or causing missing-sprite crashes.
+
+```mermaid
+flowchart TD
+    A["Player presses Skill (U key)"] --> B{"Is Fighter Goku and Has >= 35 Ki?"}
+    B -- No --> C["Standard Skill / Flurry Attack"]
+    B -- Yes --> D["Consume 35 Ki"]
+    D --> E["ActivateSuperSaiyan(15s)"]
+    E --> F["Set isSuperSaiyan = true and Timer = 15.0s"]
+    F --> G["FighterAudio.StartKiMeditationAura() (DBZ Aura Loop)"]
+    F --> H["Apply Movement and Damage Multipliers (+25%)"]
+    F --> I["FighterAnimator Dynamic Resolution: GetFrames(ssjList, baseList)"]
+    I --> J{"SSJ Frame Sequence Sliced?"}
+    J -- Yes --> K["Render Golden Hair Super Saiyan Sprite"]
+    J -- No --> L["Graceful Fallback: Render Base Goku Sprite (Zero Crashes)"]
+    F --> M["Timer reaches 0s OR Round Over"]
+    M --> N["RevertSuperSaiyan(): Reset Speed, Damage, and Sprite Sets"]
+```
+
+### Architectural Highlights:
+1. **Zero-Crash Graceful Fallback (`GetFrames` Pattern):**
+   - In traditional sprite systems, switching form sets can throw index out-of-range or null pointer exceptions if an artist hasn't yet exported every single animation for the transformed state (e.g., crouching or jumping).
+   - `FighterAnimator.GetFrames(ssjList, baseList)` inspects if `isSuperSaiyan` is true and `ssjList.Count > 0`. If any SSJ sequence is missing, it dynamically falls back to the Base sequence. The game remains 100% playable at all times.
+2. **Stat Multiplier Overlay:**
+   - Rather than hardcoding separate Super Saiyan stat blocks, `FighterController` uses an operational multiplier (`isSuperSaiyan ? 1.25f : 1.0f`) on linear velocity calculations and hitbox configuration calls.
+3. **Round Reset Auto-Reversion:**
+   - `FighterController.ResetForNewRound()` explicitly calls `RevertSuperSaiyan()`, guaranteeing fighters spawn in base form at the start of each round.
+4. **Godot vs Unity Analogy:**
+   - **Godot:** In Godot, you might swap an `AnimatedSprite2D`'s `SpriteFrames` resource or flip an `AnimationTree` blend state.
+   - **Unity:** In Unity, `FighterAnimator` dynamically routes frame requests through the cached `Frames_SSJ` list pointers, avoiding asset reloads or disk reads during live 60 FPS combat.
+
+---
+
+## 21. Master VFX & Combat Juice Architecture (`VFXManager.cs` & `FighterKiAura.cs`)
+
+Mystic Combat implements a zero-allocation, pooled Visual Effects engine specifically designed for 60 FPS fighting game responsiveness.
+
+```mermaid
+flowchart TD
+    A["Attack Connects in HitboxController"] --> B["Calculate hitCenter = Lerp(HitboxCenter, HurtboxCenter, 0.5)"]
+    B --> C["VFXManager.Instance.PlayHitSpark(hitCenter, isHeavy)"]
+    C --> D["Recycle from Pre-warmed Object Pool (Zero GC Stutter)"]
+    C --> E["Apply Hitstop Micro-Pause: Time.timeScale = 0.04f (0.065s)"]
+    C --> F["Trigger Camera Shake on Camera.main"]
+    A --> G{"Damage >= 35?"}
+    G -- Yes --> H["TriggerImpactFlash: 2-Frame White Overlay Flash"]
+    A --> I["Target.ApplyHit(damage, stunDuration)"]
+    I --> J["Target enters FighterState.HitStun -> Plays hurt_*.png"]
+    I --> K{"Health <= 0?"}
+    K -- Yes --> L["Target enters FighterState.Knockout -> Plays death_*.png"]
+    K -- Yes --> M["Winner enters FighterState.Victory -> Plays victory_*.png single turn"]
+```
+
+### Key Architectural Pillars:
+1. **Pre-warmed Object Pooling:** In a fast fighter, attacks land 3–5 times per second. Spawning `Instantiate()` and `Destroy()` triggers Garbage Collection (GC) pauses that drop frames. `VFXManager` pre-warms 32 particle emitters and shockwave GameObjects in `Awake()`, cycling them through FIFO queues with `SetActive(true/false)`.
+2. **Hitstop (Juice / Impact Freeze):** A hallmark of Capcom and Arc System Works fighting games. Freezing the world for 65 milliseconds on heavy impact gives attacks real physical weight and lets the human eye register the collision.
+3. **Dynamic Ki Particle Aura (`FighterKiAura.cs`):** A custom particle emitter attached to each fighter that continuously evaluates state:
+   - Goku Super Saiyan: Blazing golden flames and rising particles.
+   - Base Goku Meditation: Electric cyan Ki flames.
+   - Saitama: Menacing crimson pressure aura.
+4. **Godot vs Unity Analogy:**
+   - **Godot:** In Godot, you'd emit signals to a global `VFX` autoload or instantiate packed scenes (`GPUParticles2D`) and call `queue_free()`.
+   - **Unity:** In Unity, `VFXManager.Instance` coordinates pre-warmed `ParticleSystem` components and screen-shake coroutines directly on the main scene camera.
+
+---
+
+## 22. Dramatic Slow-Motion K.O. State Machine & Authentic DBZ Flame Architecture
+
+To achieve authentic arcade fighting game weight and cinematic punch, Mystic Combat replaces abrupt round transitions with a 4-phase decoupled K.O. sequence and an oscillating dual-layer anime flame shell.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor HP as Fighter Health
+    participant MM as MatchManager
+    participant Phys as Physics (Box2D)
+    participant VFX as VFXManager
+    participant Anim as FighterAnimator
+    participant Def as Defeated Fighter
+    participant Win as Victorious Fighter
+
+    HP->>MM: OnDeath (Health reaches 0)
+    MM->>Def: TransitionTo(FighterState.Knockout)
+    MM->>Phys: Time.timeScale = 0.28f (Slow Motion Physics)
+    MM->>VFX: TriggerImpactFlash(0.12s) + CameraShake(0.40)
+    Note over Def,Anim: Phase 1: Loser plays 11-frame collapse animation in slow-mo
+    Anim->>Def: PlayOnce(death_0..10, fps: 6.5, unscaled: true)
+    MM->>MM: WaitForSecondsRealtime(1.8s)
+    Note over MM,Phys: Phase 2: Loser hits floor -> snap physics back to normal
+    MM->>Phys: Time.timeScale = 1.0f
+    MM->>VFX: PlayDustPuff(floor) + Impact Camera Shake(0.20)
+    Note over Win,Anim: Phase 3: Winner performs single-turn victory celebration
+    MM->>Win: TransitionTo(FighterState.Victory)
+    Anim->>Win: PlayOnce(victory_0..8, fps: 6.0, unscaled: true)
+    Note over MM: Phase 4: Wait for exactly 1 turn of victory animation (VictoryDuration)
+    MM->>MM: WaitForSeconds(VictoryDuration)
+    Note over MM: Phase 5: Start next round immediately!
+    MM->>MM: CheckWinCondition() / StartRound()
+```
+
+### Architectural Principles:
+1. **Decoupled Delta Time (`unscaled: true`):**
+   - **The Problem:** Scaling animations with `Time.deltaTime` during a slow-motion knockdown causes frame rate to drop from 60 FPS to 15 FPS, resulting in choppy 3-frame slideshow animations.
+   - **The Solution:** In [`FighterAnimator.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterAnimator.cs), `PlayOnce` and `PlayLoop` support `unscaled: true` using `Time.unscaledDeltaTime`. Physics (gravity, knockback recoil, debris) moves at $0.28\times$ cinematic speed, while the 11-frame pixel-art collapse plays at a full, fluid framerate over exactly 1.7 real seconds.
+2. **Dual-Layer Oscillating DBZ Aura (`FighterKiAura.cs`):**
+   - **Layer 1 (Spiky Flame Cocoon):** A high-frequency oscillating sprite shell (`dbz_spiky_aura.png`, 26 jagged flame spires) fluctuating at $24\text{–}28\text{ Hz}$ with dynamic Perlin scaling and alpha pulsation.
+   - **Layer 2 (Speed-Streak Sub-Emitter):** Vertical stretched needle particles shooting rapidly upward through the cocoon from the feet past the fighter's head.
+   - **Dynamic Color Tinting:** Single-pass tinting allows the grayscale master sprite to project Radiant DBZ Gold (Super Saiyan Goku), Electric Cyan (Base Goku meditation), or Blazing Crimson (Saitama).
+3. **Super Saiyan State Guards:**
+   - In [`FighterController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs), meditation is strictly blocked while `isSuperSaiyan` is true (`!isSuperSaiyan`), preventing Goku from generating Ki while ascended.
+4. **Pacing Standardization (199s Round Timer):**
+   - Set `roundDuration = 199f` in `MatchManager.cs` to eliminate rushed play and provide ample time for footsies, spacing, and dramatic momentum swings.
+5. **Godot vs Unity Analogy:**
+   - **Godot:** In Godot, you'd set `Engine.time_scale = 0.28`, and mark `process_mode = PROCESS_MODE_ALWAYS` or use `_process(get_process_delta_time())` on an `AnimatedSprite2D` to avoid timescale slowdown.
+   - **Unity:** In Unity, `Time.timeScale = 0.28f` governs the physics loop and `Time.deltaTime`, while `Time.unscaledDeltaTime` drives UI and decoupled celebratory sprite sequences.
 
 
+---
+
+## 24. Re-Entrant HitStop Management & 2D Vector Knockback Architecture
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P1 as Player 1 Hitbox
+    participant P2 as Player 2 Hitbox
+    participant FC1 as Fighter 1 Controller
+    participant FC2 as Fighter 2 Controller
+    participant VFX as VFXManager
+    participant Time as Unity Time Engine
+
+    Note over P1,P2: Simultaneous Attack Clash (Both land within 1 frame)
+    P1->>FC2: ProcessHit() deals damage + knockback
+    P1->>VFX: TriggerHitStop(0.065s)
+    Note over VFX: isHitStopActive was FALSE -> originalTimeScale = 1.0f
+    VFX->>Time: Time.timeScale = 0.04f (Physics micro-freeze)
+
+    P2->>FC1: ProcessHit() deals damage + knockback
+    P2->>VFX: TriggerHitStop(0.065s) (Re-entrant Call!)
+    Note over VFX: isHitStopActive is TRUE! Do NOT overwrite originalTimeScale!
+    VFX->>Time: Refresh HitStop timer, keep originalTimeScale = 1.0f
+
+    FC1->>FC1: TransitionTo(HitStun) -> attackHitbox.Deactivate()
+    FC2->>FC2: TransitionTo(HitStun) -> attackHitbox.Deactivate()
+
+    Note over VFX: Realtime duration completes
+    VFX->>Time: Time.timeScale = originalTimeScale (1.0f)
+    Note over VFX,Time: TimeScale safely restored! Zero permanent slow-mo!
+```
+
+### Architectural Pillars:
+1. **Re-Entrant HitStop Guard (`VFXManager.cs`):**
+   - Encapsulates `isHitStopActive` state.
+   - Prevents nested coroutines from reading an already slowed `Time.timeScale` ($0.04\text{f}$) as the "normal" scale.
+   - Restores physics speed safely on completion, interruption, or component disable.
+2. **2D Decoupled Knockback (`HitboxController.cs`):**
+   - Replaced monolithic vertical lift with parameterized `knockbackY` in `ConfigureAttack(damage, knockbackX, kiGain, offset, size, knockbackY)`.
+   - Allows fine-grained control: jabs flinch without floating, heavy strikes send targets reeling, and multi-hit flurries trap opponents in place.
+3. **Counter-Hit Attack Interruption (`FighterController.cs`):**
+   - In `TransitionTo(newState)`, if entering `HitStun`, `KnockBack`, or `Knockout`, `attackHitbox.Deactivate()` is executed immediately.
+   - Prevents lingering hitboxes from hitting after a fighter has already been interrupted.
+
+---
+
+## 23. Dual-Form Character Animation Architecture & Ground Plane Synchronization (`FighterAnimator.cs`)
+
+### Architectural Overview
+To support dynamic character transformations (e.g. Goku's transformation from Base to Super Saiyan) without instantiating new GameObjects or causing camera/physics glitches, `FighterAnimator.cs` implements a **Dual-Sequence State Dispatcher**:
+
+```mermaid
+sequenceDiagram
+    participant StateMachine as FighterController (HFSM)
+    participant Animator as FighterAnimator
+    participant Renderer as SpriteRenderer
+    participant FileSystem as Disk Asset Cache (Frames / Frames_SSJ)
+
+    Note over Animator,FileSystem: Awake(): Loads Base Frames & SSJ Frames into Parallel Lists
+    StateMachine->>Animator: UpdateAnimation() [CurrentState = Walking]
+    alt isSuperSaiyan == true
+        Animator->>Animator: GetFrames(ssjWalkFrames, walkFrames) -> Returns ssjWalkFrames
+        Animator->>Renderer: PlayLoop(ssjWalkFrames, 8.0 FPS)
+    else isSuperSaiyan == false
+        Animator->>Animator: GetFrames(ssjWalkFrames, walkFrames) -> Returns walkFrames
+        Animator->>Renderer: PlayLoop(walkFrames, 8.0 FPS)
+    end
+```
+
+### Architectural Highlights:
+1. **Parallel Sequence Loading:**
+   - On initialization, `FighterAnimator.cs` loads Base Goku frames from `Assets/Sprites/Fighters/Goku/Frames/` into `idleFrames`, `walkFrames`, etc.
+   - Concurrently, if `Frames_SSJ` exists, it populates `ssjIdleFrames`, `ssjWalkFrames`, etc.
+   - `GetFrames(ssjList, baseList)` provides instant runtime fallback: if a specific track is empty in SSJ (e.g., `skill` or `ultimate`), it gracefully falls back to the base form's animation without throwing null references.
+
+2. **Standardized Ground Plane Contract ($128 \times 128$, Baseline $Y = 105$):**
+   - Both Base and Super Saiyan assets strictly conform to a $128 \times 128$ texture contract with the character's planted feet pinned to $Y = 105$.
+   - `LoadFrame()` applies a calculated pivot:
+     $$\text{pivot} = \left(0.5f, \frac{128f - 105f}{128f}\right) = (0.5f, 0.1797f)$$
+   - This ensures transformation causes zero vertical hopping, zero hitbox drift, and zero floor penetration.
 
 
+---
+
+## 25. Match Manager Overtime Extension & Simultaneous Death Arbitration Architecture
+
+```mermaid
+flowchart TD
+    Start["Round Start (199s Timer)"] --> Tick["Tick Round Timer (Update)"]
+    Tick --> CheckDeath{"Fighter HP <= 0?"}
+    
+    CheckDeath -- "Yes (Death Event Fired)" --> WaitFrame["WaitForEndOfFrame() Arbitration"]
+    WaitFrame --> BothDead{"Both HP <= 0?"}
+    BothDead -- "Yes" --> DoubleKO["Double K.O.! Both Collapse
+P1 +1 Pt | P2 +1 Pt
+OnRoundEnd(0, round)"]
+    BothDead -- "No" --> SingleWin["Single Winner Knockout
+Winner +1 Pt
+OnRoundEnd(winner, round)"]
+
+    CheckDeath -- "No (Both Alive)" --> TimerZero{"roundTimer <= 0s?"}
+    TimerZero -- "No" --> Tick
+    TimerZero -- "Yes" --> CheckOT{"isOvertime == false?"}
+    CheckOT -- "Yes (Regular Time Over)" --> GrantOT["Grant +100s Overtime!
+isOvertime = true
+VFX Flash & Camera Shake
+HUD Yellow Warning"]
+    GrantOT --> Tick
+    CheckOT -- "No (Overtime Expired)" --> TimeDraw["Time-Out Draw!
+Neither Collapses
+P1 +1 Pt | P2 +1 Pt
+OnRoundEnd(0, round)"]
+
+    DoubleKO --> CheckWin{"CheckWinCondition()"}
+    SingleWin --> CheckWin
+    TimeDraw --> CheckWin
+
+    CheckWin -- "Both >= 2 Wins & Tied (2-2)" --> Tiebreak["Sudden Death Final Round!
+StartRound()"]
+    CheckWin -- "One Player >= 2 Wins" --> MatchOver["Tournament Champion Declared!
+OnMatchOver(winner)"]
+    CheckWin -- "Neither >= 2 Wins (e.g. 1-1)" --> NextRound["Start Next Round
+StartRound()"]
+```
+
+### Architectural Principles:
+1. **Deferred Death Arbitration (`WaitForEndOfFrame`):**
+   - Eliminates execution-order bias during trading blows.
+   - Accurately captures simultaneous double-deaths within the same frame tick.
+2. **Re-Entrant Draw Representation (`winnerIndex = 0`):**
+   - The event signature `OnRoundEnd?.Invoke(winnerPlayerIndex, currentRound)` utilizes `0` to denote a Draw.
+   - Listeners ([`HUDController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/HUDController.cs), [`CombatMenuController.cs`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CombatMenuController.cs)) seamlessly adapt by lighting both players' score gems and presenting Draw Match victory banners.
+3. **Pacing Continuity:**
+   - Overtime extensions do not reset health or fighter positions; combat flows uninterrupted with fresh clock pressure.
 
 
+---
+
+## 26. Kamehameha State Machine Lifecycle & Full-Screen AoE Blast Architecture
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Input as Player Input
+    participant FC as Goku FighterController
+    participant VFX as KamehamehaBeamVFX
+    participant Hit as HitboxController
+    participant Cam as VFXManager (Camera)
+    participant Opp as Opponent Fighter
+
+    Input->>FC: Ultimate Pressed (Q / O, 80 Ki)
+    FC->>FC: TransitionTo(FighterState.Ultimate)
+    Note over FC: attackTimer = 3.36s | startup = 2.15s | active = 1.21s
+
+    loop Phase 1: Startup Charge (2.15s)
+        VFX->>VFX: Position charge orb in cupped hands (-0.35m, 0.88m)
+        VFX->>VFX: Swell orb scale (0.20m -> 0.88m) + 30Hz Ki pulse
+        Note over FC: Audio: "KA... ME... HA... ME..."
+    end
+
+    Note over FC,VFX: Startup Timer reaches 0s -> Eruption!
+    FC->>Hit: Activate Hitbox (Offset: 4.6m, Size: 8.5m x 1.6m)
+    VFX->>Cam: TriggerCameraShake(0.30, 0.38s) + ImpactFlash(0.04s)
+    VFX->>VFX: Deactivate Orb -> Activate Muzzle Flare + Beam Body + Beam Head
+
+    loop Phase 2: Beam Blast (1.21s)
+        VFX->>VFX: Roaring plasma oscillation (1.35m - 1.55m thickness)
+        Hit->>Opp: Overlap detected! Deal 45 Dmg, 8.5f X / 2.2f Y Knockback
+        Note over Hit: Opponent added to hitTargetsThisSwing -> SINGLE HIT!
+        Note over FC: Audio: "HA-A-A-A!"
+    end
+
+    Note over VFX: activeTimer < 0.20s -> Fade beam alpha (1.0 -> 0.0)
+    FC->>Hit: Deactivate Hitbox
+    VFX->>VFX: StopAllVFX()
+    FC->>FC: TransitionTo(Idle)
+```
+
+### Architectural Principles:
+1. **Decoupled Visual Component (`KamehamehaBeamVFX.cs`):**
+   - Implements a self-contained visual controller attached directly to Goku.
+   - Monitors `controller.CurrentState`, `AttackStartupTimer`, and `AttackActiveTimer` to drive visual phases without polluting core movement or state transition logic.
+2. **Instant Interruption Cleanup:**
+   - If Goku takes damage and transitions to `HitStun` or `Knockout`, `KamehamehaBeamVFX.Update()` detects `CurrentState != Ultimate` and shuts down all active sprites on the exact same frame.
+3. **True AoE Beam Alignment:**
+   - Visual beam body ($7.2\text{m}$) and leading head ($1.3\text{m}$) yield an $8.5\text{m}$ total reach, perfectly synchronized with `HitboxController.ConfigureAttack(45, 8.5f, 15f, new Vector2(4.6f, 0.95f), new Vector2(8.5f, 1.6f), 2.2f)`.
 
 
+---
 
+## 42. UI Font Asset Architecture & Self-Healing Distance Field Rendering
 
+### Architectural Problem Statement
+In arcade fighting games, UI text must be instantaneous, crisp, and robust across diverse display aspect ratios. A failure in font asset texture binding or glyph coverage results in unreadable solid blocks (tofu quads) during critical moments like match pausing or tournament victory declarations.
+
+### Multi-Layered Defense-in-Depth Pipeline
+
+```mermaid
+flowchart TD
+    subgraph Layer 1: Serialized Assets
+        F1["ArcadeClassic_SDF.asset<br/>_MainTex = fileID -3925478913968619439"]
+        F2["RetroGaming_SDF.asset<br/>_MainTex = fileID -1603636736672497938"]
+        FB["Fallback Table<br/>LiberationSans SDF (GUID: 8f5863...)"]
+        F1 --> FB
+        F2 --> FB
+    end
+
+    subgraph Layer 2: Asset Storage
+        R1["Assets/Resources/Fonts/"]
+        R2["Assets/Fonts/TMP_Assets/"]
+    end
+
+    subgraph Layer 3: Runtime Self-Healing
+        CM["CombatMenuController.cs"]
+        EI["EnsureFontIntegrity(font)"]
+        SH["SanitizeAndHealUIHierarchy()"]
+        CM --> EI
+        CM --> SH
+    end
+
+    subgraph Layer 4: Screen Output
+        TXT["Crisp Retro Glyphs<br/>> RESUME <<br/>- COMBAT FROZEN -<br/>* WORLD CHAMPION *"]
+    end
+
+    Layer 1 --> Layer 2
+    Layer 2 --> Layer 3
+    Layer 3 --> Layer 4
+```
+
+### Self-Healing Runtime Architecture:
+1. **Material Texture Verification (`EnsureFontIntegrity`):**
+   Checks `font.material.GetTexture("_MainTex")`. If null, immediately re-links `font.material.SetTexture("_MainTex", font.atlasTexture)`.
+2. **Dynamic Fallback Assignment:**
+   If `font.fallbackFontAssetTable` is missing, dynamically appends `LiberationSans SDF` (which has complete ASCII and Latin-1 coverage).
+3. **Typography Sanitization (`SanitizeAndHealUIHierarchy`):**
+   Traverses all `TextMeshProUGUI` components on active and inactive menu roots. Sanitizes non-ASCII Unicode glyphs (`▶`, `◀`, `★`, `—`, `•`) into universal ASCII (`>`, `<`, `*`, `-`, `|`) and calls `label.ForceMeshUpdate()`.
+4. **Hierarchy Auto-Wiring:**
+   If `pauseMenuRoot` or `resultsMenuRoot` exists in the scene prefab without inspector button bindings, dynamic hierarchy traversal populates button lists and registers click listeners automatically.

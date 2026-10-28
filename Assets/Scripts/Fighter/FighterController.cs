@@ -49,6 +49,26 @@ namespace MysticCombat.Fighter
         [SerializeField] private float meditateKiPerSecond = 15f;
         [SerializeField] private float redZoneSpeedMultiplier = 0.35f;
 
+
+
+        [Header("Super Saiyan Transformation")]
+
+        [Tooltip("Whether this fighter is currently in Super Saiyan form.")]
+
+        [SerializeField] private bool isSuperSaiyan;
+
+
+
+        [Tooltip("Remaining seconds in Super Saiyan transformation.")]
+
+        [SerializeField] private float superSaiyanTimer;
+
+
+
+        public bool IsSuperSaiyan => isSuperSaiyan;
+
+        public float SuperSaiyanTimer => superSaiyanTimer;
+
         #endregion
 
         #region Cached Components
@@ -62,6 +82,7 @@ namespace MysticCombat.Fighter
         private float attackActiveTimer;
         private BoxCollider2D hurtboxCollider;
         private float flurryHitTimer;
+        private int flurryHitsRemaining;
 
         #endregion
 
@@ -76,6 +97,9 @@ namespace MysticCombat.Fighter
         /// Whether the fighter is currently touching the ground.
         /// </summary>
         public bool IsGrounded { get; private set; }
+
+        public float AttackStartupTimer => attackStartupTimer;
+        public float AttackActiveTimer => attackActiveTimer;
 
         #endregion
 
@@ -110,6 +134,11 @@ namespace MysticCombat.Fighter
             {
                 Combat.HurtboxController hb = GetComponentInChildren<Combat.HurtboxController>(true);
                 if (hb != null) hurtboxCollider = hb.GetComponent<BoxCollider2D>();
+            }
+
+            if (gameObject.name.ToLower().Contains("goku") && GetComponent<Combat.KamehamehaBeamVFX>() == null)
+            {
+                gameObject.AddComponent<Combat.KamehamehaBeamVFX>();
             }
         }
 
@@ -147,6 +176,7 @@ namespace MysticCombat.Fighter
         private void Update()
         {
             CheckGround();
+            HandleSuperSaiyanTimer();
             HandleStateTransitions();
             HandleKiGeneration();
         }
@@ -228,8 +258,8 @@ namespace MysticCombat.Fighter
 
             if (hurtboxCollider != null)
             {
-                hurtboxCollider.size = new Vector2(0.85f, 1.8f);
-                hurtboxCollider.offset = new Vector2(0f, 0.95f);
+                hurtboxCollider.size = new Vector2(0.70f, 1.50f);
+                hurtboxCollider.offset = new Vector2(0f, 0.78f);
             }
 
             if (spriteRenderer != null)
@@ -242,6 +272,7 @@ namespace MysticCombat.Fighter
             {
                 anim.ResetToIdle();
             }
+            RevertSuperSaiyan();
 
             Debug.Log($"<color=#00e676>[FighterController]</color> {gameObject.name} reset for new round at {spawnPosition} (Facing: {(faceRight ? "Right" : "Left")})");
         }
@@ -249,6 +280,26 @@ namespace MysticCombat.Fighter
         /// <summary>
         /// Applies movement and Ki tuning values (from character JSON data).
         /// </summary>
+        /// <summary>
+        /// Puts the fighter into HitStun / Hurt reaction state or Knockout if defeated.
+        /// </summary>
+        public void ApplyHit(int damage, float stunDuration = 0.35f)
+        {
+            if (CurrentState == FighterState.Knockout) return;
+
+            HealthSystem health = GetComponent<HealthSystem>();
+            if (health != null && health.CurrentHealth <= 0)
+            {
+                fighterAudio?.PlayVoiceHurt();
+                TransitionTo(FighterState.Knockout);
+                return;
+            }
+
+            attackTimer = stunDuration;
+            fighterAudio?.PlayVoiceHurt();
+            TransitionTo(FighterState.HitStun);
+        }
+
         public void ApplyStats(float speed, float jump, float gravity, float meditateRate = 15f, float redZoneSpeedMult = 0.35f)
         {
             moveSpeed = speed;
@@ -295,7 +346,7 @@ namespace MysticCombat.Fighter
                     break;
 
                 case FighterState.Meditating:
-                    if (!inputHandler.MeditateHeld || !IsGrounded)
+                    if (!inputHandler.MeditateHeld || !IsGrounded || isSuperSaiyan)
                     {
                         TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
                     }
@@ -361,18 +412,35 @@ namespace MysticCombat.Fighter
                         attackStartupTimer -= Time.deltaTime;
                         if (attackStartupTimer <= 0f && attackHitbox != null)
                         {
-                            attackHitbox.Activate();
-                            flurryHitTimer = 0.16f;
+                            if (flurryHitsRemaining > 0)
+                            {
+                                attackHitbox.Activate();
+                                flurryHitTimer = 0.23f;
+                            }
                         }
                     }
                     else if (attackActiveTimer > 0f)
                     {
                         attackActiveTimer -= Time.deltaTime;
-                        flurryHitTimer -= Time.deltaTime;
-                        if (flurryHitTimer <= 0f)
+                        if (flurryHitsRemaining > 0)
                         {
-                            flurryHitTimer = 0.16f;
-                            if (attackHitbox != null) attackHitbox.ResetHitTargets();
+                            flurryHitTimer -= Time.deltaTime;
+                            if (flurryHitTimer <= 0f)
+                            {
+                                flurryHitTimer = 0.23f;
+                                flurryHitsRemaining--;
+                                if (attackHitbox != null)
+                                {
+                                    if (flurryHitsRemaining > 0)
+                                    {
+                                        attackHitbox.ResetHitTargets();
+                                    }
+                                    else
+                                    {
+                                        attackHitbox.Deactivate();
+                                    }
+                                }
+                            }
                         }
 
                         if (attackActiveTimer <= 0f && attackHitbox != null)
@@ -387,13 +455,27 @@ namespace MysticCombat.Fighter
                         TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
                     }
                     break;
+
+                case FighterState.HitStun:
+                case FighterState.KnockBack:
+                    attackTimer -= Time.deltaTime;
+                    if (attackTimer <= 0f)
+                    {
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
+                    }
+                    break;
+
+                case FighterState.Knockout:
+                case FighterState.Victory:
+                    // Stays locked in Knockout or Victory pose until round resets!
+                    break;
             }
         }
 
         private void HandleGroundedTransitions(bool isExhausted)
         {
             // Meditate can be channeled at any time when grounded (even in Red Zone)
-            if (inputHandler.MeditateHeld && IsGrounded)
+            if (inputHandler.MeditateHeld && IsGrounded && !isSuperSaiyan)
             {
                 TransitionTo(FighterState.Meditating);
                 return;
@@ -404,6 +486,7 @@ namespace MysticCombat.Fighter
             {
                 float effectiveJump = isExhausted ? jumpForce * 0.75f : jumpForce;
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, effectiveJump);
+                Combat.VFXManager.Instance?.PlayDustPuff(transform.position);
                 TransitionTo(FighterState.Jumping);
                 return;
             }
@@ -418,37 +501,81 @@ namespace MysticCombat.Fighter
                     if (energySystem == null || energySystem.CanAfford(ultCost))
                     {
                         if (energySystem != null) energySystem.SpendKi(ultCost);
-                        attackTimer = 1.45f;
-                        attackStartupTimer = 0.45f;
-                        attackActiveTimer = 0.50f;
-                        if (attackHitbox != null)
+                        bool isGoku = gameObject.name.ToLower().Contains("goku");
+                        if (!isGoku)
                         {
-                            bool isGoku = gameObject.name.ToLower().Contains("goku");
-                            Vector2 offset = isGoku ? new Vector2(1.8f, 1.0f) : new Vector2(1.2f, 1.0f);
-                            Vector2 size = isGoku ? new Vector2(3.0f, 1.4f) : new Vector2(1.6f, 1.2f);
-                            attackHitbox.ConfigureAttack(45, 14f, 15f, offset, size);
+                            // Saitama Serious Punch: Synced to voice audio (3.80s total)
+                            attackTimer = 3.80f;
+                            attackStartupTimer = 2.40f; // Chilling calm delivery: "Death... Serious Series..."
+                            attackActiveTimer = 1.40f;  // Devastating punch on "SERIOUS PUNCH!" 
+                            if (attackHitbox != null)
+                            {
+                                attackHitbox.ConfigureAttack(100, 12f, 20f, new Vector2(1.25f, 0.95f), new Vector2(1.4f, 1.0f), 3.0f);
+                            }
+                            Combat.VFXManager.Instance?.TriggerCameraShake(0.35f, 0.30f);
+                            Combat.VFXManager.Instance?.TriggerImpactFlash(0.04f);
+                        }
+                        else
+                        {
+                            // Goku Kamehameha: Synced to voice audio (3.36s total)
+                            attackTimer = 3.36f;
+                            attackStartupTimer = 2.15f; // Charging ki in cupped hands: "KA... ME... HA... ME..."
+                            attackActiveTimer = 1.21f;  // Blasting beam on "HA-A-A-A!"
+                            if (attackHitbox != null)
+                            {
+                                attackHitbox.ConfigureAttack(45, 8.5f, 15f, new Vector2(4.6f, 0.95f), new Vector2(8.5f, 1.6f), 2.2f);
+                            }
                         }
                         TransitionTo(FighterState.Ultimate);
                         return;
                     }
                 }
 
-                // Skill Attack (E / U)
+                // Skill Attack / Super Saiyan (E / U)
                 if (inputHandler.SkillPressed)
                 {
-                    float skillCost = 20f;
+                    bool isGoku = gameObject.name.ToLower().Contains("goku");
+                    float skillCost = isGoku ? 35f : 20f;
                     if (energySystem == null || energySystem.CanAfford(skillCost))
                     {
                         if (energySystem != null) energySystem.SpendKi(skillCost);
-                        attackTimer = 0.85f;
-                        attackStartupTimer = 0.10f;
-                        attackActiveTimer = 0.60f;
+
+                        if (isGoku)
+                        {
+                            // Pure Super Saiyan transformation / power-up! Zero damage dealt.
+                            if (!isSuperSaiyan)
+                            {
+                                ActivateSuperSaiyan(15f);
+                            }
+                            else
+                            {
+                                superSaiyanTimer = 15f;
+                                fighterAudio?.StartKiMeditationAura();
+                            }
+
+                            if (attackHitbox != null) attackHitbox.Deactivate();
+                            attackTimer = 0.0f;
+                            attackStartupTimer = 0.0f;
+                            attackActiveTimer = 0.0f;
+                            flurryHitsRemaining = 0;
+                            TransitionTo(FighterState.Idle);
+                            return;
+                        }
+
+                        // Saitama Skill (Consecutive Normal Punches - Exactly 10 hits @ 2 damage, no hitstop, minimal shake)
+                        attackTimer = 2.70f;
+                        attackStartupTimer = 0.15f;
+                        attackActiveTimer = 2.30f;
+                        flurryHitsRemaining = 10;
+                        flurryHitTimer = 0.23f;
                         if (attackHitbox != null)
                         {
-                            bool isGoku = gameObject.name.ToLower().Contains("goku");
-                            Vector2 offset = isGoku ? new Vector2(2.1f, 0.9f) : new Vector2(1.05f, 0.9f);
-                            Vector2 size = isGoku ? new Vector2(3.6f, 0.85f) : new Vector2(1.4f, 0.9f);
-                            attackHitbox.ConfigureAttack(20, 6f, 8f, offset, size);
+                            Vector2 offset = new Vector2(1.05f, 0.9f);
+                            Vector2 size = new Vector2(1.4f, 0.9f);
+                            int damage = 2; // 2 damage per punch x 10 hits = 20 damage
+                            float knockbackX = 0.35f; // Micro-knockback to prevent flying away
+                            float knockbackY = 0.0f;
+                            attackHitbox.ConfigureAttack(damage, knockbackX, 1f, offset, size, knockbackY, hitStop: false, shakeMult: 0.20f);
                         }
                         TransitionTo(FighterState.Skill);
                         return;
@@ -463,7 +590,7 @@ namespace MysticCombat.Fighter
                     attackActiveTimer = 0.35f;
                     if (attackHitbox != null)
                     {
-                        attackHitbox.ConfigureAttack(16, 8f, 10f, new Vector2(0.95f, 0.85f), new Vector2(1.1f, 0.75f));
+                        attackHitbox.ConfigureAttack(16, 5.0f, 10f, new Vector2(0.95f, 0.85f), new Vector2(1.1f, 0.75f), 2.0f);
                     }
                     TransitionTo(FighterState.HeavyAttack);
                     return;
@@ -477,7 +604,7 @@ namespace MysticCombat.Fighter
                     attackActiveTimer = 0.24f;
                     if (attackHitbox != null)
                     {
-                        attackHitbox.ConfigureAttack(10, 4.5f, 6f, new Vector2(0.8f, 0.85f), new Vector2(0.85f, 0.65f));
+                        attackHitbox.ConfigureAttack(10, 2.2f, 6f, new Vector2(0.8f, 0.85f), new Vector2(0.85f, 0.65f), 0.8f);
                     }
                     TransitionTo(FighterState.LightAttack);
                     return;
@@ -513,20 +640,26 @@ namespace MysticCombat.Fighter
             }
         }
 
-        private void TransitionTo(FighterState newState)
+        public void TransitionTo(FighterState newState)
         {
             if (CurrentState == newState) return;
 
             FighterState oldState = CurrentState;
             CurrentState = newState;
 
+            // Attack Interruption & Cleanup: Deactivate hitboxes if taking a hit or leaving attack states
+            if (attackHitbox != null && (newState == FighterState.HitStun || newState == FighterState.KnockBack || newState == FighterState.Knockout || (IsAttackState(oldState) && !IsAttackState(newState))))
+            {
+                attackHitbox.Deactivate();
+            }
+
             // Dynamic Hurtbox Height: Ducking lowers vulnerable body area!
             if (hurtboxCollider != null)
             {
                 if (newState == FighterState.Crouching)
                 {
-                    hurtboxCollider.size = new Vector2(0.85f, 0.95f);
-                    hurtboxCollider.offset = new Vector2(0f, 0.48f);
+                    hurtboxCollider.size = new Vector2(0.70f, 0.78f);
+                    hurtboxCollider.offset = new Vector2(0f, 0.40f);
                 }
                 else if (oldState == FighterState.Crouching)
                 {
@@ -565,13 +698,21 @@ namespace MysticCombat.Fighter
                 case FighterState.Meditating:
                     fighterAudio?.StartKiMeditationAura();
                     break;
+
+                case FighterState.Victory:
+                    if (gameObject.name.ToLower().Contains("saitama"))
+                    {
+                        fighterAudio?.PlayJump();
+                    }
+                    break;
             }
 
-            // --- Landing Audio Trigger (Airborne to Grounded) ---
+            // --- Landing Audio & Dust VFX Trigger (Airborne to Grounded) ---
             if ((oldState == FighterState.Falling || oldState == FighterState.Jumping) &&
                 (newState == FighterState.Idle || newState == FighterState.Walking || newState == FighterState.Exhausted))
             {
                 fighterAudio?.PlayLand();
+                Combat.VFXManager.Instance?.PlayDustPuff(transform.position);
             }
 
             // --- State-Exit Audio Triggers ---
@@ -581,9 +722,82 @@ namespace MysticCombat.Fighter
             }
         }
 
+        private bool IsAttackState(FighterState state)
+        {
+            return state == FighterState.LightAttack ||
+                   state == FighterState.HeavyAttack ||
+                   state == FighterState.Skill ||
+                   state == FighterState.Ultimate;
+        }
+
         #endregion
 
         #region Ki Generation & Meditation
+
+        #region Super Saiyan Transformation
+
+
+
+        public void ActivateSuperSaiyan(float duration = 15f)
+
+        {
+
+            isSuperSaiyan = true;
+
+            superSaiyanTimer = duration;
+            if (CurrentState == FighterState.Meditating) TransitionTo(FighterState.Idle);
+
+            fighterAudio?.StartKiMeditationAura();
+
+            Debug.Log($"<color=#fbbf24>[FighterController] {gameObject.name} ASCENDED TO SUPER SAIYAN! Duration: {duration}s</color>");
+
+        }
+
+
+
+        public void RevertSuperSaiyan()
+
+        {
+
+            if (!isSuperSaiyan) return;
+
+            isSuperSaiyan = false;
+
+            superSaiyanTimer = 0f;
+
+            fighterAudio?.StopKiMeditationAura();
+
+            Debug.Log($"[FighterController] {gameObject.name} reverted to Base form.");
+
+        }
+
+
+
+        private void HandleSuperSaiyanTimer()
+
+        {
+
+            if (!isSuperSaiyan) return;
+
+
+
+            superSaiyanTimer -= Time.deltaTime;
+
+            if (superSaiyanTimer <= 0f)
+
+            {
+
+                RevertSuperSaiyan();
+
+            }
+
+        }
+
+
+
+        #endregion
+
+
 
         private void HandleKiGeneration()
         {
@@ -609,7 +823,9 @@ namespace MysticCombat.Fighter
             if (inputHandler == null) return;
 
             bool isExhausted = energySystem != null && energySystem.IsInRedZone;
-            float currentSpeed = moveSpeed * (isExhausted ? redZoneSpeedMultiplier : 1f);
+            float ssjMult = isSuperSaiyan ? 1.25f : 1.0f;
+
+            float currentSpeed = moveSpeed * (isExhausted ? redZoneSpeedMultiplier : ssjMult);
 
             switch (CurrentState)
             {
@@ -632,9 +848,10 @@ namespace MysticCombat.Fighter
                     break;
 
                 case FighterState.Skill:
-                    // Anime forward step into punch flurry!
+                    // Anime forward step into punch flurry! (Saitama steady flurry advance tuned to 0.60f)
                     float surgeDir = spriteRenderer != null && spriteRenderer.flipX ? -1f : 1f;
-                    rb.linearVelocity = new Vector2(surgeDir * 1.5f, rb.linearVelocity.y);
+                    float surgeSpeed = gameObject.name.ToLower().Contains("goku") ? 0.0f : 0.60f;
+                    rb.linearVelocity = new Vector2(surgeDir * surgeSpeed, rb.linearVelocity.y);
                     break;
             }
         }
