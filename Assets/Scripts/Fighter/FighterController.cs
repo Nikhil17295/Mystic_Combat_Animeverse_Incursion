@@ -17,8 +17,9 @@ namespace MysticCombat.Fighter
         #region Serialized Fields
 
         [Header("References")]
-        [Tooltip("The input handler driving this fighter.")]
-        [SerializeField] private PlayerInputHandler inputHandler;
+        [Tooltip("The input handler driving this fighter (if pre-configured in Inspector).")]
+        [SerializeField] private PlayerInputHandler legacyInputHandler;
+        private IFighterInput inputHandler;
 
         [Tooltip("The opposing fighter's transform for auto-facing.")]
         public Transform opponent;
@@ -59,6 +60,7 @@ namespace MysticCombat.Fighter
         private float attackTimer;
         private float attackStartupTimer;
         private float attackActiveTimer;
+        private BoxCollider2D hurtboxCollider;
         private float flurryHitTimer;
 
         #endregion
@@ -97,6 +99,18 @@ namespace MysticCombat.Fighter
 
             rb.gravityScale = gravityScale;
             rb.freezeRotation = true;
+
+            if (inputHandler == null)
+            {
+                if (legacyInputHandler != null) inputHandler = legacyInputHandler;
+                else inputHandler = GetComponent<IFighterInput>();
+            }
+
+            if (hurtboxCollider == null)
+            {
+                Combat.HurtboxController hb = GetComponentInChildren<Combat.HurtboxController>(true);
+                if (hb != null) hurtboxCollider = hb.GetComponent<BoxCollider2D>();
+            }
         }
 
         private void OnEnable()
@@ -152,12 +166,17 @@ namespace MysticCombat.Fighter
         #region Initialization
 
         /// <summary>
-        /// Assigns the input handler for this fighter.
+        /// Assigns the input handler (hardware or CPU virtual brain) for this fighter.
         /// </summary>
-        public void SetInputHandler(PlayerInputHandler handler)
+        public void SetInputHandler(IFighterInput handler)
         {
             inputHandler = handler;
         }
+
+        /// <summary>
+        /// Gets the active input handler.
+        /// </summary>
+        public IFighterInput GetInputHandler() => inputHandler;
 
         /// <summary>
         /// Assigns the ground check transform used for ground detection.
@@ -205,6 +224,12 @@ namespace MysticCombat.Fighter
             {
                 attackHitbox.Deactivate();
                 attackHitbox.ResetHitTargets();
+            }
+
+            if (hurtboxCollider != null)
+            {
+                hurtboxCollider.size = new Vector2(0.85f, 1.8f);
+                hurtboxCollider.offset = new Vector2(0f, 0.95f);
             }
 
             if (spriteRenderer != null)
@@ -398,7 +423,10 @@ namespace MysticCombat.Fighter
                         attackActiveTimer = 0.50f;
                         if (attackHitbox != null)
                         {
-                            attackHitbox.ConfigureAttack(45, 14f, 15f, new Vector2(1.1f, 1.0f), new Vector2(1.5f, 1.2f));
+                            bool isGoku = gameObject.name.ToLower().Contains("goku");
+                            Vector2 offset = isGoku ? new Vector2(1.8f, 1.0f) : new Vector2(1.2f, 1.0f);
+                            Vector2 size = isGoku ? new Vector2(3.0f, 1.4f) : new Vector2(1.6f, 1.2f);
+                            attackHitbox.ConfigureAttack(45, 14f, 15f, offset, size);
                         }
                         TransitionTo(FighterState.Ultimate);
                         return;
@@ -417,7 +445,10 @@ namespace MysticCombat.Fighter
                         attackActiveTimer = 0.60f;
                         if (attackHitbox != null)
                         {
-                            attackHitbox.ConfigureAttack(20, 6f, 8f, new Vector2(1.0f, 0.9f), new Vector2(1.3f, 0.9f));
+                            bool isGoku = gameObject.name.ToLower().Contains("goku");
+                            Vector2 offset = isGoku ? new Vector2(2.1f, 0.9f) : new Vector2(1.05f, 0.9f);
+                            Vector2 size = isGoku ? new Vector2(3.6f, 0.85f) : new Vector2(1.4f, 0.9f);
+                            attackHitbox.ConfigureAttack(20, 6f, 8f, offset, size);
                         }
                         TransitionTo(FighterState.Skill);
                         return;
@@ -488,6 +519,21 @@ namespace MysticCombat.Fighter
 
             FighterState oldState = CurrentState;
             CurrentState = newState;
+
+            // Dynamic Hurtbox Height: Ducking lowers vulnerable body area!
+            if (hurtboxCollider != null)
+            {
+                if (newState == FighterState.Crouching)
+                {
+                    hurtboxCollider.size = new Vector2(0.85f, 0.95f);
+                    hurtboxCollider.offset = new Vector2(0f, 0.48f);
+                }
+                else if (oldState == FighterState.Crouching)
+                {
+                    hurtboxCollider.size = new Vector2(0.85f, 1.8f);
+                    hurtboxCollider.offset = new Vector2(0f, 0.95f);
+                }
+            }
 
             // --- State-Entry Audio Triggers (State-Driven Architecture) ---
             switch (newState)

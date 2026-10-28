@@ -15,6 +15,7 @@ namespace MysticCombat.UI
     /// - Shiny Blue Point Gems for scored rounds and Hollow Sockets when unearned
     /// - Big Golden Gem in the center that ignites and pulses at Match Point (1-1 tie)
     /// - Automatic runtime reference discovery ensuring real-time event updates
+    /// - Dynamic fighter avatar and name binding reflecting character select choices
     /// </summary>
     public class HUDController : MonoBehaviour
     {
@@ -53,6 +54,12 @@ namespace MysticCombat.UI
 
         [Tooltip("P2 round point gem 2 (Hollow when unearned, Shiny Blue when won 2 rounds).")]
         [SerializeField] private Image p2PointGem2;
+
+        [Header("Avatar & Name Displays")]
+        [SerializeField] private Image p1AvatarCard;
+        [SerializeField] private Image p2AvatarCard;
+        [SerializeField] private TextMeshProUGUI p1NameText;
+        [SerializeField] private TextMeshProUGUI p2NameText;
 
         [Header("Center Time Stone & Magic Mandala")]
         [Tooltip("Doctor Strange style rotating green spell mandala rect.")]
@@ -198,54 +205,62 @@ namespace MysticCombat.UI
                 if (t != null) p2KiBar = t.GetComponent<Image>();
             }
 
-            // 2. Resolve Player 1 (Goku) - Must be in active scene!
+            // Resolve Avatar cards and Name text elements
+            if (p1AvatarCard == null)
+            {
+                Transform t = transform.Find("P1_AvatarCard");
+                if (t != null) p1AvatarCard = t.GetComponent<Image>();
+            }
+            if (p2AvatarCard == null)
+            {
+                Transform t = transform.Find("P2_AvatarCard");
+                if (t != null) p2AvatarCard = t.GetComponent<Image>();
+            }
+            if (p1NameText == null)
+            {
+                Transform t = transform.Find("P1_Name");
+                if (t != null) p1NameText = t.GetComponent<TextMeshProUGUI>();
+            }
+            if (p2NameText == null)
+            {
+                Transform t = transform.Find("P2_Name");
+                if (t != null) p2NameText = t.GetComponent<TextMeshProUGUI>();
+            }
+
+            // 2. Resolve Player 1 - Must be in active scene!
             if (!IsInActiveScene(p1Health) || !IsInActiveScene(p1Energy))
             {
                 p1Health = null;
                 p1Energy = null;
 
-                GameObject goku = GameObject.Find("Fighter_P1_Goku");
-                if (goku != null)
+                foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
                 {
-                    p1Health = goku.GetComponent<HealthSystem>();
-                    p1Energy = goku.GetComponent<EnergySystem>();
-                }
-                else
-                {
-                    foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
+                    if (fc == null) continue;
+                    string n = fc.gameObject.name;
+                    if (n == "Fighter_P1" || n.StartsWith("Fighter_P1_"))
                     {
-                        if (fc.gameObject.name.Contains("Goku") || fc.gameObject.name.Contains("P1"))
-                        {
-                            p1Health = fc.GetComponent<HealthSystem>();
-                            p1Energy = fc.GetComponent<EnergySystem>();
-                            break;
-                        }
+                        p1Health = fc.GetComponent<HealthSystem>();
+                        p1Energy = fc.GetComponent<EnergySystem>();
+                        break;
                     }
                 }
             }
 
-            // 3. Resolve Player 2 (Saitama) - Must be in active scene!
+            // 3. Resolve Player 2 - Must be in active scene!
             if (!IsInActiveScene(p2Health) || !IsInActiveScene(p2Energy))
             {
                 p2Health = null;
                 p2Energy = null;
 
-                GameObject saitama = GameObject.Find("Fighter_P2_Saitama");
-                if (saitama != null)
+                foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
                 {
-                    p2Health = saitama.GetComponent<HealthSystem>();
-                    p2Energy = saitama.GetComponent<EnergySystem>();
-                }
-                else
-                {
-                    foreach (var fc in Object.FindObjectsByType<Fighter.FighterController>(FindObjectsInactive.Exclude))
+                    if (fc == null) continue;
+                    string n = fc.gameObject.name;
+                    if (n == "Fighter_P2" || n.StartsWith("Fighter_P2_"))
                     {
-                        if (fc.gameObject.name.Contains("Saitama") || fc.gameObject.name.Contains("P2"))
-                        {
-                            p2Health = fc.GetComponent<HealthSystem>();
-                            p2Energy = fc.GetComponent<EnergySystem>();
-                            break;
-                        }
+                        p2Health = fc.GetComponent<HealthSystem>();
+                        p2Energy = fc.GetComponent<EnergySystem>();
+                        break;
                     }
                 }
             }
@@ -348,6 +363,24 @@ namespace MysticCombat.UI
             UpdateTimer(matchManager.RoundTimer > 0f ? matchManager.RoundTimer : 99f);
         }
 
+        /// <summary>
+        /// Explicitly binds fighter health and energy systems at runtime.
+        /// Immediately synchronizes health bars, Ki meters, and heroic avatar portraits.
+        /// </summary>
+        public void SetFighterReferences(HealthSystem p1Hp, HealthSystem p2Hp, EnergySystem p1Ki, EnergySystem p2Ki)
+        {
+            UnsubscribeEvents();
+
+            p1Health = p1Hp;
+            p2Health = p2Hp;
+            p1Energy = p1Ki;
+            p2Energy = p2Ki;
+
+            SyncInitialState();
+            SubscribeEvents();
+            Debug.Log($"<color=#00e676>[HUDController]</color> Bound fighter references: P1: {p1Health?.gameObject.name} | P2: {p2Health?.gameObject.name}");
+        }
+
         private void SyncInitialState()
         {
             if (p1Health != null) UpdateHealthBar(0, p1Health.HealthPercent);
@@ -372,6 +405,55 @@ namespace MysticCombat.UI
                 UpdateRoundScore(0, 0);
                 UpdateTimer(99f);
             }
+
+            SyncFighterAvatarsAndNames();
+        }
+
+        private void SyncFighterAvatarsAndNames()
+        {
+            string p1Id = (GameManager.Instance != null && !string.IsNullOrEmpty(GameManager.Instance.P1SelectedCharacterId))
+                ? GameManager.Instance.P1SelectedCharacterId.ToLower()
+                : "goku";
+            string p2Id = (GameManager.Instance != null && !string.IsNullOrEmpty(GameManager.Instance.P2SelectedCharacterId))
+                ? GameManager.Instance.P2SelectedCharacterId.ToLower()
+                : "saitama";
+
+            if (p1NameText != null)
+            {
+                p1NameText.text = p1Id == "goku" ? "GOKU" : "SAITAMA";
+            }
+
+            if (p2NameText != null)
+            {
+                string prefix = (GameManager.Instance != null && GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu) ? "CPU " : "";
+                p2NameText.text = prefix + (p2Id == "goku" ? "GOKU" : "SAITAMA");
+            }
+
+            UpdateAvatarCard(p1AvatarCard, p1Id, false);
+            UpdateAvatarCard(p2AvatarCard, p2Id, p1Id == p2Id);
+        }
+
+        private void UpdateAvatarCard(Image img, string charId, bool isMirrorP2)
+        {
+            if (img == null) return;
+
+            string spritePath = charId == "goku"
+                ? System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "goku_avatar_heroic.png")
+                : System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "saitama_avatar_heroic.png");
+
+            if (System.IO.File.Exists(spritePath))
+            {
+                byte[] bytes = System.IO.File.ReadAllBytes(spritePath);
+                Texture2D tex = new Texture2D(2, 2);
+                tex.filterMode = FilterMode.Bilinear;
+                if (tex.LoadImage(bytes))
+                {
+                    img.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                }
+            }
+
+            // Avatars remain 100% original full color in all cases (no tinting)
+            img.color = Color.white;
         }
 
         #endregion

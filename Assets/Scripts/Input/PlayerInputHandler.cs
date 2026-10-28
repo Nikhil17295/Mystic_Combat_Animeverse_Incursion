@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using MysticCombat.Core;
+using MysticCombat.Systems;
 
 namespace MysticCombat.Input
 {
@@ -7,7 +9,7 @@ namespace MysticCombat.Input
     /// Reads keyboard input for P1 or P2 using Unity's modern Input System (Keyboard.current).
     /// Fallback supported for legacy input systems.
     /// </summary>
-    public class PlayerInputHandler : MonoBehaviour
+    public class PlayerInputHandler : MonoBehaviour, IFighterInput
     {
         #region Enums
 
@@ -39,10 +41,54 @@ namespace MysticCombat.Input
 
         #endregion
 
+        #region Match State Tracking
+
+        private MatchManager cachedMatchManager;
+
+        /// <summary>
+        /// Fighters can only receive inputs when a round is actively in progress.
+        /// Inputs are completely cut off before the round begins, during K.O./round-end delays,
+        /// after match over, and during pause.
+        /// </summary>
+        private bool CanFight()
+        {
+            if (Time.timeScale == 0f) return false;
+
+            if (cachedMatchManager == null)
+            {
+                cachedMatchManager = Object.FindAnyObjectByType<MatchManager>();
+            }
+
+            if (cachedMatchManager != null)
+            {
+                if (cachedMatchManager.CurrentMatchState != MatchManager.MatchState.RoundInProgress)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        #endregion
+
         #region Unity Callbacks
 
         private void Update()
         {
+            if (!CanFight())
+            {
+                MoveInput = Vector2.zero;
+                JumpPressed = false;
+                CrouchHeld = false;
+                LightAttackPressed = false;
+                HeavyAttackPressed = false;
+                SkillPressed = false;
+                UltimatePressed = false;
+                MeditateHeld = false;
+                return;
+            }
+
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
 
@@ -58,54 +104,79 @@ namespace MysticCombat.Input
 
         #endregion
 
-        #region Input Reading (Modern Input System)
+        #region Input Reading (Modern Input System with Dynamic Keybindings)
 
         private void ReadP1Input(Keyboard kb)
         {
-            // Movement (W/A/S/D) + Space for Jump
+            bool isLocalDuel = GameManager.Instance != null && GameManager.Instance.CurrentGameMode == GameManager.GameMode.LocalPvP;
+
             float horizontal = 0f;
-            if (kb.aKey.isPressed) horizontal -= 1f;
-            if (kb.dKey.isPressed) horizontal += 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Left, isPlayer2: false, isLocalDuel))) horizontal -= 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Right, isPlayer2: false, isLocalDuel))) horizontal += 1f;
 
             float vertical = 0f;
-            if (kb.wKey.isPressed) vertical += 1f;
-            if (kb.sKey.isPressed) vertical -= 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Jump, isPlayer2: false, isLocalDuel))) vertical += 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Crouch, isPlayer2: false, isLocalDuel))) vertical -= 1f;
 
             MoveInput = new Vector2(horizontal, vertical);
 
-            // Action Buttons (Custom Ergonomic Layout: F = Light, C = Heavy, E = Skill, Q = Ultimate, X = Meditate)
-            // Jump strictly mapped to W (Space removed to prevent overriding inputs)
-            JumpPressed = kb.wKey.wasPressedThisFrame;
-            CrouchHeld = kb.sKey.isPressed;
-            LightAttackPressed = kb.fKey.wasPressedThisFrame;
-            HeavyAttackPressed = kb.cKey.wasPressedThisFrame;
-            SkillPressed = kb.eKey.wasPressedThisFrame;
-            UltimatePressed = kb.qKey.wasPressedThisFrame;
-            MeditateHeld = kb.xKey.isPressed;
+            JumpPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Jump, isPlayer2: false, isLocalDuel));
+            CrouchHeld = IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Crouch, isPlayer2: false, isLocalDuel));
+            LightAttackPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.LightAttack, isPlayer2: false, isLocalDuel));
+            HeavyAttackPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.HeavyAttack, isPlayer2: false, isLocalDuel));
+            SkillPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Skill, isPlayer2: false, isLocalDuel));
+            UltimatePressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Ultimate, isPlayer2: false, isLocalDuel));
+            MeditateHeld = IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Meditate, isPlayer2: false, isLocalDuel));
         }
 
         private void ReadP2Input(Keyboard kb)
         {
-            // Movement (I / J / K / L strictly - Arrow Keys removed to prevent overriding inputs)
+            // P2 is strictly active in Local Duel mode
             float horizontal = 0f;
-            if (kb.jKey.isPressed) horizontal -= 1f;
-            if (kb.lKey.isPressed) horizontal += 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Left, isPlayer2: true, isLocalDuel: true))) horizontal -= 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Right, isPlayer2: true, isLocalDuel: true))) horizontal += 1f;
 
             float vertical = 0f;
-            if (kb.iKey.isPressed) vertical += 1f;
-            if (kb.kKey.isPressed) vertical -= 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Jump, isPlayer2: true, isLocalDuel: true))) vertical += 1f;
+            if (IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Crouch, isPlayer2: true, isLocalDuel: true))) vertical -= 1f;
 
             MoveInput = new Vector2(horizontal, vertical);
 
-            // Action Buttons (Custom Ergonomic Layout: H = Light, N = Heavy, U = Skill, O = Ultimate, M = Meditate)
-            JumpPressed = kb.iKey.wasPressedThisFrame;
-            CrouchHeld = kb.kKey.isPressed;
+            JumpPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Jump, isPlayer2: true, isLocalDuel: true));
+            CrouchHeld = IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Crouch, isPlayer2: true, isLocalDuel: true));
+            LightAttackPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.LightAttack, isPlayer2: true, isLocalDuel: true));
+            HeavyAttackPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.HeavyAttack, isPlayer2: true, isLocalDuel: true));
+            SkillPressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Skill, isPlayer2: true, isLocalDuel: true));
+            UltimatePressed = WasPressedThisFrame(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Ultimate, isPlayer2: true, isLocalDuel: true));
+            MeditateHeld = IsPressed(kb, InputSettingsManager.GetRuntimeKey(FighterAction.Meditate, isPlayer2: true, isLocalDuel: true));
+        }
 
-            LightAttackPressed = kb.hKey.wasPressedThisFrame;
-            HeavyAttackPressed = kb.nKey.wasPressedThisFrame;
-            SkillPressed = kb.uKey.wasPressedThisFrame;
-            UltimatePressed = kb.oKey.wasPressedThisFrame;
-            MeditateHeld = kb.mKey.isPressed;
+        private static bool IsPressed(Keyboard kb, Key key)
+        {
+            if (kb == null || key == Key.None) return false;
+            try
+            {
+                var control = kb[key];
+                return control != null && control.isPressed;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool WasPressedThisFrame(Keyboard kb, Key key)
+        {
+            if (kb == null || key == Key.None) return false;
+            try
+            {
+                var control = kb[key];
+                return control != null && control.wasPressedThisFrame;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         #endregion

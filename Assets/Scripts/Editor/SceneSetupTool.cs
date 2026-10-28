@@ -25,7 +25,7 @@ namespace MysticCombat.Editor
     public static class SceneSetupTool
     {
         private const int GROUND_LAYER = 6;
-        private const string BAKE_VERSION_KEY = "MysticCombat_GrandHUD_Bake_v22";
+        private const string BAKE_VERSION_KEY = "MysticCombat_GrandHUD_Bake_v28";
 
         static SceneSetupTool()
         {
@@ -72,32 +72,41 @@ namespace MysticCombat.Editor
             // 3. Setup Arena Hierarchy (Backdrop, Floor, Invisible Boundary Walls)
             SetupArena();
 
-            // 4. Setup Fighters with Balanced Scales as Prefab Instances
-            GameObject goku = SetupGoku();
-            GameObject saitama = SetupSaitama();
+            // 4. Ensure Standalone Fighter Prefabs are Generated in Assets/Prefabs and Assets/Resources
+            FighterPrefabGenerator.GeneratePrefabs();
 
-            // 5. Wire Auto-Facing Opponent References in Scene
-            FighterController gokuFc = goku.GetComponent<FighterController>();
-            FighterController saitamaFc = saitama.GetComponent<FighterController>();
-            gokuFc.opponent = saitama.transform;
-            saitamaFc.opponent = goku.transform;
-            EditorUtility.SetDirty(goku);
-            EditorUtility.SetDirty(saitama);
+            // 5. Clean up any static baked fighters in the scene so dynamic character selection deploys cleanly!
+            GameObject existingGoku = GameObject.Find("Fighter_P1_Goku");
+            if (existingGoku != null) Object.DestroyImmediate(existingGoku);
+            GameObject existingSaitama = GameObject.Find("Fighter_P2_Saitama");
+            if (existingSaitama != null) Object.DestroyImmediate(existingSaitama);
+            GameObject existingP1 = GameObject.Find("Fighter_P1");
+            if (existingP1 != null) Object.DestroyImmediate(existingP1);
+            GameObject existingP2 = GameObject.Find("Fighter_P2");
+            if (existingP2 != null) Object.DestroyImmediate(existingP2);
 
             // 6. Setup MatchManager
-            MatchManager mm = SetupMatchManager(goku, saitama);
+            MatchManager mm = SetupMatchManager(null, null);
 
             // 7. Setup Grand Tournament Arcade HUD (Health, Ki, Heroic Avatars, Time Stone Mandala, Gems)
-            GameObject hudCanvas = SetupHUD(goku, saitama, mm);
+            GameObject hudCanvas = SetupHUD(null, null, mm);
 
-            // 8. Snap SceneView to 2D Mode
+            // 8. Ensure PrototypeBootstrap exists in the scene for dynamic fighter deployment
+            GameObject bootstrap = GameObject.Find("[PrototypeBootstrap]");
+            if (bootstrap == null)
+            {
+                bootstrap = new GameObject("[PrototypeBootstrap]");
+                bootstrap.AddComponent<PrototypeBootstrap>();
+            }
+
+            // 9. Snap SceneView to 2D Mode
             if (SceneView.lastActiveSceneView != null)
             {
                 SceneView.lastActiveSceneView.in2DMode = true;
                 SceneView.lastActiveSceneView.Repaint();
             }
 
-            // 9. Save the Scene
+            // 10. Save the Scene
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
 
@@ -530,8 +539,12 @@ namespace MysticCombat.Editor
                 so.FindProperty("heavyHitClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/arcade_hit_04.ogg");
                 so.FindProperty("skillHitClip").objectReferenceValue = null;
                 so.FindProperty("ultimateHitClip").objectReferenceValue = null;
+                // Goku has NO skill voice
                 so.FindProperty("voiceSkillClip").objectReferenceValue = null;
+                // Ultimate (Q / O): Kamehameha!
                 so.FindProperty("voiceUltimateClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/goku_voice_kamehameha.wav");
+                so.FindProperty("voiceSkillMultiplier").floatValue = 1.0f;
+                so.FindProperty("voiceUltimateMultiplier").floatValue = 0.50f;
             }
             else // Saitama
             {
@@ -544,15 +557,19 @@ namespace MysticCombat.Editor
                 so.FindProperty("heavyHitClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/saitama_normal_punch.mp3");
                 so.FindProperty("skillHitClip").objectReferenceValue = null;
                 so.FindProperty("ultimateHitClip").objectReferenceValue = null;
-                so.FindProperty("voiceSkillClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/saitama_voice_consecutive_punches.wav");
-                so.FindProperty("voiceUltimateClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/saitama_voice_serious_punch.wav");
+                // Skill (E / U): Consecutive Normal Punches
+                so.FindProperty("voiceSkillClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/consecutive_normal_punches.mp3");
+                // Ultimate (Q / O): Serious Punch
+                so.FindProperty("voiceUltimateClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/serious_punch.mp3");
+                so.FindProperty("voiceSkillMultiplier").floatValue = 2.20f;
+                so.FindProperty("voiceUltimateMultiplier").floatValue = 2.50f;
             }
 
             so.FindProperty("sfxVolume").floatValue = 1.0f;
             so.FindProperty("whiffVolume").floatValue = 0.65f;
             so.FindProperty("impactVolume").floatValue = 1.0f;
-            so.FindProperty("voiceVolume").floatValue = 0.9f;
-            so.FindProperty("kiAuraVolume").floatValue = 0.45f;
+            so.FindProperty("voiceVolume").floatValue = 1.0f;
+            so.FindProperty("kiAuraVolume").floatValue = 0.12f;
             so.ApplyModifiedProperties();
             return fa;
         }
@@ -868,6 +885,13 @@ namespace MysticCombat.Editor
             so.ApplyModifiedProperties();
 
             // ----------------------------------------------------
+            // 8b. ATTACH COMBAT MENU CONTROLLER (PAUSE & RESULTS)
+            // ----------------------------------------------------
+            CombatMenuController menuCtrl = canvasObj.GetComponent<CombatMenuController>();
+            if (menuCtrl == null) menuCtrl = canvasObj.AddComponent<CombatMenuController>();
+            menuCtrl.EnsureUIHierarchyBuilt();
+
+            // ----------------------------------------------------
             // 9. SAVE AS PREFAB AND CONNECT AS LIVE INSTANCE
             // ----------------------------------------------------
             string uiDir = "Assets/Prefabs/UI";
@@ -890,6 +914,17 @@ namespace MysticCombat.Editor
                 PrefabUtility.RecordPrefabInstancePropertyModifications(liveCtrl);
                 liveCtrl.ResolveReferences();
                 EditorUtility.SetDirty(liveCtrl);
+            }
+
+            // Wire CombatMenuController matchManager reference on live instance
+            CombatMenuController liveMenu = canvasInstance != null ? canvasInstance.GetComponent<CombatMenuController>() : menuCtrl;
+            if (liveMenu != null && mm != null)
+            {
+                SerializedObject menuSo = new SerializedObject(liveMenu);
+                menuSo.FindProperty("matchManager").objectReferenceValue = mm;
+                menuSo.ApplyModifiedProperties();
+                PrefabUtility.RecordPrefabInstancePropertyModifications(liveMenu);
+                EditorUtility.SetDirty(liveMenu);
             }
 
             return canvasInstance != null ? canvasInstance : canvasObj;

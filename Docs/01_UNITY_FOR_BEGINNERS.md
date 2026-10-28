@@ -587,6 +587,453 @@ Unity includes a built-in waveform player for every imported audio clip:
 4. Click **Play** to listen to the audio directly in the Editor without running the game!
 5. To change a fighter's sound, select their prefab in `Assets/Prefabs/Fighters/` (or in the scene Hierarchy) and simply drag-and-drop the chosen audio clip into the corresponding slot on the `FighterAudio` component.
 
+---
+
+## 23. Seamless UI Screen Swapping & Cross-Scene Singletons
+
+### Why Not Create a Separate Scene for Character Select?
+In beginner game tutorials, developers often create a new Unity scene for every single screen:
+`MainMenuScene.unity` ➔ `CharacterSelectScene.unity` ➔ `CombatScene.unity`.
+
+**The Problem:** Calling `SceneManager.LoadScene()` unloads everything in the current scene. This causes:
+1. A noticeable freeze or frame hitch while textures reload.
+2. Background music immediately cuts off or restarts from the beginning, breaking arcade continuity.
+3. Background graphics (like our cosmic multiverse animation) vanish during the transition.
+
+### The Industry Standard: Single-Canvas Panel Swapping
+In professional fighting games (like *Street Fighter* or *Tekken*), the Title Screen and Character Select Screen live inside the **exact same Canvas**:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ MainMenu_Canvas (Screen Space Overlay)                  │
+│                                                         │
+│ ├── Cosmic_Background (Always visible & animated)       │
+│ ├── Vignette_Overlay  (Always visible)                  │
+│ ├── Menu_Root         (Title logo & 4 arcade options)   │
+│ └── CharacterSelect_Root (Fighter cards & stat panels)  │
+└─────────────────────────────────────────────────────────┘
+```
+
+When the player selects **"1 PLAYER VS CPU"** or **"2 PLAYER LOCAL DUEL"**:
+- `menuRoot.SetActive(false);`
+- `characterSelectRoot.SetActive(true);`
+
+**Result:** The background and title music continue uninterrupted! The player experiences zero loading screen.
+
+### How Do Selected Characters Travel to the Fight Scene?
+When the battle begins, we load `SampleScene.unity`. Since scenes unload regular GameObjects, how does the fight scene know who Player 1 and Player 2 chose?
+
+**The Solution: The Persistent Singleton (`GameManager.cs`)**
+Using Unity's `DontDestroyOnLoad(gameObject)`, the `GameManager` survives scene transitions:
+
+```csharp
+// Inside CharacterSelectController.cs
+GameManager.Instance.P1SelectedCharacterId = "goku";
+GameManager.Instance.P2SelectedCharacterId = "saitama";
+GameManager.Instance.LoadScene("SampleScene");
+
+// Inside PrototypeBootstrap.cs (in SampleScene)
+string p1 = GameManager.Instance.P1SelectedCharacterId; // "goku"
+string p2 = GameManager.Instance.P2SelectedCharacterId; // "saitama"
+CreateFighter("Fighter_P1_" + p1, p1Spawn, PlayerIndex.P1, p1);
+```
+
+> **Godot Comparison:**
+> This is identical to Godot's **Autoload Singletons** (e.g. `GameManager.gd` registered in Project Settings). Autoload nodes sit in the root viewport above the current scene, persisting variables across `get_tree().change_scene_to_file()`.
+
+
+
+
+
+
+
+---
+
+## 24. RectTransform Coordinate Math vs. Godot Containers & Runtime Audio
+
+### Why Did UI Elements Overlap in Unity?
+In Unity's UI system (`uGUI`), each element is governed by a **`RectTransform`**:
+- **Anchors (`min`, `max`):** Define the reference point on the parent container (e.g. `(0.5, 0.5)` for center).
+- **`anchoredPosition`:** The (X, Y) offset from that anchor.
+- **`sizeDelta`:** The (Width, Height) of the element.
+
+If you place an element at Y = -76 with height 34, its bottom edge is at -76 - 17 = -93px.
+If you place the box below it at Y = -205 with height 245, its top edge is at -205 + 122.5 = -82.5px.
+Because -82.5 > -93, the top of the lower box penetrates 10.5px right into the upper text!
+
+> **Godot Analogy:**
+> In **Godot**, you rarely position UI by raw pixel arithmetic. Instead, you put elements inside a **`VBoxContainer`** or **`MarginContainer`**. Godot automatically reads each child's `custom_minimum_size` and stacks them with automatic separation margins, preventing accidental coordinate collisions.
+> In **Unity**, when you manually code or bake `RectTransform` layouts without a `VerticalLayoutGroup`, you must calculate bounding box intervals (Center +/- Height/2) to guarantee a clean void gap!
+
+---
+
+### The `AddComponent` Trap: Why Was Audio Silent?
+When you write `fighter.AddComponent<FighterAudio>()` at runtime in C#:
+1. Unity creates a clean, default instance of the component.
+2. All `[SerializeField]` fields (like `voiceSkillClip`, `jumpClip`, `lightHitClip`) start as **`null`**!
+3. If the script relies only on values dragged into the Inspector during edit time, dynamically spawned GameObjects will have no sound clips assigned and will fail silently.
+
+### The Solution: Unity's `Resources` Folder
+In Unity, any asset placed inside a folder named **`Resources/`** (anywhere in your `Assets/` tree) is compiled into a special runtime archive:
+```csharp
+// Loads consecutive_normal_punches.mp3 at runtime without needing Inspector drag-and-drop!
+AudioClip clip = Resources.Load<AudioClip>("Audio/Anime_Powers/consecutive_normal_punches");
+```
+By adding `EnsureClipsLoaded()` into `FighterAudio.cs`, the audio component automatically falls back to `Resources.Load()` if serialized inspector slots are empty, guaranteeing that fighters spawned from Character Select or during Mirror Matches always have their voices and hits ready to play!
+
+---
+
+## 25. Pixel Art Contrast, Sprites, and Background Readability (Why Do Outlines Blend In?)
+
+### What is Relative Luminance?
+In digital games, human eyes perceive color brightness primarily through **luminance** ($Y$):
+$$Y = 0.299 \cdot R + 0.587 \cdot G + 0.114 \cdot B$$
+Notice that green contributes $\sim 59\%$ to brightness, red $\sim 30\%$, and blue $\sim 11\%$.
+
+### Why Did Saitama's Flurry Punches Disappear "Sometimes"?
+- **The Center of the Arena:** The arena stage floor has a warm spotlight (`#FBA782`, luminance $\sim 190$).
+- **The Outer Flanks of the Arena:** The stage floor tiles and background walls are dark slate and navy (`#1A1F25`, luminance $\approx 28$).
+- **Saitama's Original Outlines:** Were colored dark charcoal-red (`#140505`, luminance $\approx 9.5$).
+
+When Saitama punched in the spotlight, a dark outline against a bright floor created an easy $20:1$ contrast ratio. But when he moved toward the dark edge of the screen, a luminance of $9.5$ against a background of $28$ yielded a contrast ratio of less than $1.3:1$! The human eye physically cannot distinguish the boundary, so the outline seemed to vanish into thin air.
+
+### The Fix: Dual-Tier Anime Cel-Shading
+In retro fighting games and anime fighters:
+1. **Perimeter Inking:** Outlines bordering transparent space must be solid, pure dark ink (`#080404` / `#000000`) so they never bleed into background pixels.
+2. **Kinetic Knuckle Highlights:** The leading front edge of every striking fist gets an explosive anime white/gold flash (`#FFFFFF` and `#FFD76E`). Because white has a maximum luminance of $255$, it creates an $>8:1$ contrast ratio against ANY dark tile, ensuring punches pop with cinematic energy wherever the fighter stands.
+
+> **Godot Comparison:**
+> In **Godot**, developers frequently face the same issue when 2D pixel art sprites are placed in front of dark `TileMapLayer` or `ParallaxBackground` nodes. Godot users often solve this using a `CanvasItemMaterial` with a custom fragment shader that samples 4-neighbor pixels to create an outline or outer glow, or by baking high-contrast pixel art highlights directly into `SpriteFrames` of an `AnimatedSprite2D`.
+
+---
+
+## 26. Pausing Games, Time.timeScale, and Unscaled Input in Unity vs Godot
+
+### How Does Pausing Work in Unity?
+To pause a game in Unity, developers set:
+```csharp
+Time.timeScale = 0f;
+```
+When `Time.timeScale = 0f`:
+1. **`FixedUpdate()` Physics Stop:** Rigidbodies stop moving, collisions stop calculating, and velocity is completely preserved.
+2. **`Time.deltaTime` Becomes `0.0`:** Any movement code multiplying by `Time.deltaTime` automatically halts.
+3. **`WaitForSeconds()` Coroutines Freeze:** Any coroutine waiting on `WaitForSeconds` is paused until `Time.timeScale` is restored to `1.0`.
+
+### The Two Classic Rookie Traps:
+1. **`Update()` Keeps Running:**
+   - Unity's `Update()` function **still executes every frame** even when `Time.timeScale = 0`!
+   - If your player script checks `Keyboard.current.spaceKey.wasPressedThisFrame` in `Update()`, pressing Space to select an option in the pause menu will register as a jump attack when unpaused!
+   - *The Fix:* Add an early exit in your input handler: `if (Time.timeScale == 0f) return;`.
+   - *Lifecycle Input Gating:* In addition to pause, fighters should not accept inputs before the match starts or after K.O. Gating input with `MatchManager.CurrentMatchState == RoundInProgress` guarantees clean finish poses.
+2. **Audio Stops or Stutters:**
+   - Calling `AudioListener.pause = true` pauses all audio globally.
+   - If your pause menu needs to play retro button clicks or navigation bleeps, set `audioSource.ignoreListenerPause = true;` on the menu's `AudioSource`.
+
+### Sliding UI Animations in Pure C# (No Plugins Needed)
+To slide a menu from off-screen ($Y = 950\text{px}$) into the center ($Y = 0\text{px}$):
+```csharp
+float t = Mathf.Clamp01(elapsed / duration);
+// Cubic Ease-Out: 1 - (1 - t)^3
+float ease = 1f - Mathf.Pow(1f - t, 3f);
+rectTransform.anchoredPosition = Vector2.Lerp(new Vector2(0, 950), Vector2.zero, ease);
+```
+Using `Time.unscaledDeltaTime` ensures the tween runs smoothly at 60 FPS even when `Time.timeScale` is frozen!
+
+> **Godot Comparison:**
+> In **Godot**, pausing is handled via `get_tree().paused = true`.
+> Every Node in Godot has a **`process_mode`** property:
+> - `PROCESS_MODE_INHERIT` / `PAUSABLE`: The node stops processing when paused (like fighters in Unity).
+> - `PROCESS_MODE_ALWAYS`: The node continues processing even when paused (used for Pause Menus and UI in Godot).
+> For UI slide animations, Godot developers use `create_tween().tween_property(panel, "position:y", 0.0, 0.65).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)`. In Unity, our custom coroutine provides the exact same high-performance tween with 0 external dependencies!
+
+
+---
+
+## 27. Game AI Fundamentals: Decoupling Input and Hierarchical State Machines (HFSM)
+
+### Why Can't the AI Just "Tell the Character What to Do"?
+In beginner tutorials, people often write AI by directly calling character functions:
+```csharp
+// ❌ ROOKIE MISTAKE: AI directly overrides physics and bypasses game rules!
+if (playerNearby) {
+    fighter.transform.position = player.position; // Teleport!
+    fighter.PlayAttackAnimation(); // Cheats attack cooldowns!
+}
+```
+This causes major game-feel bugs:
+1. **Unfair "Input Reading" & Cheating:** The AI attacks without obeying recovery frames, startup delays, or Ki costs.
+2. **Coupling Nightmare:** If you change how walking or jumping works in `FighterController`, you have to rewrite the AI from scratch.
+
+### The Professional Game Dev Solution: The "Virtual Controller"
+Instead of letting the AI bypass rules, we create an **Input Interface** (`IFighterInput`):
+- `MoveInput`
+- `JumpPressed`
+- `LightAttackPressed`
+- `HeavyAttackPressed`
+- `SkillPressed`
+- `UltimatePressed`
+- `MeditateHeld`
+
+Both **Humans** and **CPUs** must feed through this exact same interface!
+```
+[Physical Keyboard]  ──▶ [PlayerInputHandler] ──┐
+                                                 ├──▶ [IFighterInput] ──▶ [FighterController]
+[Tactical CPU Brain] ──▶ [CpuFighterBrain]   ──┘
+```
+The `FighterController` does not even know if it is being played by a human or an AI. The AI has to obey the exact same gravity, startup frames, hitbox ranges, and Ki exhaustion rules as the player.
+
+### What is a Hierarchical Finite State Machine (HFSM)?
+A flat state machine only has one layer (`Idle`, `Walk`, `Punch`). In fighting games, this feels robotic.
+A **Hierarchical FSM** splits thinking into two layers:
+1. **Layer 1: Macro Strategy (High-Level Posture):**
+   - *"Am I winning or losing? Should I rush down, keep my distance, or back off to charge Ki?"*
+2. **Layer 2: Micro Actions (Concrete Button Pressing):**
+   - *"I decided to rush down; now I press [D] to walk forward, and when within 1.0m, I tap [Light Attack]."*
+
+### Humanizing the Bot (No Frame-0 Cheats)
+If a computer reacts in $0\text{ms}$, players feel cheated. We introduce:
+1. **Reaction Delay Tick ($\Delta t \approx 0.14\text{s} - 0.40\text{s}$):** The AI only evaluates strategic decisions every few hundred milliseconds, matching human reflex windows.
+2. **Hesitation / Mistake Rate:** A percentage chance on Easy difficulty where the bot pauses in neutral or drops a combo confirm.
+
+> **Godot Comparison:**
+> In **Godot**, you achieve this by giving your `CharacterBody2D` a generic child node or Resource for `input_provider`. In 2P mode, it points to a script reading `Input.get_vector()`. In Single-Player mode, you swap that node for an `AIController.gd` node that emits virtual vectors and action flags into `_physics_process()`.
+
+---
+
+## 28. Dynamic Prefab Instantiation vs. Scene Hardcoding (The Fighting Game Stage Pattern)
+
+### The Rookie Trap: Leaving Characters in the Scene
+When prototyping in Unity, developers often drag `Goku` and `Saitama` directly into the scene hierarchy.
+Why this breaks fighting games:
+1. **Broken Character Select:** If Player 1 selects Saitama in the menu, but the scene already contains a baked `Goku`, the game will either spawn duplicates or completely ignore the player's choice!
+2. **The Deferred `Destroy()` Race Condition:** Calling `Destroy(oldFighter)` in Unity does **not** destroy the object immediately—it flags it to be removed at the end of the frame. Any script calling `GameObject.Find()` in `Awake()` or `Start()` will still find the old, discarded fighter!
+
+### The Solution: Clean Arena + Dynamic Deployment
+An arena scene (`SampleScene`) should be a clean stage: floor, backdrop, boundary walls, lights, camera, HUD, and referee (`MatchManager`).
+When the scene loads:
+1. The **Deployer** reads `GameManager.Instance.P1SelectedCharacterId` and `P2SelectedCharacterId`.
+2. It calls `Resources.Load<GameObject>("Prefabs/Fighters/" + charId)`.
+3. It spawns the exact selected prefabs at the spawn markers:
+   ```csharp
+   GameObject p1 = Instantiate(p1Prefab, p1SpawnPos, Quaternion.identity);
+   p1.name = "Fighter_P1";
+   ```
+4. It immediately hands the instantiated references directly to `MatchManager` and `HUDController`:
+   ```csharp
+   matchManager.SetFighterReferences(p1Health, p2Health, p1Energy, p2Energy);
+   hudController.SetFighterReferences(p1Health, p2Health, p1Energy, p2Energy);
+   ```
+
+> **Godot Comparison:**
+> In **Godot**, this is identical to keeping `Arena.tscn` free of hardcoded players. Instead, `Arena.gd` reads `GameManager.p1_character` in `_ready()`, calls:
+> ```gdscript
+> var p1_node = load("res://Fighters/" + char_id + ".tscn").instantiate()
+> $SpawnP1.add_child(p1_node)
+> ```
+> and directly connects the child node's signals to the HUD.
+
+---
+
+## 29. Dynamic Key Rebinding, Combined Local Duel Tables & Audio Mixer (Godot vs Unity)
+
+### The Problem: Hardcoded Keyboard Keys & Shared Keyboard Chaos
+In PC fighting games, players have very different setups:
+1. **Solo Player (Vs CPU & Future LAN):** The player has the entire keyboard to themselves and wants comfortable single-hand or split layouts.
+2. **Local 1v1 Duel (Shared Keyboard):** Two players sit side-by-side on the same keyboard. If Player 1 uses `W/A/S/D` and Player 2 also uses keys that collide, neither can fight.
+3. **Hardcoding Rookie Mistake:** Writing `if (Keyboard.current.aKey.isPressed)` directly in fighter scripts locks players into one fixed control scheme.
+
+### The Solution in Mystic Combat:
+1. **`InputSettingsManager.cs`**:
+   - Stores two distinct profiles:
+     - **Single Player Profile (9 Keys):** Full keyboard freedom (Vs CPU & LAN).
+     - **1v1 Local Duel Profile (18 Keys):** Split keyboard across Player 1 (Left) and Player 2 (Right).
+   - Saved persistently to disk via `PlayerPrefs` (`MC_Bind_SP_*`, `MC_Bind_DuelP1_*`, `MC_Bind_DuelP2_*`).
+2. **The Combined Table UI Pattern:**
+   - Rather than dividing the screen into two disconnected boxes for P1 and P2, we use a **3-column combined table**:
+     `[ Fighter Action ] | [ Player 1 Key ] | [ Player 2 Key ]`
+   - Keeps both players' mappings vertically aligned so conflicts can be spotted instantly.
+3. **Interactive Key Interception:**
+   - Clicking a key button switches it to `[ PRESS KEY ]`.
+   - In `Update()`, the controller monitors `Keyboard.current.allKeys`, binds the first key pressed, and saves it immediately.
+4. **Top Audio Sliders:**
+   - Volume sliders (`Music BGM` and `SFX Sound`) live directly at the top of the modal for instant adjustment with live `%` readouts and real-time audio playback update.
+
+> **Godot Comparison:**
+> In **Godot**, actions are registered in `ProjectSettings` (`input/*`). Runtime rebinding is done with:
+> ```gdscript
+> InputMap.action_erase_events(action_name)
+> var new_ev = InputEventKey.new()
+> new_ev.physical_keycode = key
+> InputMap.action_add_event(action_name, new_ev)
+> ```
+> Settings are saved to `user://settings.cfg` using `ConfigFile`. In Unity, `InputSettingsManager` maps `FighterAction` enum to `UnityEngine.InputSystem.Key` controls and persists them via `PlayerPrefs`.
+
+---
+
+## 30. Hierarchical Sub-Menu Flow & Arcade Visual Navigation (Godot vs Unity)
+
+### The Beginner Trap: Squeezing Everything Onto One Static Screen
+When beginners build menus in fighting games, they often try to fit every slider, checkbox, and keybinding into one single view.
+- **The Consequence:** To fit volume sliders, descriptions, and 18 key rows simultaneously, UI text must be shrunk down to $12\text{pt}\text{–}14\text{pt}$. On standard 1080p and 4K displays, players literally have to squint to read their own key bindings!
+- **The Rookie Mistake on Navigation:** Forgetting visual focus indicators, then pasting ugly text like *"Use W/S to move, Enter to choose, Esc to leave"* across the screen.
+
+### The Solution: Hierarchical Sub-Menus + Obvious Visual Navigation
+1. **Window Enlargement:** Expanded the Options window to **$1440 \times 880\text{px}$** with an **$80\%$ font size increase** ($24\text{pt}\text{–}36\text{pt}$ typography everywhere).
+2. **Hierarchical Screen Flow:**
+   - **Screen 1 (Main Hub):** Contains only the big volume sliders, sub-menu entry buttons, and lower reset/exit buttons.
+   - **Screen 2 (Single Player Sub-Screen):** Opens full-window when selected, dedicating the entire screen to 9 large, readable action rows ($24\text{pt}$).
+   - **Screen 3 (1v1 Local Duel Sub-Screen):** Opens full-window when selected, providing massive horizontal space for the 3-column combined table.
+3. **Making Navigation Obvious (No Prompt Clutter):**
+   - **Blinking Arcade Cursor (`►`):** Precedes the active item (`►  MUSIC BGM`, `►  CONFIGURE SINGLE PLAYER KEYS`).
+   - **Pulsing Neon Gold Focus Frame:** Uses a sine wave (`Mathf.Sin(Time.unscaledTime * 7f)`) to smoothly pulse the active element's `Outline` component between Radiant Gold (`#FFD54F`) and Pure White (`#FFFFFF`).
+   - Any player looking at the screen instantly knows what is selected without reading a single tutorial prompt.
+
+> **Godot Comparison:**
+> In **Godot**, you manage focus using `focus_mode = FOCUS_ALL`, `StyleBoxFlat` with custom border color on focus, and the `focus_entered` signal. You toggle sub-menus by hiding `MainPanel.visible = false` and setting `SubPanel.visible = true`. In Unity, `OptionsMenuController` manages active indices, updates the `►` text prefix, and pulses the `Outline` component in `Update()`.
+
+---
+
+## 31. Dynamic Fighter Deployment vs. Scene Transition Lifecycles (Godot vs Unity)
+
+### The Beginner Trap: Static Scene Instances vs. Dynamic Character Spawning
+When beginners create fighting games, they often place characters directly into the scene editor (`SampleScene.unity`).
+- **The Consequence:** When you build a Character Selection screen (Goku vs. Saitama), your selection never works in the actual match! Because `SampleScene.unity` already has pre-baked fighters serialized on disk, the game ignores your Character Select choices and always spawns the hardcoded characters.
+- **The Follow-Up Rookie Mistake:** Beginners delete the static fighters from the scene file, but then enter Play Mode and discover an **empty arena** with no fighters at all!
+
+### Why Did the Arena Load Empty? (The Scene Transition Lifecycle Trap)
+In Unity, understanding *when* scripts execute across scenes is critical:
+1. **`[RuntimeInitializeOnLoadMethod]` Only Fires Once:**
+   - Many developers use `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` to auto-spawn fighters.
+   - **The Trap:** This attribute runs **exactly once** when the game starts. If your game begins in `MainMenuScene`, the method fires while in the main menu (where fighters shouldn't spawn). When the player later selects a character and loads `SampleScene`, that method **never fires again**!
+2. **The `SceneManager.sceneLoaded` Active Scene Gotcha:**
+   - When transitioning scenes via `SceneManager.LoadScene("SampleScene")`, Unity triggers the `sceneLoaded` callback.
+   - **The Trap:** When `sceneLoaded` fires, `SceneManager.GetActiveScene()` is **still pointing to `MainMenuScene`** until Unity finishes processing all scene callbacks! If your deployer script checks `if (SceneManager.GetActiveScene().name == "MainMenuScene") return;`, it erroneously aborts, thinking it is still inside the main menu!
+3. **Instantiating Into the Wrong Scene:**
+   - Calling `Instantiate(prefab)` without specifying a parent or scene drops the GameObject into whatever scene Unity currently considers active (`SceneManager.GetActiveScene()`). If `MainMenuScene` is still technically active during the transition, the new fighters are spawned into `MainMenuScene` right before `MainMenuScene` is destroyed and unloaded from memory!
+
+### The Solution in Mystic Combat:
+1. **Listen to `SceneManager.sceneLoaded` & `AfterSceneLoad`:**
+   - Listen to `SceneManager.sceneLoaded` for transitions (e.g. Main Menu $\to$ Arena).
+   - Also listen to `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` so developers can press Play directly inside `SampleScene` during debugging without going through the Main Menu.
+2. **Explicit Scene Migration (`SceneManager.MoveGameObjectToScene`):**
+   - When instantiating the deployer or fighter prefabs, explicitly set the active scene and move objects into the target combat scene:
+     ```csharp
+     SceneManager.SetActiveScene(scene);
+     SceneManager.MoveGameObjectToScene(fighterInstance, scene);
+     ```
+3. **`MatchManager` Readiness Handshake (`MatchState.WaitingToStart`):**
+   - In `MatchManager.Start()`, if fighters are not yet in the scene, the match enters `MatchState.WaitingToStart`.
+   - As soon as the deployer spawns the fighters and calls `SetFighterReferences(p1Hp, p2Hp, p1Ki, p2Ki)`, `MatchManager` smoothly transitions to starting Round 1.
+
+> **Godot Comparison:**
+> In **Godot**, scene changing is handled by `get_tree().change_scene_to_file("res://Scenes/Arena.tscn")`. To spawn dynamic characters:
+> ```gdscript
+> var fighter_scene = load("res://Prefabs/Goku.tscn")
+> var fighter = fighter_scene.instantiate()
+> arena_node.add_child(fighter)
+> ```
+> In Godot, `add_child()` explicitly dictates which branch of the SceneTree receives the node, completely avoiding Unity's `GetActiveScene()` ambiguity. In Unity, `SceneManager.MoveGameObjectToScene()` provides that exact explicit placement.
+
+---
+
+## 37. Audio Mixing: Linear vs Logarithmic Volume, Envelopes & Dynamic Range
+
+Balancing audio in a 2D fighting game is critical for game feel. If menu clicks or vocal shouts are too loud, they drown out the background music (BGM) and cause instant ear fatigue.
+
+### 1. Unity Volume vs Godot Decibels
+- **Unity AudioSource:** Uses a normalized **linear amplitude scale** from `0.0f` (silent) to `1.0f` (full volume).
+  - Passing `volumeScale = 0.50f` to `audioSource.PlayOneShot(clip, volumeScale)` directly cuts the sound wave amplitude in half (a $50\%$ drop).
+  - Passing `volumeScale = 0.70f` produces a $30\%$ drop.
+- **Godot Audio Buses:** Godot uses a **decibel scale (dB)** where $0\text{ dB}$ is full volume and $-80\text{ dB}$ is silence.
+  - In Godot GDScript, you convert between scales using `linear_to_db(0.5)` or `db_to_linear(-6.0)`.
+
+```
+Unity Linear:  0.0f ───────────── 0.50f ───────────── 1.00f (Max Headroom)
+Godot Decibel: -80 dB ─────────── -6 dB  ──────────── 0 dB (Unity 1.0f Equivalent)
+```
+
+### 2. Eliminating Audio "Pops" and "Clicks" with Envelopes
+When generating procedural sound effects (like retro 8-bit blips or menu boops), instantly cutting a waveform to zero creates an abrupt discontinuity in speaker voltage, which our ears hear as a harsh **"pop"** or **"click"**.
+- **The Solution (Amplitude Decay Envelope):** Multiply the waveform by a linear decay factor:
+  ```csharp
+  // Without envelope: harsh click at end of sound
+  sample = Mathf.Sign(Mathf.Sin(frequency * t));
+
+  // With linear decay envelope: smooth fade to silence
+  float decay = 1.0f - (t / duration);
+  sample = Mathf.Sign(Mathf.Sin(frequency * t)) * decay;
+  ```
+
+### 3. Master Hierarchy & Per-Sound Calibration
+In Mystic Combat:
+1. **Master BGM:** Defaults to $100\%$ (`1.00f`) so the 90s arcade music delivers maximum dynamic range without being artificially muffled.
+2. **Menu Navigation SFX:** Reduced from `0.45f` down to `0.22f` ($51\%$ volume reduction) and shaped with a smooth decay envelope, keeping menu interactions crisp without piercing the player's ears.
+3. **Character Move-Slot Audio Routing:**
+   - **Goku:** Has no special skill; his signature **Ultimate Finisher** (`Q` / `O`, Ki: 80) is **Kamehameha**, animated via `ultimate_0..9` and voiced via `voiceUltimateClip` (`goku_voice_kamehameha`).
+   - **Saitama:** Has Consecutive Normal Punches on **Skill** (`E` / `U`, `voiceSkillClip`) and Serious Punch on **Ultimate** (`Q` / `O`, `voiceUltimateClip`).
+4. **Vocal Acoustic Gain Calibration:**
+   - **Goku Kamehameha (`goku_voice_kamehameha.wav`):** Has an extremely high raw digital recording ceiling (Peak `0.906`, RMS `0.262`). To prevent ear fatigue, its multiplier is calibrated to `0.50f` with a hard safety ceiling.
+   - **Saitama Special Shouts (`consecutive_normal_punches.mp3` & `serious_punch.mp3`):** Recorded with softer vocal gain. Their multipliers are boosted to `2.20f` (Skill) and `2.50f` (Ultimate) so they punch through loud physical hit impacts!
+5. **Clean One-Shot Master Scaling (No Double Multiplication):**
+   - In Unity, `audioSource.PlayOneShot(clip, volumeScale)` produces `audioSource.volume * volumeScale`.
+   - By keeping the underlying `AudioSource.volume` at `1.0f` and applying `InputSettingsManager.SFXVolume` directly inside `PlayOneShot()`, the system avoids accidental cascading attenuation.
+
+---
+
+## 38. Sprite Baselines, Dynamic Hurtbox Scaling & AI Action Cadence (Godot vs Unity)
+
+### 1. The Sprite Bouncing Trap: Baseline Alignment
+In 2D fighting games, characters switch between different animation states: `Idle`, `Walk`, `Punch`, `Skill`, and `Ultimate`.
+- **The Rookie Mistake:** Cropping each animation frame tightly around the character's bounding box to save file size.
+  - For example, if an idle sprite is $47 \times 47\text{px}$, but a special blast sprite is $90 \times 79\text{px}$ with $20\text{px}$ of empty canvas below the feet:
+  - When the game switches to the blast animation, the character's feet pop $20\text{px}$ upward into the air! They appear to bounce like a pogo stick.
+- **The Professional Solution:** Standardize all frames onto a fixed canvas ($128 \times 128\text{px}$) with the ground contact point locked to an exact baseline row (`y = 104`, bottom padding $23\text{px}$). The pivot `(0.5f, 23/128)` then applies uniformly to every single frame, guaranteeing zero jumping or jittering.
+
+### 2. Dynamic Hurtbox Scaling (Why Ducking Must Lower the Collider)
+In fighting games, crouching is used to duck under high attacks.
+- If your `Hurtbox` child GameObject has a static `BoxCollider2D` that stays $1.8\text{m}$ tall, crouching changes the visual sprite but leaves the vulnerable zone standing up in the air!
+- In `FighterController.TransitionTo()`, whenever a fighter enters `FighterState.Crouching`, the hurtbox height is scaled from $1.8\text{m}$ down to $0.95\text{m}$ ($y = 0.48\text{m}$). Returning to `Idle` restores it to $1.8\text{m}$. Ducking now physically dodges high strikes!
+
+### 3. The 60 FPS AI Probability Trap
+In `Update()`, code runs 60 times every second.
+- **The Trap:** Writing `if (Random.value < 0.15f) JumpPressed = true;` inside `Update()`.
+  - Beginners assume this means a $15\%$ chance to jump.
+  - In reality, evaluating a $15\%$ chance 60 times a second produces an expected **9 jumps every second**! The bot jumps constantly like a maniac.
+- **The Solution:** Use explicit cooldown timers (`jumpCooldownTimer`, `attackCooldownTimer`). The AI evaluates actions at controlled intervals ($1.8\text{s}\text{–}3.0\text{s}$ between tactical jumps; $0.25\text{s}\text{–}0.50\text{s}$ between attack strikes), producing human-like arcade pacing.
+
+> **Godot Comparison:**
+> In **Godot**, you handle dynamic hurtboxes by adding a track for `CollisionShape2D:shape:size` directly inside the `AnimationPlayer` resource, adjusting the collider shape frame-by-frame on the timeline. In Unity, scripts update `BoxCollider2D.size` and `offset` during state transitions. For AI cadence, Godot typically uses a `Timer` node or a `yield(get_tree().create_timer(delay), "timeout")` pattern.
+
+---
+
+## 39. Event Race Conditions & Audio Self-Healing in Scene Transitions (Godot vs Unity)
+
+### The Beginner Trap: Relying 100% on Events Without State Recovery
+In Unity, many systems communicate using C# events:
+- `MatchManager.OnRoundStart += HandleRoundStart;`
+- **The Trap:** When transitioning scenes dynamically, `PrototypeBootstrap` deploys fighters and immediately starts Round 1.
+  - If `OnRoundStart?.Invoke(1)` fires during the scene load step, `MatchAudioController` might not have finished its `OnEnable()` subscription yet.
+  - The event fires into empty air. `MatchAudioController` misses the notification completely!
+  - If `MatchAudioController.Start()` is empty, it assumes an event will arrive in the future. Result: Round 1 has **zero background music**, but Round 2 works because the listener is now subscribed.
+
+### The Professional Solution: Self-Healing Handshake
+Never rely solely on an event if the underlying system has a persistent state!
+1. In `Start()`: Inspect the current state of `MatchManager`:
+   ```csharp
+   if (matchManager.CurrentMatchState == MatchState.RoundInProgress && !musicSource.isPlaying)
+   {
+       PlayBattleMusic(resetToStart: true);
+   }
+   ```
+2. In `Update()`: Add a failsafe check that recovers playback if music was stopped or missed.
+3. This guarantees that whether the event fires early, on time, or late, the music **always plays**.
+
+> **Godot Comparison:**
+> In **Godot**, background music is almost always placed on an **Autoload Singleton** (e.g., `BGMPlayer.tscn`). Because Autoload nodes live in the root `/root/` SceneTree, they are **never destroyed or reloaded** when `change_scene_to_file()` runs. In Unity, scene-local audio controllers must implement self-healing checks in `Start()` to bridge asynchronous transition timing gaps.
+
+
+
+
 
 
 

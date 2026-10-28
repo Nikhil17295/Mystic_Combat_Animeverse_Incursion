@@ -17,7 +17,7 @@ GameObject:
   - component: {fileID: 1461611492751410668}
   - component: {fileID: 2215052640620348780}
   - component: {fileID: 6562127518618394206}
-  - component: {fileID: 7268565002593660542}
+  - component: {fileID: 7703077801276963889}
   m_Layer: 0
   m_Name: Goku
   m_TagString: Untagged
@@ -34,7 +34,7 @@ Transform:
   m_GameObject: {fileID: 196570998643446817}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.2, y: -3, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.88, y: 0.88, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -107,14 +107,14 @@ BoxCollider2D:
   m_Offset: {x: 0, y: 0.95}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 0.47, y: 0.47}
-    newSize: {x: 0.47, y: 0.47}
+    pivot: {x: 0.5, y: 0.1796875}
+    oldSize: {x: 5.3333335, y: 5.3333335}
+    newSize: {x: 5.3333335, y: 5.3333335}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.85, y: 1.9}
+  m_Size: {x: 0.8, y: 1.9}
   m_EdgeRadius: 0
 --- !u!212 &4268172441527938763
 SpriteRenderer:
@@ -170,7 +170,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 0.47, y: 0.47}
+  m_Size: {x: 5.3333335, y: 5.3333335}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 0
@@ -201,10 +201,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 275722d1f91068d4d97839c01746bf24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Fighter.FighterController
-  inputHandler: {fileID: 7630830238063693531}
-  opponent: {fileID: 5331331634078136830, guid: 86d3c90f74b5a3747a37a866f79a562f, type: 3}
+  legacyInputHandler: {fileID: 0}
+  opponent: {fileID: 0}
   attackHitbox: {fileID: 8248166633078589144}
-  fighterAudio: {fileID: 7268565002593660542}
+  fighterAudio: {fileID: 0}
   groundCheckPoint: {fileID: 8360602784235929951}
   groundCheckRadius: 0.15
   groundLayer:
@@ -265,7 +265,7 @@ MonoBehaviour:
   redZoneThreshold: 10
   redZoneDuration: 5
   recoveryKi: 20
---- !u!114 &7268565002593660542
+--- !u!114 &7703077801276963889
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -279,29 +279,32 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Combat.FighterAudio
   sfxSource: {fileID: 0}
   auraSource: {fileID: 0}
-  jumpClip: {fileID: 8300000, guid: 53e898e360727bf313d67dac9180b655, type: 3}
-  landClip: {fileID: 8300000, guid: bc0cc04549f9bd50cb61e4328e5c88a9, type: 3}
-  crouchClip: {fileID: 8300000, guid: 64f0b210014189de4b4b2b4522de6b1e, type: 3}
-  dashClip: {fileID: 8300000, guid: 7a07bde6e3bafe35f9fc33d8ef4d2141, type: 3}
-  lightWhiffClip: {fileID: 8300000, guid: 190f551fd24091e97a8295f221c22842, type: 3}
-  heavyWhiffClip: {fileID: 8300000, guid: 86a476731a85a1bef74868094eb84ce0, type: 3}
+  voiceSource: {fileID: 0}
+  jumpClip: {fileID: 8300000, guid: a5a8334d7e151ac4486b794a82673e86, type: 3}
+  landClip: {fileID: 8300000, guid: a5a8334d7e151ac4486b794a82673e86, type: 3}
+  crouchClip: {fileID: 8300000, guid: 44703b5540eb24f44b86bca53a4734d1, type: 3}
+  dashClip: {fileID: 8300000, guid: b60b174baf8f403469b0285ab001a257, type: 3}
+  lightWhiffClip: {fileID: 8300000, guid: e1d42c9256da20949bb0e5ed770d2588, type: 3}
+  heavyWhiffClip: {fileID: 8300000, guid: 85ebb771fb24f354bad20aa0521a62c2, type: 3}
   skillAttackClip: {fileID: 0}
   ultimateAttackClip: {fileID: 0}
-  lightHitClip: {fileID: 8300000, guid: c763b19988f8594a4ad0e68360e7c4c9, type: 3}
-  heavyHitClip: {fileID: 8300000, guid: 614e909771f3053dcf1f33712465c67a, type: 3}
+  lightHitClip: {fileID: 8300000, guid: 132ff3e39d2f67344b75d46764d42485, type: 3}
+  heavyHitClip: {fileID: 8300000, guid: 6bb4f54f9c34dfe44b6a117feba7e79c, type: 3}
   skillHitClip: {fileID: 0}
   ultimateHitClip: {fileID: 0}
-  kiChargeLoopClip: {fileID: 8300000, guid: cbf726ab5f2e7801a75ad4c195307c64, type: 3}
-  redZoneWarningClip: {fileID: 8300000, guid: 040c9c42201d714c9065ba3301bce739, type: 3}
+  kiChargeLoopClip: {fileID: 8300000, guid: 84dd92e6ed8422a4da67d1025456066a, type: 3}
+  redZoneWarningClip: {fileID: 8300000, guid: 63a8bab3dcb63f942bc42ae9003039d7, type: 3}
   voiceAttackGruntClip: {fileID: 0}
   voiceHurtClip: {fileID: 0}
   voiceSkillClip: {fileID: 0}
-  voiceUltimateClip: {fileID: 8300000, guid: dbc9a3b352c126161d201360b62067bb, type: 3}
+  voiceUltimateClip: {fileID: 8300000, guid: d980ce96851e6c645a785d0ccdc28406, type: 3}
   sfxVolume: 1
   whiffVolume: 0.65
   impactVolume: 1
-  voiceVolume: 0.9
-  kiAuraVolume: 0.45
+  voiceVolume: 1
+  kiAuraVolume: 0.12
+  voiceSkillMultiplier: 1
+  voiceUltimateMultiplier: 0.5
 --- !u!1 &1359540555661872691
 GameObject:
   m_ObjectHideFlags: 0
@@ -369,7 +372,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.8, y: 0.85}
+  m_Offset: {x: 0.8, y: 0.9}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0, y: 0}
@@ -508,7 +511,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.85, y: 1.8}
+  m_Size: {x: 0.9, y: 1.8}
   m_EdgeRadius: 0
 --- !u!114 &4690481992769626899
 MonoBehaviour:
