@@ -25,7 +25,7 @@ namespace MysticCombat.Editor
     public static class SceneSetupTool
     {
         private const int GROUND_LAYER = 6;
-        private const string BAKE_VERSION_KEY = "MysticCombat_GrandHUD_Bake_v22";
+        private const string BAKE_VERSION_KEY = "MysticCombat_GrandHUD_Bake_v26";
 
         static SceneSetupTool()
         {
@@ -544,15 +544,17 @@ namespace MysticCombat.Editor
                 so.FindProperty("heavyHitClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Hits_Punches/saitama_normal_punch.mp3");
                 so.FindProperty("skillHitClip").objectReferenceValue = null;
                 so.FindProperty("ultimateHitClip").objectReferenceValue = null;
-                so.FindProperty("voiceSkillClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/saitama_voice_consecutive_punches.wav");
-                so.FindProperty("voiceUltimateClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/saitama_voice_serious_punch.wav");
+                so.FindProperty("voiceSkillClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/consecutive_normal_punches.mp3");
+                so.FindProperty("voiceUltimateClip").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX_Library/Anime_Powers/serious_punch.mp3");
             }
 
             so.FindProperty("sfxVolume").floatValue = 1.0f;
             so.FindProperty("whiffVolume").floatValue = 0.65f;
             so.FindProperty("impactVolume").floatValue = 1.0f;
-            so.FindProperty("voiceVolume").floatValue = 0.9f;
-            so.FindProperty("kiAuraVolume").floatValue = 0.45f;
+            so.FindProperty("voiceVolume").floatValue = 1.0f;
+            so.FindProperty("kiAuraVolume").floatValue = 0.12f;
+            so.FindProperty("voiceSkillMultiplier").floatValue = 1.45f;
+            so.FindProperty("voiceUltimateMultiplier").floatValue = 1.70f;
             so.ApplyModifiedProperties();
             return fa;
         }
@@ -868,6 +870,13 @@ namespace MysticCombat.Editor
             so.ApplyModifiedProperties();
 
             // ----------------------------------------------------
+            // 8b. ATTACH COMBAT MENU CONTROLLER (PAUSE & RESULTS)
+            // ----------------------------------------------------
+            CombatMenuController menuCtrl = canvasObj.GetComponent<CombatMenuController>();
+            if (menuCtrl == null) menuCtrl = canvasObj.AddComponent<CombatMenuController>();
+            menuCtrl.EnsureUIHierarchyBuilt();
+
+            // ----------------------------------------------------
             // 9. SAVE AS PREFAB AND CONNECT AS LIVE INSTANCE
             // ----------------------------------------------------
             string uiDir = "Assets/Prefabs/UI";
@@ -890,6 +899,17 @@ namespace MysticCombat.Editor
                 PrefabUtility.RecordPrefabInstancePropertyModifications(liveCtrl);
                 liveCtrl.ResolveReferences();
                 EditorUtility.SetDirty(liveCtrl);
+            }
+
+            // Wire CombatMenuController matchManager reference on live instance
+            CombatMenuController liveMenu = canvasInstance != null ? canvasInstance.GetComponent<CombatMenuController>() : menuCtrl;
+            if (liveMenu != null && mm != null)
+            {
+                SerializedObject menuSo = new SerializedObject(liveMenu);
+                menuSo.FindProperty("matchManager").objectReferenceValue = mm;
+                menuSo.ApplyModifiedProperties();
+                PrefabUtility.RecordPrefabInstancePropertyModifications(liveMenu);
+                EditorUtility.SetDirty(liveMenu);
             }
 
             return canvasInstance != null ? canvasInstance : canvasObj;

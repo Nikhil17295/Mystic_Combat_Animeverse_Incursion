@@ -70,7 +70,7 @@ Instead of a giant 2,000-line `Player.cs`, responsibilities are strictly separat
 | **`PlayerInputHandler`** | Reads keyboard keys (`W/A/S/D` or `Arrows`). | Does not move the player or know what an attack is. |
 | **`FighterController`** | Manages movement physics, states, jumping, and auto-facing. | Does not calculate damage or update UI. |
 | **`HealthSystem`** | Stores HP, handles `TakeDamage()` and `Heal()`. | Does not know what attack hit the player. |
-| **`EnergySystem`** | Stores Ki (0–100), handles meditation, manages 5-second Red Zone timer. | Does not draw UI or move the player. |
+| **`EnergySystem`** | Stores Ki (0â€“100), handles meditation, manages 5-second Red Zone timer. | Does not draw UI or move the player. |
 | **`HUDController`** | Updates UI bars and text. | Does not store or modify game variables. |
 | **`MainMenuController`** | Manages start screen navigation, mode selection, audio feedback, and options. | Does not execute in-match fight logic. |
 | **`MatchAudioController`** | Manages in-match battle BGM escalation (Rounds 1/2 vs Match Point) and victory fanfare triggers via `MatchManager` events. | Does not handle damage calculation or character state transitions. |
@@ -133,14 +133,14 @@ In competitive fighting games, attacks are divided into 3 distinct chronological
 
 ```
 [ Attack Started ]
-       │
-       ▼
+       â”‚
+       â–¼
 [ 1. Startup Phase ]    (Hitbox OFF, player committed)
-       │
-       ▼
+       â”‚
+       â–¼
 [ 2. Active Window ]    (Hitbox ON, damage + knockback + Ki resolved)
-       │
-       ▼
+       â”‚
+       â–¼
 [ 3. Recovery Phase ]   (Hitbox OFF, cooldown before returning to Idle)
 ```
 
@@ -176,7 +176,7 @@ To eliminate fragile inspector wiring and ensure the HUD never goes inactive:
 - This mirrors Godot's safe `_ready()` signal discovery (`get_node_or_null()`), allowing the HUD prefab to be dropped into any test scene with zero manual setup.
 
 ### Screen Space Canvas & Reference Resolution
-- **Canvas Scaler:** Configured to `Scale With Screen Size` with a reference resolution of `1920 × 1080` and `Match Width Or Height = 0.5`.
+- **Canvas Scaler:** Configured to `Scale With Screen Size` with a reference resolution of `1920 Ã— 1080` and `Match Width Or Height = 0.5`.
 - **Anchor Normalization:**
   - Player 1 Combat Card (Goku) is anchored to `Top-Left (0, 1)`.
   - Player 2 Combat Card (Saitama) is anchored to `Top-Right (1, 1)`.
@@ -185,15 +185,15 @@ To eliminate fragile inspector wiring and ensure the HUD never goes inactive:
 
 ### Layered HUD Hierarchy & Visual Composition (v11)
 To combine high-impact anime presentation with seamless 2D performance, the HUD uses a clean, non-clipping multi-layer hierarchy:
-1. **Background Layer:** `Mystic_Runic_Banner` (900×48) anchored behind the top center cluster, displaying green Tao runic circles and eldritch spell glyphs.
-2. **Container Layer:** `P1_HealthBar_Container` & `P2_HealthBar_Container` (650×52) featuring 8px beveled gold rims.
+1. **Background Layer:** `Mystic_Runic_Banner` (900Ã—48) anchored behind the top center cluster, displaying green Tao runic circles and eldritch spell glyphs.
+2. **Container Layer:** `P1_HealthBar_Container` & `P2_HealthBar_Container` (650Ã—52) featuring 8px beveled gold rims.
 3. **Fill Layer:** `GhostFill` (red trailing damage) and `HealthFill` (2-tone lime/gold health) offset inwards by `(8px, 6px)` so the fills never spill past the frame.
-4. **Header Frieze Layer:** `Mystic_Runic_Banner` (960×36) repositioned along the top border (`y = -18`) with glowing jade Taoist eldritch mandalas and runic bridges framing the entire combat cluster.
+4. **Header Frieze Layer:** `Mystic_Runic_Banner` (960Ã—36) repositioned along the top border (`y = -18`) with glowing jade Taoist eldritch mandalas and runic bridges framing the entire combat cluster.
 5. **Foreground Typography:** TextMeshProUGUI with `enableVertexGradient = true`, delivering GPU-accelerated 3D multi-color gradients (Goku solar flame gold, Saitama crimson maroon, Timer emerald glow).
 6. **Dynamic Match Point Championship Relic & Dual Round Gem Trackers:**
-   - **Dual Round Gems per Fighter:** Each player has two 56×56px point gem sockets near their avatar card (`P1_PointGem_1`, `P1_PointGem_2`, `P2_PointGem_1`, `P2_PointGem_2`). When a fighter wins Round 1, Gem 1 ignites to `gem_shiny_blue.png`. When they win Round 2, Gem 2 ignites and the tournament victory sequence triggers.
-   - **Center Championship Relic:** Enlarged to 68×68px, initialized with a round hollow golden socket (`gem_big_gold_hollow.png`). Dynamically evaluates `(p1Wins >= 1 || p2Wins >= 1)`. When either fighter reaches match point, `HUDController` ignites the socket into the radiant golden gem ([`gem_big_gold.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/UI/gem_big_gold.png), extracted from the user's multi-gem screenshot `Screenshot 2026-10-25 112541.png`) with an active breathing pulse animation ($1.0\times \rightarrow 1.15\times$).
-   - **Enlarged Emerald Time Stone:** Scaled up to 56×56px atop the rotating Tao mandala, creating a bold, crystalline focal point.
+   - **Dual Round Gems per Fighter:** Each player has two 56Ã—56px point gem sockets near their avatar card (`P1_PointGem_1`, `P1_PointGem_2`, `P2_PointGem_1`, `P2_PointGem_2`). When a fighter wins Round 1, Gem 1 ignites to `gem_shiny_blue.png`. When they win Round 2, Gem 2 ignites and the tournament victory sequence triggers.
+   - **Center Championship Relic:** Enlarged to 68Ã—68px, initialized with a round hollow golden socket (`gem_big_gold_hollow.png`). Dynamically evaluates `(p1Wins >= 1 || p2Wins >= 1)`. When either fighter reaches match point, `HUDController` ignites the socket into the radiant golden gem ([`gem_big_gold.png`](file:///B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Sprites/UI/gem_big_gold.png), extracted from the user's multi-gem screenshot `Screenshot 2026-10-25 112541.png`) with an active breathing pulse animation ($1.0\times \rightarrow 1.15\times$).
+   - **Enlarged Emerald Time Stone:** Scaled up to 56Ã—56px atop the rotating Tao mandala, creating a bold, crystalline focal point.
 
 ---
 
@@ -220,7 +220,7 @@ To prevent state bleed-through between rounds, each round starts completely fres
 2. **Physics Zeroing:** Rigidbody2D `linearVelocity` is clamped to `Vector2.zero` to eliminate lingering knockback momentum.
 3. **State Machine Reset:** Current fighter state transitions to `FighterState.Idle`, attack cooldown timers reset to $0$, and active hitboxes are deactivated with cleared target lists.
 4. **Vitals & UI Synchronization:** Health resets to $100$ and Ki resets; `HUDController.ResetHealthBarsInstantly()` clears trailing damage ghost bars immediately.
-5. **Round 3 Decider:** If the score reaches 1–1, Round 3 automatically initiates as the Final Round Match Point.
+5. **Round 3 Decider:** If the score reaches 1â€“1, Round 3 automatically initiates as the Final Round Match Point.
 
 ---
 
@@ -284,5 +284,203 @@ graph TD
    - Voice lines are trimmed to remove dead-air reverb tails and accelerated ($1.20\times - 1.25\times$) so that verbal calls (e.g., Goku's *"Kamehameha"* at $3.36\text{s}$, Saitama's *"Consecutive Normal Punches"* at $2.20\text{s}$ and *"Serious Punch"* at $3.17\text{s}$) match the rapid execution speeds of modern fighting game specials without desyncing from gameplay.
 5. **Curated SFX Library (`Assets/Audio/SFX_Library/`):**
    - Over 50 studio foley hits, anime power blasts, swishes, and tournament gongs organized in four categories (`Anime_Powers`, `Arcade_Bells`, `Hits_Punches`, `Swishes_Whiffs`), ready for one-click auditioning and drag-and-drop assignment in the Unity Inspector.
+
+
+---
+
+## 7. Character Select Menu & Match Handoff Architecture
+
+```mermaid
+graph TD
+    subgraph Main Menu Canvas ["MainMenuScene (Same Canvas)"]
+        MM["MainMenuController.cs<br/>(Options 0-3)"]
+        CS["CharacterSelectController.cs<br/>(P1 & P2 / CPU Selection)"]
+        BGM["AudioSource (BGM)<br/>(Continuous Playback)"]
+        
+        MM -->|"Select 1P vs CPU / 2P Duel"| CS
+        CS -.->|"Keeps playing seamlessly"| BGM
+        CS -->|"Cancel [ESC]"| MM
+    end
+
+    subgraph Grimoire Data ["Grimoire Data Layer"]
+        JSON1["goku.json"]
+        JSON2["saitama.json"]
+        Loader["CharacterDataLoader.cs"]
+        JSON1 --> Loader
+        JSON2 --> Loader
+        Loader -->|"Populates live stats (HP, SPD, ATK, Ult)"| CS
+    end
+
+    subgraph Persistence Layer ["Cross-Scene State"]
+        GM["GameManager Singleton<br/>(DontDestroyOnLoad)"]
+        CS -->|"Sets P1SelectedCharacterId<br/>Sets P2SelectedCharacterId<br/>Sets GameMode"| GM
+    end
+
+    subgraph Combat Scene ["SampleScene (Match Arena)"]
+        Bootstrap["PrototypeBootstrap.cs"]
+        GM -->|"Reads Character IDs"| Bootstrap
+        Bootstrap -->|"Spawns P1 Fighter"| F1["Fighter 1 (Goku / Saitama)"]
+        Bootstrap -->|"Spawns P2 Fighter<br/>(Applies alternate tint if Mirror)"| F2["Fighter 2 (Goku / Saitama)"]
+        HUD["HUDController.cs"]
+        GM -->|"Syncs P1/P2 Avatar Portraits & Names"| HUD
+    end
+```
+
+### Key Architectural Highlights:
+1. **Zero-Hitch In-Canvas Screen Transition:**
+   - Switching between Title Marquee and Character Selection occurs via GameObject activation (`menuRoot.SetActive(false)` / `characterSelectRoot.SetActive(true)`) within the same Canvas hierarchy.
+   - The cosmic background image, vignette overlay, and background music stream continuously without stopping, restarting, or popping.
+2. **Dynamic Grimoire Binding:**
+   - Rather than baking hardcoded stat values into TextMeshPro labels, `CharacterSelectController` calls `CharacterDataLoader.Load(id)` on open.
+   - Any rebalancing made to `moveSpeed`, `health`, `lightAttack.damage`, `skill.name`, or `ultimate.name` in `goku.json` or `saitama.json` immediately reflects on the selection cards.
+3. **Mirror Match Resolution Pipeline:**
+   - If both players pick the same fighter (e.g. Goku vs Goku), the system automatically detects the collision (`p1Char == p2Char`).
+   - `CharacterSelectController` surfaces a `[ MIRROR MATCH: P2 ALTERNATE PALETTE ]` badge.
+   - `PrototypeBootstrap` injects an alternate color tint into Player 2's `SpriteRenderer` (e.g., Ice/Cyan Gi for Goku or Amber/Orange for Saitama), guaranteeing immediate visual clarity in 2D combat.
+4. **Hybrid CPU Mode (Manual + Instant Random):**
+   - Supports both deliberate player selection (P1 picks opponent) and instant randomized single-button match launching (`[R]` key or `[ RANDOM CPU ]` button).
+
+---
+
+## 6.3 Fighter Sprite Rendering Pipeline & High-Contrast Cel-Inking Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│               Fighter Sprite Visual Processing Pipeline                │
+└────────────────────────────────────────────────────────────────────────┘
+  Disk Image Files (skill_0.png .. skill_11.png)
+       │
+       ▼
+  FighterAnimator.LoadFrame()
+       │
+       ├─► File.ReadAllBytes(path)
+       ├─► Texture2D (FilterMode.Point, TextureFormat.RGBA32)
+       ├─► Calculate Standardized Baseline Pivot (160x160 -> Y: 0.15625)
+       └─► Sprite.Create(tex, rect, pivot, pixelsPerUnit: 28f)
+       │
+       ▼
+  SpriteRenderer (Universal 2D Pipeline)
+       │
+       ├─► Outer Perimeter: Solid 1px Deep Inking (#080404) -> Zero Background Bleed
+       ├─► Strike Leading Edge: Kinetic Shockwave Flash (#FFFFFF / #FFD76E)
+       └─► High-Contrast Silhouette: >8:1 Contrast Ratio on Dark Arena Tiles
+```
+
+### Architectural Principles:
+1. **Zero-Shader Overhead:** Rather than binding costly 2D outline shaders (which require multiple texture samples per fragment in a Custom Post-Processing / Sprite Unlit pass), silhouettes are baked into pixel-perfect assets rendered via Unity's default `SpriteRenderer`.
+2. **Reversion Safety Architecture:** Original assets are preserved bit-for-bit in `Assets/Sprites/Fighters/Saitama/Original_Skill_Backup/`, allowing instant rollback via `revert_skill_frames.py` with zero risk of asset loss.
+3. **Point Filtering Fidelity:** Textures are instantiated with `FilterMode.Point`, preserving razor-sharp pixel grids without bilinear blurring or anti-aliasing artifacts.
+
+---
+
+## 6.4 Combat Loop & Menu State Transitions (Pause & Rematch Architecture)
+
+```mermaid
+stateDiagram-v2
+    [*] --> InCombat: Match Starts (Round 1)
+    
+    state InCombat {
+        [*] --> RoundActive: Time.timeScale = 1.0
+        RoundActive --> RoundActive: Fighters Battle
+    }
+    
+    InCombat --> Paused: Press [ESC] / [P]
+    state Paused {
+        [*] --> FreezePhysics: Time.timeScale = 0.0
+        FreezePhysics --> AudioMute: AudioListener.pause = true
+        AudioMute --> MenuInteractive: UI Audio Unmuted (ignoreListenerPause)
+    }
+    
+    Paused --> InCombat: "Resume" / Press [ESC]
+    Paused --> InCombat: "Restart Match" (Reset Score, HP, Ki)
+    Paused --> MainMenu: "Main Menu" (Load MainMenuScene)
+    Paused --> CharSelect: "Character Select" (Load MainMenuScene direct to Heroes)
+    
+    InCombat --> MatchOver: Round 2 Won by Player
+    state MatchOver {
+        [*] --> DramaticDelay: 3.0s Realtime K.O. Reverberation
+        DramaticDelay --> SlideDown: Animate Card (Y = 950 -> 0)
+        SlideDown --> DisplayVictory: Show Champion & Avatar
+    }
+    
+    MatchOver --> InCombat: "Rematch" (Instant Reset to 0-0 Round 1)
+    MatchOver --> CharSelect: "Character Select"
+    MatchOver --> MainMenu: "Main Menu"
+```
+
+### Architectural Principles:
+1. **Unscaled Time Processing:** UI animations, button interactions, and navigation audio continue executing while physics is frozen because UI reads unscaled time and `ignoreListenerPause = true`.
+2. **Direct Cross-Scene Route Acceleration:** Selecting "Character Select" sets `GameManager.Instance.CurrentState = GameState.CharacterSelect`, which tells `MainMenuController` to immediately bypass the title marquee and open directly into Hero Selection.
+3. **In-Memory Instant Rematch:** Selecting "Rematch" avoids reloading the entire Unity scene, resetting round variables, positions, and health in-memory for instant $< 0.1\text{s}$ responsiveness.
+4. **Match-Lifecycle Input Gating:** `PlayerInputHandler` gates input by `MatchManager.CurrentMatchState == RoundInProgress`, ensuring fighters only accept inputs during active rounds and remain freeze-framed after K.O. and before the opening bell.
+5. **Zero-Dimming Arena Transparency:** Results modal uses a transparent backdrop (`Color.clear`) so the arena environment and fighters remain fully visible and illuminated behind the championship card.
+
+---
+
+## 11. CPU Artificial Intelligence: Hierarchical State Machine (HFSM) & Input Abstraction
+
+### Architectural Overview
+Rather than hardcoding AI logic directly into fighter movement scripts, Mystic Combat implements a **Virtual Controller Architecture** driven by a **Hierarchical Finite State Machine (HFSM)**.
+
+```mermaid
+graph TD
+    subgraph Input Layer ["Input Abstraction Layer"]
+        Human["PlayerInputHandler.cs<br/>(Reads Physical Keyboard)"]
+        CPU["CpuFighterBrain.cs<br/>(Macro/Micro HFSM)"]
+        Interface["IFighterInput<br/>(Common Data Contract)"]
+        Human -->|Implements| Interface
+        CPU -->|Implements| Interface
+    end
+
+    subgraph Fighter Entity ["Fighter Controller"]
+        FC["FighterController.cs<br/>(Receives IFighterInput)"]
+        Physics["Rigidbody2D Movement & Attacks"]
+        Interface -->|Drives| FC
+        FC --> Physics
+    end
+
+    subgraph Macro Layer ["Layer 1: Tactical Posture (Strategy)"]
+        Neutral["Spacing Neutral<br/>(Footsies & Baiting)"]
+        Rushdown["Aggressive Rushdown<br/>(Closing distance & Combos)"]
+        Hoard["Ki Hoarding<br/>(Safe distance Meditation)"]
+        Retreat["Defensive Retreat<br/>(Red Zone survival)"]
+        Punish["Punish Opening<br/>(Whiff punish on whiffed moves)"]
+    end
+
+    subgraph Micro Layer ["Layer 2: Virtual Action Actuation"]
+        MoveAct["MoveInput (X: -1 / +1)"]
+        JumpAct["JumpPressed (Pulse)"]
+        AttackAct["Light / Heavy / Skill / Ult Pressed"]
+        MeditateAct["MeditateHeld (Continuous)"]
+    end
+
+    CPU --> MacroLayer
+    MacroLayer --> MicroLayer
+    MicroLayer --> Interface
+```
+
+### Key Architectural Pillars:
+1. **Zero-Cheating Guarantee (Pure Fair Play):**
+   - The CPU AI cannot bypass startup frames, cancel un-cancelable recovery windows, or teleport.
+   - It emits standard virtual inputs (`IFighterInput`) into `FighterController`, executing through the exact same physics and combat rules as human players.
+2. **Layer 1: Macro Tactical HFSM:**
+   - Evaluated periodically via a humanized **Reaction Tick** ($\Delta t \approx 0.14\text{s} - 0.40\text{s}$).
+   - Decisions are made by inspecting:
+     - $X$-distance to opponent.
+     - Bot's own HP and Ki resources.
+     - Opponent's HP, Ki, and state (`IsOpponentInRedZone`, `IsOpponentMeditating`, `IsOpponentInRecovery`).
+3. **Layer 2: Micro Virtual Actuation:**
+   - Single-frame trigger buttons (`JumpPressed`, `LightAttackPressed`, `HeavyAttackPressed`, `SkillPressed`, `UltimatePressed`) are pulsed for 1 frame and automatically cleared in `LateUpdate()`.
+   - Continuous inputs (`MoveInput`, `MeditateHeld`, `CrouchHeld`) are maintained across frames until macro re-evaluation.
+4. **Character-Specific Combat Personalities:**
+   - **Goku (`GokuBrain.cs`):** Disciplined martial artist. Spacing preferred at $\approx 2.1\text{m}$. Charges Ki proactively at distance. Fires *Kamehameha* from mid-range when $\text{Ki} \ge 20$. Hoards $80\text{ Ki}$ for his Ultimate blast.
+   - **Saitama (`SaitamaBrain.cs`):** Overwhelming in-your-face brawler. Preferred distance $< 1.0\text{m}$. Refuses to back down in neutral. Drops *Consecutive Normal Punches* point-blank. Hoards $100\text{ Ki}$ and relentlessly hunts down the player for the game-ending *Serious Punch*.
+5. **Configurable Difficulty Profiles (`CpuBrainProfile.cs`):**
+   - `Easy`: Longer reaction delay ($0.40\text{s}$), $35\%$ mistake/hesitation rate, low combo confirmation ($30\%$).
+   - `Hard`: Arcade reflex delay ($0.14\text{s}$), $8\%$ mistake rate, high combo confirmation ($85\%$).
+   - `Extreme`: Tournament boss reaction ($0.08\text{s}$), stat-scaled $1.4\times\text{ HP}$ and $1.25\times\text{ Damage}$.
+
+
+
 
 

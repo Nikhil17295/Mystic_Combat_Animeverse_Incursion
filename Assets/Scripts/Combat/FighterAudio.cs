@@ -24,6 +24,9 @@ namespace MysticCombat.Combat
         [Tooltip("AudioSource for looping Ki meditation energy aura.")]
         [SerializeField] private AudioSource auraSource;
 
+        [Tooltip("AudioSource for high-priority character vocal cries and special shouts.")]
+        [SerializeField] private AudioSource voiceSource;
+
         [Header("Common Combat Movement SFX")]
         [Tooltip("Springy leap sound played on takeoff when entering Jumping state.")]
         [SerializeField] private AudioClip jumpClip;
@@ -95,10 +98,17 @@ namespace MysticCombat.Combat
         [SerializeField] [Range(0f, 1f)] private float impactVolume = 1.0f;
 
         [Tooltip("Character voice and vocal grunts volume.")]
-        [SerializeField] [Range(0f, 1f)] private float voiceVolume = 0.9f;
+        [SerializeField] [Range(0f, 1f)] private float voiceVolume = 1.0f;
 
-        [Tooltip("Looping Ki meditation aura hum volume (tuned to 60% of original for balanced combat acoustics).")]
-        [SerializeField] [Range(0f, 1f)] private float kiAuraVolume = 0.45f;
+        [Tooltip("Looping Ki meditation aura hum volume (tuned down to a soft 12% ambient vibration so it never overpowers battle acoustics).")]
+        [SerializeField] [Range(0f, 1f)] private float kiAuraVolume = 0.12f;
+
+        [Header("Move-Specific Vocal Amplification")]
+        [Tooltip("Volume multiplier applied to special skill vocal shouts (e.g. Consecutive Normal Punches).")]
+        [SerializeField] [Range(0.5f, 2.5f)] private float voiceSkillMultiplier = 1.45f;
+
+        [Tooltip("Volume multiplier applied to ultimate finisher vocal shouts (e.g. Serious Punch).")]
+        [SerializeField] [Range(0.5f, 2.5f)] private float voiceUltimateMultiplier = 1.70f;
 
         #endregion
 
@@ -109,6 +119,8 @@ namespace MysticCombat.Combat
         public float WhiffVolume { get => whiffVolume; set => whiffVolume = Mathf.Clamp01(value); }
         public float VoiceVolume { get => voiceVolume; set => voiceVolume = Mathf.Clamp01(value); }
         public float KiAuraVolume { get => kiAuraVolume; set => kiAuraVolume = Mathf.Clamp01(value); }
+        public float VoiceSkillMultiplier { get => voiceSkillMultiplier; set => voiceSkillMultiplier = Mathf.Clamp(value, 0.1f, 3.0f); }
+        public float VoiceUltimateMultiplier { get => voiceUltimateMultiplier; set => voiceUltimateMultiplier = Mathf.Clamp(value, 0.1f, 3.0f); }
 
         public AudioClip JumpClip { get => jumpClip; set => jumpClip = value; }
         public AudioClip LandClip { get => landClip; set => landClip = value; }
@@ -136,6 +148,46 @@ namespace MysticCombat.Combat
         private void Awake()
         {
             SetupAudioSources();
+            EnsureClipsLoaded();
+        }
+
+        /// <summary>
+        /// Guarantees that essential voice, hit, and movement audio clips are populated at runtime,
+        /// even when fighters are dynamically spawned or instantiated via code.
+        /// </summary>
+        public void EnsureClipsLoaded()
+        {
+            string fighterName = gameObject.name.ToLower();
+            bool isSaitama = fighterName.Contains("saitama");
+            bool isGoku = fighterName.Contains("goku");
+
+            if (isSaitama)
+            {
+                if (voiceSkillClip == null) voiceSkillClip = Resources.Load<AudioClip>("Audio/Anime_Powers/consecutive_normal_punches");
+                if (voiceUltimateClip == null) voiceUltimateClip = Resources.Load<AudioClip>("Audio/Anime_Powers/serious_punch");
+                if (lightWhiffClip == null) lightWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_11");
+                if (heavyWhiffClip == null) heavyWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_06");
+                if (lightHitClip == null) lightHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_01");
+                if (heavyHitClip == null) heavyHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/saitama_normal_punch");
+            }
+            else if (isGoku)
+            {
+                if (voiceUltimateClip == null) voiceUltimateClip = Resources.Load<AudioClip>("Audio/Anime_Powers/goku_voice_kamehameha");
+                if (lightWhiffClip == null) lightWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_13");
+                if (heavyWhiffClip == null) heavyWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_09");
+                if (lightHitClip == null) lightHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_01");
+                if (heavyHitClip == null) heavyHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_04");
+            }
+
+            if (jumpClip == null) jumpClip = Resources.Load<AudioClip>("Audio/Anime_Powers/jumpland_clean");
+            if (landClip == null) landClip = Resources.Load<AudioClip>("Audio/Anime_Powers/jumpland_clean");
+            if (crouchClip == null) crouchClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_05");
+            if (dashClip == null) dashClip = Resources.Load<AudioClip>("Audio/Anime_Powers/teleport_dash");
+            if (kiChargeLoopClip == null) kiChargeLoopClip = Resources.Load<AudioClip>("Audio/Anime_Powers/dbz_super_saiyan_aura");
+            if (redZoneWarningClip == null) redZoneWarningClip = Resources.Load<AudioClip>("Audio/Hits_Punches/punch_foley_punch_1");
+
+            // Guarantee soft ambient meditation volume on spawn
+            kiAuraVolume = 0.12f;
         }
 
         private void OnValidate()
@@ -144,6 +196,10 @@ namespace MysticCombat.Combat
             if (sfxSource != null)
             {
                 sfxSource.volume = sfxVolume;
+            }
+            if (voiceSource != null)
+            {
+                voiceSource.volume = voiceVolume * sfxVolume;
             }
             if (auraSource != null && auraSource.isPlaying)
             {
@@ -156,6 +212,11 @@ namespace MysticCombat.Combat
             if (sfxSource != null && Mathf.Abs(sfxSource.volume - sfxVolume) > 0.001f)
             {
                 sfxSource.volume = sfxVolume;
+            }
+
+            if (voiceSource != null && Mathf.Abs(voiceSource.volume - (voiceVolume * sfxVolume)) > 0.001f)
+            {
+                voiceSource.volume = voiceVolume * sfxVolume;
             }
 
             if (auraSource != null && auraSource.isPlaying)
@@ -189,7 +250,29 @@ namespace MysticCombat.Combat
             sfxSource.volume = sfxVolume;
             sfxSource.mute = false;
 
-            // 2. Looping Ki Aura Source
+            // 2. Dedicated Voice Source (for loud, impactful anime vocal shouts)
+            if (voiceSource == null)
+            {
+                Transform existingVoice = transform.Find("Voice_AudioSource");
+                if (existingVoice != null)
+                {
+                    voiceSource = existingVoice.GetComponent<AudioSource>();
+                }
+
+                if (voiceSource == null)
+                {
+                    GameObject voiceObj = new GameObject("Voice_AudioSource");
+                    voiceObj.transform.SetParent(transform, false);
+                    voiceSource = voiceObj.AddComponent<AudioSource>();
+                }
+            }
+            voiceSource.loop = false;
+            voiceSource.playOnAwake = false;
+            voiceSource.spatialBlend = 0f;
+            voiceSource.volume = voiceVolume * sfxVolume;
+            voiceSource.mute = false;
+
+            // 3. Looping Ki Aura Source (Soft ambient 12% hum)
             if (auraSource == null)
             {
                 Transform existingChild = transform.Find("Ki_Aura_AudioSource");
@@ -318,7 +401,8 @@ namespace MysticCombat.Combat
         {
             if (voiceSkillClip != null)
             {
-                PlaySound(voiceSkillClip, voiceVolume * sfxVolume);
+                float vol = voiceVolume * sfxVolume * voiceSkillMultiplier;
+                PlayVoiceSound(voiceSkillClip, vol);
             }
         }
 
@@ -326,7 +410,8 @@ namespace MysticCombat.Combat
         {
             if (voiceUltimateClip != null)
             {
-                PlaySound(voiceUltimateClip, voiceVolume * sfxVolume);
+                float vol = voiceVolume * sfxVolume * voiceUltimateMultiplier;
+                PlayVoiceSound(voiceUltimateClip, vol);
             }
         }
 
@@ -367,7 +452,17 @@ namespace MysticCombat.Combat
         private void PlaySound(AudioClip clip, float volume)
         {
             if (sfxSource == null || clip == null) return;
-            sfxSource.PlayOneShot(clip, Mathf.Clamp01(volume));
+            sfxSource.PlayOneShot(clip, Mathf.Clamp(volume, 0f, 2.5f));
+        }
+
+        private void PlayVoiceSound(AudioClip clip, float volume)
+        {
+            if (clip == null) return;
+            AudioSource src = (voiceSource != null) ? voiceSource : sfxSource;
+            if (src != null)
+            {
+                src.PlayOneShot(clip, Mathf.Clamp(volume, 0f, 2.5f));
+            }
         }
 
         #endregion

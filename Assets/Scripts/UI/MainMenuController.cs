@@ -77,6 +77,10 @@ namespace MysticCombat.UI
         [Header("Options & Controls Modal")]
         [SerializeField] private GameObject optionsPanel;
 
+        [Header("Character Selection Screen")]
+        [SerializeField] private GameObject characterSelectRoot;
+        [SerializeField] private CharacterSelectController characterSelectController;
+
         [Header("Scene Loading")]
         [SerializeField] private string combatSceneName = "SampleScene";
 
@@ -179,6 +183,19 @@ namespace MysticCombat.UI
 
         private void Start()
         {
+            // If returning from combat directly to Character Select, bypass title screen
+            if (GameManager.Instance != null && GameManager.Instance.CurrentState == GameManager.GameState.CharacterSelect)
+            {
+                SkipIntro();
+                if (characterSelectController != null && characterSelectRoot != null)
+                {
+                    if (menuRoot != null) menuRoot.SetActive(false);
+                    characterSelectRoot.SetActive(true);
+                    characterSelectController.Open(GameManager.Instance.CurrentGameMode);
+                    return;
+                }
+            }
+
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.SetState(GameManager.GameState.MainMenu);
@@ -341,6 +358,11 @@ namespace MysticCombat.UI
 
         private void HandleNavigationInput()
         {
+            if (characterSelectRoot != null && characterSelectRoot.activeSelf)
+            {
+                return;
+            }
+
             if (optionsPanel != null && optionsPanel.activeSelf)
             {
                 if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
@@ -423,23 +445,55 @@ namespace MysticCombat.UI
 
         private void StartGameMode(GameManager.GameMode mode)
         {
-            Debug.Log($"<color=#00e676>[MainMenuController]</color> Launching Mode: {mode}");
+            Debug.Log($"<color=#00e676>[MainMenuController]</color> Opening Character Select for: {mode}");
 
-            // Immediately cut title music so it never bleeds or overlaps with battle music
-            if (musicSource != null)
+            // If Character Select UI exists, transition seamlessly without stopping background music!
+            if (characterSelectController != null && characterSelectRoot != null)
             {
-                musicSource.Stop();
-            }
-
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.SetGameMode(mode);
-                GameManager.Instance.SetState(GameManager.GameState.InMatch);
-                GameManager.Instance.LoadScene(combatSceneName);
+                if (menuRoot != null) menuRoot.SetActive(false);
+                characterSelectRoot.SetActive(true);
+                characterSelectController.Open(mode);
             }
             else
             {
-                UnityEngine.SceneManagement.SceneManager.LoadScene(combatSceneName);
+                // Fallback direct launch if CharacterSelect is not baked yet
+                if (musicSource != null)
+                {
+                    musicSource.Stop();
+                }
+
+                if (GameManager.Instance != null)
+                {
+                    GameManager.Instance.SetGameMode(mode);
+                    GameManager.Instance.SetState(GameManager.GameState.InMatch);
+                    GameManager.Instance.LoadScene(combatSceneName);
+                }
+                else
+                {
+                    UnityEngine.SceneManagement.SceneManager.LoadScene(combatSceneName);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Called when the player cancels character selection and returns to Title.
+        /// Retains playing background music without restarting or hitching.
+        /// </summary>
+        public void ReturnToMainMenuFromCharSelect()
+        {
+            if (characterSelectRoot != null) characterSelectRoot.SetActive(false);
+            if (menuRoot != null) menuRoot.SetActive(true);
+            UpdateSelectionVisuals(playSfx: false);
+        }
+
+        /// <summary>
+        /// Stops title background music cleanly when the match transition commences.
+        /// </summary>
+        public void StopTitleMusic()
+        {
+            if (musicSource != null)
+            {
+                musicSource.Stop();
             }
         }
 

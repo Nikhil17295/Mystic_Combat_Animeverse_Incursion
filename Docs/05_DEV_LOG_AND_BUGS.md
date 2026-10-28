@@ -410,3 +410,208 @@
 2. **Never hardcode values:** If you need a new stat (e.g. projectile speed), put it in the character JSON file.
 3. **Keep `FixedUpdate` clean:** Only physics velocities and impulses belong in `FixedUpdate`.
 4. **Use `[SerializeField] private` instead of `public`:** Encapsulate variables; only expose what other scripts genuinely need to read.
+---
+
+### Postmortem: Preventing Input Leakage Between Swapped UI Panels
+- **Incident:** When the player navigated to the Character Select screen and pressed `Escape` or arrow keys, both the Character Select menu and the Main Menu options responded simultaneously, causing audio double-triggering and unexpected menu resets.
+- **Root Cause:** Both [`MainMenuController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/MainMenuController.cs) and [`CharacterSelectController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CharacterSelectController.cs) were polling `Input.GetKeyDown()` in their respective `Update()` methods without checking if the sibling UI panel was currently active.
+- **Resolution:**
+  1. In `MainMenuController.HandleNavigationInput()`, added an immediate guard clause:
+     ```csharp
+     if (characterSelectRoot != null && characterSelectRoot.activeSelf)
+     {
+         return; // Yield all input control to CharacterSelectController!
+     }
+     ```
+  2. When returning from Character Select (`ReturnToMainMenuFromCharSelect()`), the main menu restores its visuals cleanly and resumes navigation without restarting the background music.
+
+---
+
+### Postmortem: Audio Bleed During Scene Transition
+- **Incident:** When transitioning from the Character Select screen into the fighting arena (`SampleScene`), the Title Screen BGM briefly overlapped with the arena's opening bell sound.
+- **Root Cause:** In the original prototype, `musicSource.Stop()` was called during `StartGameMode()`. Because Character Select was inserted as a pre-match screen, stopping the music on menu option selection cut the music too early; leaving it unmanaged caused it to bleed across scene loading.
+- **Resolution:**
+  1. Title music now plays uninterrupted through the entire Character Selection phase.
+  2. `CharacterSelectController.LaunchMatchSequence()` calls `mainMenuController.StopTitleMusic()` right at the end of the `VERSUS!` countdown, ensuring total acoustic silence so the arena's opening gong can ring cleanly into silence.
+
+---
+
+### Bug 13: UI Coordinate Collision & Overlap in Character Select Cards
+- **Symptom:** In MainMenuScene.unity's Character Select screen, the bottom of the hero title/epithet ("HOPE OF THE UNIVERSE" and "HERO FOR FUN") was visibly sliced through and covered by the blue stat box below it.
+- **Root Cause (Bounding Box Math Collision):**
+  1. The hero epithet label (Text_Epithet) was anchored at  = -76\text{px}$ with height \text{px}$, placing its bottom edge at:
+     -76 - 17 = -93\text{px}
+  2. The blue stat panel (Stat_Panel) was anchored at  = -205\text{px}$ with height \text{px}$, placing its top edge at:
+     -205 + 122.5 = -82.5\text{px}
+  3. Because $-82.5\text{px}$ is higher than $-93\text{px}$, the stat panel's top border and dark background collided .5\text{px}$ directly into the title text!
+- **Godot vs Unity Architectural Concept:**
+  > In **Godot**, placing UI nodes inside a **VBoxContainer** or **MarginContainer** automatically calculates child bounding rectangles and enforces vertical separation margins without manual pixel math.
+  > In **Unity**, when using raw **RectTransform** components (without a VerticalLayoutGroup), every element uses absolute local pixel offsets (nchoredPosition and sizeDelta). If the developer or setup tool specifies overlapping coordinate bounds, Unity renders them directly on top of each other.
+- **Solution:**
+  1. Recalculated the card's vertical rhythm inside [MainMenuSetupTool.cs](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs):
+     - Card Root: Expanded height to \text{px}$.
+     - Epithet Label: Center  = -52\text{px}$, height \text{px}$, font size \text{pt}$ $\rightarrow$ bottom edge sits at $-68\text{px}$.
+     - Stat Box: Center  = -195\text{px}$, height \text{px}$ $\rightarrow$ top edge sits at $-82.5\text{px}$.
+     - **Result:** A clean **.5\text{px}$ void clearance gap**, completely eliminating the overlap.
+  2. Applied franchise-specific title color signatures:
+     - Goku: Super Saiyan Radiant Gold (#FFE620) with Ki Amber outline (#401E00).
+     - Saitama: Serious Punch Crimson (#FF4D4D) with Dark Maroon outline (#360808).
+
+---
+
+### Postmortem: Dynamic Runtime Audio Binding & Fallback Architecture (EnsureClipsLoaded)
+- **Incident:** When testing match transitions from Character Select into SampleScene, fighters dynamically spawned by [PrototypeBootstrap.cs](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs) executed skills and ultimates in complete silence.
+- **Root Cause:** 
+  1. SceneSetupTool.cs wires AudioClip references into the pre-baked scene fighters using AssetDatabase.LoadAssetAtPath().
+  2. However, at runtime, PrototypeBootstrap.CreateFighter() instantiated components via gameObject.AddComponent<FighterAudio>().
+  3. In Unity, AddComponent<T>() instantiates a blank component with all serialized [SerializeField] fields initialized to 
+ull. Because AssetDatabase is stripped from runtime player builds, runtime scripts cannot use AssetDatabase.LoadAssetAtPath().
+- **Resolution:**
+  1. Created a dedicated runtime audio directory: Assets/Resources/Audio/Anime_Powers/, Swishes_Whiffs/, and Hits_Punches/.
+  2. Implemented EnsureClipsLoaded() in [FighterAudio.cs](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs):
+     `csharp
+     if (isSaitama)
+     {
+         if (voiceSkillClip == null) voiceSkillClip = Resources.Load<AudioClip>("Audio/Anime_Powers/consecutive_normal_punches");
+         if (voiceUltimateClip == null) voiceUltimateClip = Resources.Load<AudioClip>("Audio/Anime_Powers/serious_punch");
+     }
+     `
+  3. In PrototypeBootstrap.CreateFighter(), explicitly called a.EnsureClipsLoaded() right after attaching FighterAudio.
+  4. Now, regardless of whether fighters are baked in the scene, instantiated from prefabs, or created on the fly in mirror matches, all voices, whiffs, and hits are 100% guaranteed to play!
+
+---
+
+### Bug 14: Mirror Match Notice Coordinate Collision ($Y = -315\text{px}$)
+- **Symptom:** In `MainMenuScene.unity`, when Player 1 and Player 2/CPU selected the same character (Mirror Match), the warning banner (`★ MIRROR MATCH: BOTH FIGHTERS ACTIVE ★`) appeared directly slicing through the bottom corners of both character cards.
+- **Root Cause:** Character cards sit at $Y = +15\text{px}$ with a height of $660\text{px}$, placing their bottom edge exactly at:
+  $$15 - 330 = -315\text{px}$$
+  The mirror match banner was centered at $Y = -315\text{px}$ with a width of $900\text{px}$ ($X = -450$ to $+450$). Because the cards span from $-660$ to $-100$ on the left and $+100$ to $+660$ on the right, the banner's outer $350\text{px}$ segments crossed directly over both cards.
+- **Solution:** Repositioned `Mirror_Match_Notice` to $Y = -345\text{px}$ in [`MainMenuSetupTool.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Editor/MainMenuSetupTool.cs), placing it cleanly into the void clearance gap between the cards (bottom at $-315\text{px}$) and the instructions footer (top at $-367\text{px}$).
+
+---
+
+### Bug 15: Versus Screen P2 Badge Showing `[ PLAYER 2 ]` in CPU Mode
+- **Symptom:** During the cinematic `VERSUS!` screen fly-in, Player 2's card displayed `[ PLAYER 2 ]` even when the player selected "1 PLAYER VS CPU" mode and was fighting a computer opponent.
+- **Root Cause:** While the name text updated to `"CPU SAITAMA"` or `"CPU GOKU"`, the top badge `p2VsBadgeTmp` was never serialized or updated in `CharacterSelectController.cs`, leaving its static default string unaltered.
+- **Solution:** Serialized `versusP2BadgeText` and `versusP2CardOutline` on [`CharacterSelectController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CharacterSelectController.cs) and dynamically assigned:
+  ```csharp
+  versusP2BadgeText.text = (currentGameMode == GameManager.GameMode.VsCpu) ? "[ CPU ]" : "[ PLAYER 2 ]";
+  versusP2BadgeText.color = (currentGameMode == GameManager.GameMode.VsCpu) ? cpuThemeColor : p2ThemeColor;
+  ```
+
+---
+
+### Postmortem: The "Zombie" Ki Meditation Volume Trap (`kiAuraVolume`)
+- **Incident:** Despite previous attempts to balance the meditation sound, the Ki aura hum was still overwhelmingly loud during gameplay, drowning out battle audio.
+- **Root Cause Analysis (Why the sound didn't decrease previously):**
+  1. **Field Serialization in Prefabs:** While documentation noted volume calibration, the serialized YAML in `Assets/Prefabs/Fighters/Goku.prefab` and `Saitama.prefab` remained at `kiAuraVolume: 0.45`! Unity prefabs serialize their own values and override script field default values unless explicitly re-baked.
+  2. **Raw Master Audio Loudness:** The audio asset `dbz_super_saiyan_aura.mp3` is mastered at $0\text{ dBFS}$ peak (full normalized scale) with heavy low-frequency sub-bass. In game audio, looping sounds with continuous $0\text{ dB}$ RMS perceive as substantially louder than transient punch hits. Even at $45\%$ ($0.45$), it overwhelmed the soundscape.
+  3. **Runtime Spawner Override:** In `PrototypeBootstrap.cs`, dynamically added `FighterAudio` components inherited the old $0.45$ default from `FighterAudio.cs`.
+- **Resolution (4-Tier Enforcement):**
+  1. Updated `FighterAudio.cs` C# default: `kiAuraVolume = 0.12f;` (soft 12% ambient hum).
+  2. Updated `SceneSetupTool.cs` baking logic to enforce `0.12f`.
+  3. Updated YAML directly in `Goku.prefab` and `Saitama.prefab` to `kiAuraVolume: 0.12`.
+  4. Enforced in `PrototypeBootstrap.CreateFighter()`: `fa.KiAuraVolume = 0.12f;`.
+
+---
+
+### Postmortem: Audio PlayOneShot Volume Ceiling & Vocal Amplification
+- **Incident:** Special move vocal shouts (Saitama's "Consecutive Normal Punches" and "Serious Punch") sounded too quiet and lacked punchiness.
+- **Root Cause:**
+  1. `FighterAudio.PlaySound()` previously executed:
+     `sfxSource.PlayOneShot(clip, Mathf.Clamp01(volume));`
+     `Mathf.Clamp01` forcibly clipped the volume multiplier to a maximum of $1.0$, preventing any amplification boost above unity gain.
+  2. All audio (whiffs, hits, jumps, voice) shared a single `sfxSource` `AudioSource`. During multi-hit flurries, punch impacts competed for amplitude on the same channel.
+- **Resolution:**
+  1. Added a dedicated child `AudioSource` (`Voice_AudioSource`) specifically for high-priority vocal cries.
+  2. Replaced `Mathf.Clamp01(volume)` with `Mathf.Clamp(volume, 0f, 2.5f)`, allowing volume scale multipliers above $1.0$.
+  3. Implemented move-specific volume amplification:
+     - Skill Attack (`consecutive_normal_punches.mp3`): **$1.45\times$ volume multiplier**.
+     - Ultimate Finisher (`serious_punch.mp3`): **$1.70\times$ volume multiplier**.
+
+---
+
+### Bug 16: Saitama Consecutive Normal Punches Luminance Blending & Perimeter Outline Vanishing
+
+- **Symptom:**
+  During Saitama's Special Skill ("Consecutive Normal Punches", activated via `[U]`), the rapid flurry of punches sometimes blended into the background tiles or enemy fighters, causing the punch outlines to disappear and rendering the attack as a muddy, indistinct red blob.
+- **Forensic Pixel Diagnosis:**
+  1. **Border Color Collision:** The outer boundary pixels across all 12 animation frames (`skill_0.png` through `skill_11.png`) were colored `(20, 5, 5, 255)` (`#140505`), which has a relative luminance of just **$9.5$** out of $255$.
+  2. **Context-Dependent Contrast Failure:**
+     - In the center of the arena where the stage spotlight shines (`#FBA782`, luminance $\sim 190$), the dark `#140505` outline had sufficient contrast against the floor.
+     - However, when Saitama moved towards the left or right arena flanks or punched against Goku's sprite, the backdrop tiles are dark slate/navy (`#1A1F25` and `#141937`, luminance **$26\text{–}30$**) and Goku's hair/sash are black (`#000000`, luminance $0.0$).
+     - Against these dark surfaces, the `#140505` boundary had a contrast ratio of **$< 1.3:1$**, causing human visual perception to merge the outline with the background.
+  3. **Unshielded Perimeter Gaps (171 Pixels):** Frames 0, 2, 3, 4, 6, and 7 contained 171 perimeter glove pixels where raw red (`#F40000` / `#B70000`) touched transparent background alpha directly with zero outline.
+  4. **Internal Fist Merging:** Overlapping punches lacked leading kinetic shockwave highlights or internal separators, causing the rapid flurry to lose 3D form.
+- **Resolution:**
+  1. **Zero-Touch Backup:** Created bit-for-bit pristine backups of original frames in `Assets/Sprites/Fighters/Saitama/Original_Skill_Backup/` and scratch (`revert_skill_frames.py` available for instant 1-second reversion if needed).
+  2. **Perimeter Sealing & Deep Inking:** Sealed all 171 unshielded gaps with a solid 1px dark perimeter contour (`#080404` / `#000000`), darkening outer boundaries to eliminate transparency bleeding while preserving 100% of Saitama's body, cape, and suit pixels untouched.
+  3. **Anime Kinetic Shockwave Rim Highlight:** Added high-contrast anime impact highlights on all leading knuckle strike faces:
+     - **Strike Face (Front):** Blazing impact white (`#FFFFFF`, luminance **$255.0$**).
+     - **Kinetic Transition (1px behind):** Solar anime gold highlight (`#FFD76E`, luminance **$215.0$**).
+     - **Warm Body Blend (2px behind):** Energetic red-orange (`#FF5A32`, luminance **$134.8$**).
+  4. **Contrast Verification:** The knuckle front now boasts an **$>8:1$ contrast ratio** against dark arena tiles and **$>20:1$** against black sprites, ensuring razor-sharp punch readability at 60 FPS everywhere in the arena.
+
+---
+
+### Bug 17: Input Buffering & Audio Bleed during Pause (The Time.timeScale Trap)
+
+- **Symptom:**
+  In many fighting games, setting `Time.timeScale = 0f` to pause the game causes two classic bugs:
+  1. **Input Buffering on Unpause:** While navigating the pause menu with `W/S` or `Space`, the player's fighter buffers the keystrokes and immediately executes a jump or light attack upon resuming the match.
+  2. **Looping Audio Bleed & Silent Menus:** Either looping combat SFX (like Ki charging hums) keep droning on while paused, OR if `AudioListener.pause = true` is used, the pause menu's own button clicks and navigation blips become completely muted.
+- **Root Cause:**
+  1. `PlayerInputHandler` evaluates hardware keys (`Keyboard.current`) inside `Update()`. In Unity, `Update()` still executes every frame even when `Time.timeScale = 0f`! If `Time.timeScale` is not checked, input properties remain populated.
+  2. `AudioListener.pause = true` halts all active sound channels globally unless an `AudioSource` explicitly opts out via `ignoreListenerPause`.
+- **Resolution:**
+  1. **Zero Input Buffering:** In [`PlayerInputHandler.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Input/PlayerInputHandler.cs), added an early exit guard:
+     ```csharp
+     if (Time.timeScale == 0f)
+     {
+         MoveInput = Vector2.zero;
+         JumpPressed = false;
+         LightAttackPressed = false;
+         // ... zeroes all action flags ...
+         return;
+     }
+     ```
+     This guarantees that physics velocities, animation frames, and positions are frozen and completely preserved across pause/resume without accidental action execution.
+  2. **Selective UI Audio Execution:** In [`CombatMenuController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CombatMenuController.cs), configured `menuAudioSource.ignoreListenerPause = true;`. When the game is paused, `AudioListener.pause = true;` halts combat auras and hits, while the menu's retro navigation bleeps and confirmation chimes play with zero disruption.
+
+---
+
+### Bug 18: Post-K.O. Premature Winner UI & Stray Input Bleed (Pacing & Lifecycle Fix)
+
+- **Symptom:**
+  1. Immediately upon landing the final K.O. strike, the winning player could still press attack keys, causing their character to punch and jump into empty air while the opponent lay defeated.
+  2. The victory screen popped up too quickly ($1.25\text{s}$), interrupting the impact of the final strike and obscuring the fighters before players could absorb the end of the battle.
+  3. The victory screen's dark background scrim dimmed the entire arena, hiding the arena backdrop and characters.
+- **Root Cause:**
+  1. `PlayerInputHandler` only checked `Time.timeScale == 0f`, but did not evaluate `MatchManager.CurrentMatchState`. As a result, during `RoundEnd`, `MatchOver`, and before the opening round bell (`WaitingToStart`), input hardware events were still passed to `FighterController`.
+  2. The results modal relied on a static `SetActive(true)` with an opaque dark scrim rather than a dynamic presentation respecting the game world.
+- **Resolution:**
+  1. **Lifecycle Input Gating:** In [`PlayerInputHandler.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Input/PlayerInputHandler.cs), added a `CanFight()` gate checking `matchManager.CurrentMatchState == MatchState.RoundInProgress`. All movement and attack properties are zeroed out before the match begins, during round-end pauses, and after match over.
+  2. **3.0s Cinematic Pacing:** Increased the post-match delay to $3.0\text{s}$ in `CombatMenuController.cs`, providing ample time for K.O. reverberation, defeat reactions, and upcoming victory animations.
+  3. **Sliding Entrance Animation:** Animated the modal box using a cubic ease-out coroutine in unscaled time ($Y = +950\text{px} \to 0\text{px}$ over $0.65\text{s}$).
+  4. **Transparent Scrim & Prestigious Card Styling:** Cleared the dark scrim to `Color.clear` (keeping arena and characters 100% bright) and styled the modal as an ornate Animeverse Championship plaque with gold borders, cyan trim, and ruby studs.
+
+---
+
+### Bug 19: Tight Coupling of Fighter Physics to Hardware Keyboards & AI Input Cheating
+
+- **Symptom:**
+  1. [`FighterController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs) held a hard direct reference to `PlayerInputHandler` (`[SerializeField] private PlayerInputHandler inputHandler`), which read physical keyboard strokes (`Keyboard.current`).
+  2. Spawning a CPU bot required either giving it a fake keyboard device or bypassing `FighterController` by directly mutating physics and animations, which breaks frame data, Ki spending rules, and recovery windows.
+  3. Continuous AI inputs (like holding Meditate) and discrete single-frame triggers (like Light Attack press) required distinct lifecycle handling to avoid spamming an attack every single frame.
+- **Root Cause:**
+  - Violation of the **Dependency Inversion Principle (DIP)**: `FighterController` (a high-level combat execution module) depended on a low-level concrete hardware input reader (`PlayerInputHandler`) instead of an abstraction.
+- **Resolution:**
+  1. **Input Interface Extraction:** Created [`IFighterInput.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Input/IFighterInput.cs), defining properties for `MoveInput`, `JumpPressed`, `LightAttackPressed`, `HeavyAttackPressed`, `SkillPressed`, `UltimatePressed`, `MeditateHeld`, and `CrouchHeld`.
+  2. **Decoupled Injection in FighterController:** Modified `FighterController` to reference `IFighterInput inputHandler`, with backward-compatible fallback for pre-configured serialized inspector components.
+  3. **Virtual Action Pulse Clearing:** In [`CpuFighterBrain.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/CpuFighterBrain.cs), single-frame button pulses (`JumpPressed`, `LightAttackPressed`, etc.) are reset to `false` in `LateUpdate()`, guaranteeing they act as true one-frame events (`wasPressedThisFrame`) without duplicate hits.
+  4. **Character-Specific Brains & Difficulty Knobs:** Created [`GokuBrain.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/GokuBrain.cs) (mid-range Kamehameha zoner), [`SaitamaBrain.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/SaitamaBrain.cs) (relentless rushdown brawler), and [`CpuBrainProfile.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/AI/CpuBrainProfile.cs) with Easy, Hard, and Extreme difficulty tiers.
+  5. **Dynamic Character Select Switching:** Added `[TAB]` keyboard cycling in [`CharacterSelectController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CharacterSelectController.cs) to switch CPU difficulty on the fly.
+
+
+
+

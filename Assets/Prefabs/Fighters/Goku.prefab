@@ -279,6 +279,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Combat.FighterAudio
   sfxSource: {fileID: 0}
   auraSource: {fileID: 0}
+  voiceSource: {fileID: 0}
   jumpClip: {fileID: 8300000, guid: 53e898e360727bf313d67dac9180b655, type: 3}
   landClip: {fileID: 8300000, guid: bc0cc04549f9bd50cb61e4328e5c88a9, type: 3}
   crouchClip: {fileID: 8300000, guid: 64f0b210014189de4b4b2b4522de6b1e, type: 3}
@@ -300,8 +301,10 @@ MonoBehaviour:
   sfxVolume: 1
   whiffVolume: 0.65
   impactVolume: 1
-  voiceVolume: 0.9
-  kiAuraVolume: 0.45
+  voiceVolume: 1
+  kiAuraVolume: 0.12
+  voiceSkillMultiplier: 1.45
+  voiceUltimateMultiplier: 1.7
 --- !u!1 &1359540555661872691
 GameObject:
   m_ObjectHideFlags: 0

@@ -17,8 +17,9 @@ namespace MysticCombat.Fighter
         #region Serialized Fields
 
         [Header("References")]
-        [Tooltip("The input handler driving this fighter.")]
-        [SerializeField] private PlayerInputHandler inputHandler;
+        [Tooltip("The input handler driving this fighter (if pre-configured in Inspector).")]
+        [SerializeField] private PlayerInputHandler legacyInputHandler;
+        private IFighterInput inputHandler;
 
         [Tooltip("The opposing fighter's transform for auto-facing.")]
         public Transform opponent;
@@ -97,6 +98,12 @@ namespace MysticCombat.Fighter
 
             rb.gravityScale = gravityScale;
             rb.freezeRotation = true;
+
+            if (inputHandler == null)
+            {
+                if (legacyInputHandler != null) inputHandler = legacyInputHandler;
+                else inputHandler = GetComponent<IFighterInput>();
+            }
         }
 
         private void OnEnable()
@@ -152,12 +159,17 @@ namespace MysticCombat.Fighter
         #region Initialization
 
         /// <summary>
-        /// Assigns the input handler for this fighter.
+        /// Assigns the input handler (hardware or CPU virtual brain) for this fighter.
         /// </summary>
-        public void SetInputHandler(PlayerInputHandler handler)
+        public void SetInputHandler(IFighterInput handler)
         {
             inputHandler = handler;
         }
+
+        /// <summary>
+        /// Gets the active input handler.
+        /// </summary>
+        public IFighterInput GetInputHandler() => inputHandler;
 
         /// <summary>
         /// Assigns the ground check transform used for ground detection.

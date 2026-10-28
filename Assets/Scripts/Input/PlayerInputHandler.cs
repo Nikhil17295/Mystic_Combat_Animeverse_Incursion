@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using MysticCombat.Core;
 
 namespace MysticCombat.Input
 {
@@ -7,7 +8,7 @@ namespace MysticCombat.Input
     /// Reads keyboard input for P1 or P2 using Unity's modern Input System (Keyboard.current).
     /// Fallback supported for legacy input systems.
     /// </summary>
-    public class PlayerInputHandler : MonoBehaviour
+    public class PlayerInputHandler : MonoBehaviour, IFighterInput
     {
         #region Enums
 
@@ -39,10 +40,54 @@ namespace MysticCombat.Input
 
         #endregion
 
+        #region Match State Tracking
+
+        private MatchManager cachedMatchManager;
+
+        /// <summary>
+        /// Fighters can only receive inputs when a round is actively in progress.
+        /// Inputs are completely cut off before the round begins, during K.O./round-end delays,
+        /// after match over, and during pause.
+        /// </summary>
+        private bool CanFight()
+        {
+            if (Time.timeScale == 0f) return false;
+
+            if (cachedMatchManager == null)
+            {
+                cachedMatchManager = Object.FindAnyObjectByType<MatchManager>();
+            }
+
+            if (cachedMatchManager != null)
+            {
+                if (cachedMatchManager.CurrentMatchState != MatchManager.MatchState.RoundInProgress)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        #endregion
+
         #region Unity Callbacks
 
         private void Update()
         {
+            if (!CanFight())
+            {
+                MoveInput = Vector2.zero;
+                JumpPressed = false;
+                CrouchHeld = false;
+                LightAttackPressed = false;
+                HeavyAttackPressed = false;
+                SkillPressed = false;
+                UltimatePressed = false;
+                MeditateHeld = false;
+                return;
+            }
+
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
 

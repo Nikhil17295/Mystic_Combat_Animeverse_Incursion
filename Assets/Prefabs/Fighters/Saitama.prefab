@@ -470,6 +470,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Combat.FighterAudio
   sfxSource: {fileID: 0}
   auraSource: {fileID: 0}
+  voiceSource: {fileID: 0}
   jumpClip: {fileID: 8300000, guid: 53e898e360727bf313d67dac9180b655, type: 3}
   landClip: {fileID: 8300000, guid: bc0cc04549f9bd50cb61e4328e5c88a9, type: 3}
   crouchClip: {fileID: 8300000, guid: 64f0b210014189de4b4b2b4522de6b1e, type: 3}
@@ -486,13 +487,15 @@ MonoBehaviour:
   redZoneWarningClip: {fileID: 8300000, guid: 040c9c42201d714c9065ba3301bce739, type: 3}
   voiceAttackGruntClip: {fileID: 0}
   voiceHurtClip: {fileID: 0}
-  voiceSkillClip: {fileID: 8300000, guid: 1e92d0ee88d818d5080c988576abcf52, type: 3}
-  voiceUltimateClip: {fileID: 8300000, guid: a5321ad0d8aa13c22e897f6c94a7d51f, type: 3}
+  voiceSkillClip: {fileID: 8300000, guid: 7c226bd4a44afec40ae9e20ad4cc931f, type: 3}
+  voiceUltimateClip: {fileID: 8300000, guid: 2d4a68a3d81554b4da36f19e2d723b6b, type: 3}
   sfxVolume: 1
   whiffVolume: 0.65
   impactVolume: 1
-  voiceVolume: 0.9
-  kiAuraVolume: 0.45
+  voiceVolume: 1
+  kiAuraVolume: 0.12
+  voiceSkillMultiplier: 1.45
+  voiceUltimateMultiplier: 1.7
 --- !u!1 &6632295880658998869
 GameObject:
   m_ObjectHideFlags: 0

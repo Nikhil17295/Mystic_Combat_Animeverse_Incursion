@@ -398,3 +398,155 @@ When demonstrating the game to evaluators:
 3. **Show Meditation:** Hold the meditate key (`G` for P1, `M` for P2) and show the fighter rooting in place to channel mystic Ki.
 4. **Show Arena Colliders:** Run into the arena boundary walls to show solid 2D collision resolution.
 5. **Show Damage Ghost Bar & Time Stone:** Land a heavy strike to show the instant health drop followed by the smooth trailing ghost bar, and point out the rotating energy aura behind the central Time Stone.
+---
+
+### Q41: Why is the Character Select menu hosted inside the Main Menu Canvas rather than in a separate Unity scene?
+**Answer:**
+> *"In fighting games, screen transitions must feel instantaneous, fluid, and cinematic. If we loaded a separate Unity scene (`SceneManager.LoadScene("CharacterSelect")`), Unity would discard all memory, reload assets, cause a visible frame freeze, and abruptly cut the title music.
+> 
+> By hosting both screens on the same Canvas (`MainMenu_Canvas`) and toggling between `Menu_Root` and `CharacterSelect_Root`, the cosmic multiverse background animation and the title theme continue streaming seamlessly. The player perceives zero loading latency, matching the authentic arcade experience of Capcom and SNK classics."*
+
+---
+
+### Q42: How does the Character Select UI adhere to your 'Grimoire Architecture' rather than hardcoded text?
+**Answer:**
+> *"Instead of statically typing 'HP: 100' or 'Kamehameha' into TextMeshPro labels in the Unity Editor, [`CharacterSelectController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/CharacterSelectController.cs) queries [`CharacterDataLoader.Load()`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Data/CharacterDataLoader.cs) when opened.
+> 
+> It parses `goku.json` and `saitama.json` directly from `StreamingAssets/Characters/`. If a designer or game balancer changes Goku's move speed from `5.0` to `5.5` or raises Spirit Bomb damage in the JSON file, the Character Select card updates its displayed statistics automatically without needing code changes or project re-baking."*
+
+---
+
+### Q43: How does your fighting game resolve 'Mirror Matches' when both players pick the same character?
+**Answer:**
+> *"In competitive fighting games, both players must be allowed to pick their best character (e.g. Goku vs Goku or Saitama vs Saitama).
+> 
+> 1. **UI Notification:** When `p1SelectedIndex == p2SelectedIndex`, `CharacterSelectController` activates a dynamic notice: `★ MIRROR MATCH: PLAYER 2 USES ALTERNATE PALETTE ★`.
+> 2. **Sprite Tinting:** During scene initialization in [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs), the engine compares the two character IDs. If they match, Player 2's `SpriteRenderer.color` is tinted with a distinct tournament palette (Cool Ice Cyan for Goku or Solar Amber for Saitama).
+> 3. **HUD Consistency:** [`HUDController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/HUDController.cs) applies the matching alternate tint to Player 2's bust card in the top-right header, ensuring complete visual clarity for both players and spectators."*
+
+---
+
+### Q44: How does CPU opponent selection work for single-player mode?
+**Answer:**
+> *"We provide a hybrid system accommodating both tactical play and quick play:
+> 1. **Manual Selection:** In 1P vs CPU mode, after P1 locks in their hero, the prompt updates to `▶ CHOOSE CPU OPPONENT  or  PRESS [R] FOR RANDOM ◀`. The player can browse and hand-pick whoever they want to fight against.
+> 2. **Instant Random:** If the player wants immediate action without browsing, they can press the `[R]` shortcut or click the `[ ⚡ RANDOM CPU ]` button. The system immediately rolls a random valid fighter and executes the match launch sequence."*
+
+---
+
+### Q45: How did you diagnose and eliminate the UI element overlap bug in the Character Select cards, and how does Unity's UI layout system compare to Godot?
+**Answer:**
+> *"In Unity, UI elements are positioned via their RectTransform component relative to anchors:
+> 1. **The Math Collision:** Our fighter title label was anchored at  = -76\text{px}$ with a height of \text{px}$ (bottom boundary at $-93\text{px}$). The blue stat panel was anchored at  = -205\text{px}$ with a height of \text{px}$ (top boundary at $-82.5\text{px}$). Because $-82.5 > -93$, the stat box physically intersected the title text by .5\text{px}$.
+> 2. **Godot vs Unity Architectural Difference:**
+>    - In **Godot**, UI nodes usually live inside container nodes like VBoxContainer or MarginContainer. Godot automatically computes child bounding rectangles and applies separation margins, making manual pixel tracking unnecessary.
+>    - In **Unity**, when working with raw RectTransform offsets without a VerticalLayoutGroup, every element uses absolute local coordinates. If the bounding intervals intersect, Unity draws them on top of each other.
+> 3. **The Solution:** We recalculated the vertical hierarchy in MainMenuSetupTool.cs (Title center at $-52\text{px}$, bottom at $-68\text{px}$; Stat panel center at $-195\text{px}$, top at $-82.5\text{px}$), creating an explicit **.5\text{px}$ clear margin** with zero overlap. We also gave Goku and Saitama custom title colors (Super Saiyan Radiant Gold #FFE620 vs Serious Punch Crimson #FF4D4D)."*
+
+---
+
+### Q46: How does your audio architecture handle character-specific vocal cries (like Saitama's 'Consecutive Normal Punches' and 'Serious Punch') across dynamic scene transitions and runtime instantiation?
+**Answer:**
+> *"Fighting games require audio to be instant, robust, and state-synced:
+> 1. **Multi-Tier Resolution Pipeline:**
+>    - **Tier 1 (Prefab Serialization):** Our editor baking tool (SceneSetupTool.cs) assigns consecutive_normal_punches.mp3 and serious_punch.mp3 directly to Saitama's prefab slots (oiceSkillClip and oiceUltimateClip).
+>    - **Tier 2 (Runtime Resource Fallback):** When matches start from Character Select, [PrototypeBootstrap.cs](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs) spawns fighters dynamically via code (AddComponent<FighterAudio>). In Unity, AddComponent creates empty serialized fields, and AssetDatabase is unavailable at runtime. We solved this by implementing EnsureClipsLoaded() in [FighterAudio.cs](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Combat/FighterAudio.cs), which dynamically falls back to Resources.Load<AudioClip>() from Assets/Resources/Audio/.
+> 2. **State-Machine Driven Vocal Triggering:** When Saitama enters his Skill attack state ([U]), ighterAudio.PlaySkillAttack() fires PlayVoiceSkill(). When he triggers his 100-Ki Ultimate ([O]), ighterAudio.PlayUltimateAttack() fires PlayVoiceUltimate(), playing his signature shouts in perfect sync with his visual animation frames."*
+
+---
+
+### Q47: Why did the Ki meditation sound remain loud despite previous code changes, and how does Unity handle serialized prefab overrides vs C# default values?
+**Answer:**
+> *"This illustrates one of the most common pitfalls in Unity development:
+> 1. **Prefab Serialization Overrides Script Defaults:** When a GameObject is saved as a Prefab (`Goku.prefab`, `Saitama.prefab`), Unity serializes every field's current value directly into the prefab's YAML file. Even if a developer changes `kiAuraVolume = 0.45f` to `0.12f` in the C# script, existing prefabs in `Assets/Prefabs/` will continue using their serialized `0.45` value because prefab data takes precedence over code defaults.
+> 2. **Continuous RMS Loudness of Loop Assets:** Unlike transient punch impacts that last $0.15\text{s}$, `dbz_super_saiyan_aura.mp3` is a continuous normalized $0\text{ dBFS}$ sub-bass loop. To the human ear, continuous pink/brown noise sounds dramatically louder than punch hits at the same linear volume.
+> 3. **The Multi-Tier Fix:** We enforced `0.12f` (12% volume) across all 4 tiers simultaneously:
+>    - The C# field default in `FighterAudio.cs`.
+>    - The scene baker `SceneSetupTool.cs`.
+>    - The serialized prefab YAML files (`Goku.prefab` and `Saitama.prefab`).
+>    - The runtime spawning logic in `PrototypeBootstrap.cs`."*
+
+---
+
+### Q48: How does audio volume scaling work in Unity's AudioSource.PlayOneShot, and how did you boost vocal shouts without distorting normal SFX?
+**Answer:**
+> *"In Unity, `AudioSource.PlayOneShot(AudioClip clip, float volumeScale)` accepts a `volumeScale` parameter that scales output amplitude.
+> 1. **The Clamp Trap:** Beginner code often writes `Mathf.Clamp01(volume)`, which locks volume scaling to a maximum of $1.0$ ($100\%$). If a voice line has a quiet recording gain, it cannot be amplified.
+> 2. **Dedicated Voice Channel:** In `FighterAudio.cs`, we introduced a dedicated `voiceSource` (`Voice_AudioSource`) separate from the one-shot `sfxSource`. This prevents punch impacts from ducking or clipping the voice shouts.
+> 3. **Amplification Multipliers:** By removing the `0..1` clamp in favor of `Mathf.Clamp(volume, 0f, 2.5f)`, we applied tailored multipliers:
+>    - Skill Flurry (`consecutive_normal_punches.mp3`): **$1.45\times$**.
+>    - Ultimate KO Punch (`serious_punch.mp3`): **$1.70\times$**.
+> This guarantees vocal cries punch through the combat mix clearly without altering the baseline volume of normal hits."*
+
+---
+
+### Q49: How did you diagnose and solve the visual blending bug where Saitama's flurry punch outlines disappeared against certain backgrounds?
+**Answer:**
+> *"This was a critical lesson in fighting game visual readability and human perception:
+> 1. **Relative Luminance & Contextual Contrast:** In fighting games, character attacks must be readable anywhere on stage. We discovered that Saitama's flurry punch outlines were drawn with `#140505` (a dark charcoal with a relative luminance of just $9.5$). When Saitama was in the center of the ring under the stage spotlight (luminance $\sim 190$), the dark outline was visible. But when moving toward the arena edges, the background tiles have luminance $26\text{–}30$ (`#1A1F25`). Against dark tiles and Goku's black gi shadows, the contrast ratio collapsed below $1.3:1$, causing the boundary to visually vanish.
+> 2. **Unshielded Transparency Gaps:** In 6 of the 12 frames, 171 perimeter punch pixels had no dark outline at all and directly touched the transparent background.
+> 3. **The Dual-Contour Anime Solution:** Rather than relying on computationally heavy post-processing or fragment outline shaders, we baked a dual-tier cel-shading architecture directly into the sprite frames:
+>    - **Crisp Perimeter Inking:** Sealed all unshielded gaps with a 1px solid dark contour (`#080404`).
+>    - **Kinetic Shockwave Knuckle Highlights:** Along the leading front edge of each fist, we introduced a 3-stage anime rim highlight: blazing white strike face (`#FFFFFF`, luminance $255.0$), solar gold transition (`#FFD76E`), and warm red-orange blend (`#FF5A32`).
+> 4. **The Result:** The punches now have an $>8:1$ contrast ratio against dark arena tiles and $>20:1$ against black sprites, giving the move the signature high-speed anime flurry look while maintaining 100% of the original character body art."*
+
+---
+
+### Q50: How does pausing work in Unity (`Time.timeScale`), and how did you preserve combat state and prevent input buffering across pause and rematch?
+**Answer:**
+> *"Pausing in fighting games requires careful handling of physics, audio, input, and coroutines:
+> 1. **Physics & Animation Freezing:** Setting `Time.timeScale = 0f` stops `FixedUpdate()` physics updates, which preserves Rigidbody velocities, active jump trajectories, and attack frames without corrupting state.
+> 2. **Input Buffering Prevention:** In Unity, `Update()` still executes every frame even when `Time.timeScale = 0f`. If not guarded, menu navigation keypresses (like `W` or `Space`) bleed into the fighter's input handler. We added a zero-allocation guard in `PlayerInputHandler` that clears all action flags (`JumpPressed = false`, `LightAttackPressed = false`) when `Time.timeScale == 0f`, guaranteeing a clean resumption.
+> 3. **Audio Bus Separation:** We invoked `AudioListener.pause = true` to freeze looping battle music and combat auras, but set `ignoreListenerPause = true` on the UI `AudioSource`. This allows retro menu navigation bleeps and confirmation chimes to play while the match is frozen.
+> 4. **Zero-Reload Rematch Architecture:** Calling `MatchManager.RestartMatch()` restores full health and Ki, zeroes wins to 0-0, resets round timers, and positions fighters at their starting spawn anchors without requiring a heavy scene reload, giving players instantaneous arcade rematching."*
+
+---
+
+### Q51: How did you implement match-lifecycle input gating and cinematic UI slide transitions in Unity?
+**Answer:**
+> *"In competitive fighting games, input handling and round pacing are fundamental to game feel:
+> 1. **Lifecycle Input Gating:** In `PlayerInputHandler`, we implemented a `CanFight()` gate checking `MatchManager.CurrentMatchState == MatchState.RoundInProgress`. Before the round opening bell (`WaitingToStart`), during the K.O. strike reverberation (`RoundEnd`), and after the match ends (`MatchOver`), all movement and attack vectors are zeroed out. This prevents accidental attacks before the bell and keeps fighters in clean finish poses after K.O.
+> 2. **3-Second Pacing Window:** We paced the post-match victory reveal with a $3.0\text{s}$ realtime delay so the final hit reverberates, allowing the defeated fighter to hit the canvas and the victor's pose to sink in.
+> 3. **Cubic Ease-Out Tweening in Code:** Rather than relying on external tweening libraries or Animator state machines, we coded a pure mathematical ease-out coroutine:
+>    $$y(t) = \text{Lerp}\left(950, 0, 1 - (1 - t)^3\right)$$
+>    Running on `Time.unscaledDeltaTime`, the victory card rockets down from off-screen ($Y = 950\text{px}$) and settles gracefully in the screen center at 60 FPS.
+> 4. **Maintaining Scene Brightness:** By setting the full-screen modal backdrop to `Color.clear`, the arena lighting, stage backdrop, and characters stay fully illuminated instead of being masked in shadow."*
+
+---
+
+### Q52: Why did you choose a Hierarchical Finite State Machine (HFSM) with an Input Abstraction layer for CPU AI instead of Behavior Trees or direct controller calls?
+**Answer:**
+> *"We chose this architecture for three crucial software engineering and game-feel reasons:
+> 1. **Zero-Cheating Virtual Controller Contract (`IFighterInput`):** In amateur fighting games, AI scripts directly override character physics (e.g. teleporting, skipping startup frames, or ignoring Ki costs). In Mystic Combat, `FighterController` only accepts an `IFighterInput` interface. The CPU AI (`CpuFighterBrain`) must press virtual buttons (`MoveInput`, `LightAttackPressed`, `MeditateHeld`) just like a human keyboard player. It obeys the exact same gravity, recovery windows, and Red Zone exhaustion rules.
+> 2. **Decoupling Brain from Body:** Because the AI generates inputs rather than controlling physics directly, any future combat feature we add to `FighterController` (e.g., parries, air dashes, or counter-hits) works automatically for both human and CPU fighters without rewriting the AI.
+> 3. **Hierarchical FSM vs Flat FSM or Behavior Trees:** Behavior Trees add unnecessary traversal overhead and node boilerplate for a fast 2D fighter with instant 60 FPS frame data. Conversely, a flat FSM easily gets tangled in transition spaghetti. A Hierarchical FSM cleanly splits decision-making into two decoupled layers:
+>    - **Layer 1 (Macro):** Strategic Posture (`SpacingNeutral`, `AggressiveRushdown`, `KiHoarding`, `DefensiveRetreat`, `PunishOpening`).
+>    - **Layer 2 (Micro):** Concrete input actuation (virtual button triggers, pulse clearing in `LateUpdate()`)."*
+
+---
+
+### Q53: How do you prevent CPU AI from feeling like an unfair 'input-reading' cheat while still keeping Hard difficulty challenging?
+**Answer:**
+> *"Fighting game AI feels unfair when it exhibits $0\text{ms}$ frame-reading reactions (e.g. parrying every light attack on frame 1). We eliminated this through three humanization mechanics:
+> 1. **Perceptual Reaction Tick ($\Delta t \approx 0.14\text{s} - 0.40\text{s}$):** Instead of evaluating the battlefield every single frame, the CPU brain evaluates decisions on a throttled timer. On Easy difficulty, this is $0.40\text{s}$, giving the player a large window to land mix-ups and jump-ins. On Hard, it is $0.14\text{s}$, giving snappy arcade reflexes that mimic a skilled human tournament player.
+> 2. **Mistake & Hesitation Probability:** On Easy mode, the bot has a $35\%$ mistake rate where it hesitates or pauses in neutral, simulating human uncertainty. On Hard, hesitation drops to $8\%$.
+> 3. **Combo Confirmation Logic:** Rather than instantly inputting optimal combos with mathematical perfection, the bot rolls against a `comboChance` attribute ($30\%$ on Easy vs $85\%$ on Hard) to decide whether to confirm a Light attack poke into a special skill or heavy attack."*
+
+---
+
+### Q54: How did you implement distinct anime-accurate fighting personalities (Goku vs. Saitama) in the AI codebase?
+**Answer:**
+> *"Rather than using a generic bot with different sprite skins, we subclassed `CpuFighterBrain` into character-specific classes with distinct strategic traits:
+> 1. **`GokuBrain.cs` (Disciplined Martial Artist & Zoner):**
+>    - **Spacing Bias:** Maintains mid-range distance ($\approx 2.1\text{m}$).
+>    - **Ki Management:** Actively disengages at safe distance ($> 3.0\text{m}$) to channel meditation and charge energy.
+>    - **Mid-Range Blast:** Emits Kamehameha (`SkillPressed`) from $1.4\text{m} - 2.7\text{m}$ when Ki $\ge 20$.
+>    - **Hoarding Goal:** Saves up $80\text{ Ki}$ to punish vulnerable opponents with his Ultimate move.
+> 2. **`SaitamaBrain.cs` (Relentless Rushdown Brawler):**
+>    - **Spacing Bias:** Closes distance relentlessly ($< 1.0\text{m}$); never backs away in neutral.
+>    - **Visceral Close Combat:** Pokes with heavy punches and chains into *Consecutive Normal Punches* (`SkillPressed`) point-blank.
+>    - **100-Ki Lethality:** Hoards the entire $100\text{ Ki}$ bar to march up and drop the game-ending *Serious Punch* (`UltimatePressed`)."*
+
+
+
+

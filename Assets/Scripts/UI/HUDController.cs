@@ -15,6 +15,7 @@ namespace MysticCombat.UI
     /// - Shiny Blue Point Gems for scored rounds and Hollow Sockets when unearned
     /// - Big Golden Gem in the center that ignites and pulses at Match Point (1-1 tie)
     /// - Automatic runtime reference discovery ensuring real-time event updates
+    /// - Dynamic fighter avatar and name binding reflecting character select choices
     /// </summary>
     public class HUDController : MonoBehaviour
     {
@@ -53,6 +54,12 @@ namespace MysticCombat.UI
 
         [Tooltip("P2 round point gem 2 (Hollow when unearned, Shiny Blue when won 2 rounds).")]
         [SerializeField] private Image p2PointGem2;
+
+        [Header("Avatar & Name Displays")]
+        [SerializeField] private Image p1AvatarCard;
+        [SerializeField] private Image p2AvatarCard;
+        [SerializeField] private TextMeshProUGUI p1NameText;
+        [SerializeField] private TextMeshProUGUI p2NameText;
 
         [Header("Center Time Stone & Magic Mandala")]
         [Tooltip("Doctor Strange style rotating green spell mandala rect.")]
@@ -196,6 +203,28 @@ namespace MysticCombat.UI
             {
                 Transform t = transform.Find("P2_KiBar_Container/KiFill");
                 if (t != null) p2KiBar = t.GetComponent<Image>();
+            }
+
+            // Resolve Avatar cards and Name text elements
+            if (p1AvatarCard == null)
+            {
+                Transform t = transform.Find("P1_AvatarCard");
+                if (t != null) p1AvatarCard = t.GetComponent<Image>();
+            }
+            if (p2AvatarCard == null)
+            {
+                Transform t = transform.Find("P2_AvatarCard");
+                if (t != null) p2AvatarCard = t.GetComponent<Image>();
+            }
+            if (p1NameText == null)
+            {
+                Transform t = transform.Find("P1_Name");
+                if (t != null) p1NameText = t.GetComponent<TextMeshProUGUI>();
+            }
+            if (p2NameText == null)
+            {
+                Transform t = transform.Find("P2_Name");
+                if (t != null) p2NameText = t.GetComponent<TextMeshProUGUI>();
             }
 
             // 2. Resolve Player 1 (Goku) - Must be in active scene!
@@ -372,6 +401,55 @@ namespace MysticCombat.UI
                 UpdateRoundScore(0, 0);
                 UpdateTimer(99f);
             }
+
+            SyncFighterAvatarsAndNames();
+        }
+
+        private void SyncFighterAvatarsAndNames()
+        {
+            string p1Id = (GameManager.Instance != null && !string.IsNullOrEmpty(GameManager.Instance.P1SelectedCharacterId))
+                ? GameManager.Instance.P1SelectedCharacterId.ToLower()
+                : "goku";
+            string p2Id = (GameManager.Instance != null && !string.IsNullOrEmpty(GameManager.Instance.P2SelectedCharacterId))
+                ? GameManager.Instance.P2SelectedCharacterId.ToLower()
+                : "saitama";
+
+            if (p1NameText != null)
+            {
+                p1NameText.text = p1Id == "goku" ? "GOKU" : "SAITAMA";
+            }
+
+            if (p2NameText != null)
+            {
+                string prefix = (GameManager.Instance != null && GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu) ? "CPU " : "";
+                p2NameText.text = prefix + (p2Id == "goku" ? "GOKU" : "SAITAMA");
+            }
+
+            UpdateAvatarCard(p1AvatarCard, p1Id, false);
+            UpdateAvatarCard(p2AvatarCard, p2Id, p1Id == p2Id);
+        }
+
+        private void UpdateAvatarCard(Image img, string charId, bool isMirrorP2)
+        {
+            if (img == null) return;
+
+            string spritePath = charId == "goku"
+                ? System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "goku_avatar_heroic.png")
+                : System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "saitama_avatar_heroic.png");
+
+            if (System.IO.File.Exists(spritePath))
+            {
+                byte[] bytes = System.IO.File.ReadAllBytes(spritePath);
+                Texture2D tex = new Texture2D(2, 2);
+                tex.filterMode = FilterMode.Bilinear;
+                if (tex.LoadImage(bytes))
+                {
+                    img.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                }
+            }
+
+            // Avatars remain 100% original full color in all cases (no tinting)
+            img.color = Color.white;
         }
 
         #endregion

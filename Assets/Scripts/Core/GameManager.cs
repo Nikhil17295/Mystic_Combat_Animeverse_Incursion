@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using MysticCombat.AI;
 
 namespace MysticCombat.Core
 {
@@ -72,6 +73,9 @@ namespace MysticCombat.Core
         [SerializeField] private string p1SelectedCharacterId = "goku";
         [SerializeField] private string p2SelectedCharacterId = "saitama";
 
+        [Header("CPU AI Difficulty")]
+        [SerializeField] private CpuDifficulty currentCpuDifficulty = CpuDifficulty.Easy;
+
         #endregion
 
         #region Properties
@@ -106,6 +110,15 @@ namespace MysticCombat.Core
         {
             get => p2SelectedCharacterId;
             set => p2SelectedCharacterId = value;
+        }
+
+        /// <summary>
+        /// The active CPU difficulty level when playing Vs CPU.
+        /// </summary>
+        public CpuDifficulty CurrentCpuDifficulty
+        {
+            get => currentCpuDifficulty;
+            set => currentCpuDifficulty = value;
         }
 
         #endregion

@@ -326,6 +326,21 @@ namespace MysticCombat.Core
             }
         }
 
+        /// <summary>
+        /// Completely restarts the match from Round 1, restoring full health, energy,
+        /// positions, score (0-0), and unpauses the engine.
+        /// </summary>
+        public void RestartMatch()
+        {
+            Time.timeScale = 1f;
+            AudioListener.pause = false;
+
+            StopAllCoroutines();
+            currentMatchState = MatchState.WaitingToStart;
+
+            StartMatch();
+        }
+
         #endregion
 
         #region Private Methods

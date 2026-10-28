@@ -4,6 +4,8 @@ using MysticCombat.Input;
 using MysticCombat.Systems;
 using MysticCombat.Data;
 using MysticCombat.Combat;
+using MysticCombat.UI;
+using MysticCombat.AI;
 
 namespace MysticCombat.Core
 {
@@ -58,17 +60,46 @@ namespace MysticCombat.Core
             SetupLayers();
             EnsureArena();
 
-            // Find or Create Fighters: Goku (P1) and Saitama (P2)
-            GameObject fighter1 = GameObject.Find("Fighter_P1_Goku");
-            GameObject fighter2 = GameObject.Find("Fighter_P2_Saitama");
+            // Determine active character IDs from GameManager (defaults: Goku vs Saitama)
+            string p1Char = (GameManager.Instance != null && !string.IsNullOrEmpty(GameManager.Instance.P1SelectedCharacterId))
+                ? GameManager.Instance.P1SelectedCharacterId.ToLower()
+                : "goku";
 
-            if (fighter1 == null)
+            string p2Char = (GameManager.Instance != null && !string.IsNullOrEmpty(GameManager.Instance.P2SelectedCharacterId))
+                ? GameManager.Instance.P2SelectedCharacterId.ToLower()
+                : "saitama";
+
+            // Clean up pre-existing baked fighters in scene to guarantee correct characters spawn
+            GameObject[] existingFighters = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var go in existingFighters)
             {
-                fighter1 = CreateFighter("Fighter_P1_Goku", p1SpawnPosition, PlayerInputHandler.PlayerIndex.P1, "goku");
+                if (go != null && (go.name.StartsWith("Fighter_P1_") || go.name.StartsWith("Fighter_P2_")))
+                {
+                    Destroy(go);
+                }
             }
-            if (fighter2 == null)
+
+            string p1Name = "Fighter_P1_" + char.ToUpper(p1Char[0]) + p1Char.Substring(1);
+            string p2Name = "Fighter_P2_" + char.ToUpper(p2Char[0]) + p2Char.Substring(1);
+
+            GameObject fighter1 = CreateFighter(p1Name, p1SpawnPosition, PlayerInputHandler.PlayerIndex.P1, p1Char);
+            GameObject fighter2 = CreateFighter(p2Name, p2SpawnPosition, PlayerInputHandler.PlayerIndex.P2, p2Char);
+
+            // Mirror Match Support (Player 2 Alternate Palette)
+            if (p1Char == p2Char)
             {
-                fighter2 = CreateFighter("Fighter_P2_Saitama", p2SpawnPosition, PlayerInputHandler.PlayerIndex.P2, "saitama");
+                SpriteRenderer sr2 = fighter2.GetComponent<SpriteRenderer>();
+                if (sr2 != null)
+                {
+                    if (p2Char == "goku")
+                    {
+                        sr2.color = new Color(0.70f, 0.85f, 1.25f, 1.0f); // Cool Cyan/Ice Alternate Gi
+                    }
+                    else
+                    {
+                        sr2.color = new Color(1.15f, 0.85f, 0.70f, 1.0f); // Solar Amber Alternate Suit
+                    }
+                }
             }
 
             // Wire cross-references (each fighter auto-faces the other)
@@ -91,6 +122,21 @@ namespace MysticCombat.Core
                 fighter1.GetComponent<EnergySystem>(),
                 fighter2.GetComponent<EnergySystem>()
             );
+
+            // Ensure CombatMenuController is active and ready on HUD_Canvas
+            CombatMenuController menuCtrl = Object.FindAnyObjectByType<CombatMenuController>();
+            if (menuCtrl == null)
+            {
+                GameObject canvasObj = GameObject.Find("HUD_Canvas");
+                if (canvasObj != null)
+                {
+                    menuCtrl = canvasObj.AddComponent<CombatMenuController>();
+                }
+            }
+            if (menuCtrl != null)
+            {
+                menuCtrl.EnsureUIHierarchyBuilt();
+            }
 
             Debug.Log("=================================================================");
             Debug.Log("[PrototypeBootstrap] >>> FIGHTING GAME PROTOTYPE READY <<<");
@@ -126,13 +172,35 @@ namespace MysticCombat.Core
             SpriteRenderer sr = fighter.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 5;
 
-            // PlayerInputHandler
-            PlayerInputHandler inputHandler = fighter.AddComponent<PlayerInputHandler>();
-            inputHandler.playerIndex = playerIndex;
+            // Input Provider (Decoupled: Human Keyboard vs Tactical CPU HFSM)
+            bool isCpu = (playerIndex == PlayerInputHandler.PlayerIndex.P2) &&
+                         (GameManager.Instance == null || GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu);
 
-            // FighterController
             FighterController fc = fighter.AddComponent<FighterController>();
-            fc.SetInputHandler(inputHandler);
+
+            if (isCpu)
+            {
+                CpuDifficulty diff = (GameManager.Instance != null) ? GameManager.Instance.CurrentCpuDifficulty : CpuDifficulty.Easy;
+                CpuFighterBrain brain = null;
+                if (characterId == "goku")
+                {
+                    brain = fighter.AddComponent<GokuBrain>();
+                }
+                else
+                {
+                    brain = fighter.AddComponent<SaitamaBrain>();
+                }
+
+                brain.Configure(diff);
+                fc.SetInputHandler(brain);
+                Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Spawned {fighterName} as CPU with {diff} difficulty!");
+            }
+            else
+            {
+                PlayerInputHandler inputHandler = fighter.AddComponent<PlayerInputHandler>();
+                inputHandler.playerIndex = playerIndex;
+                fc.SetInputHandler(inputHandler);
+            }
 
             // Ground check point at the fighter's feet
             GameObject groundCheck = new GameObject("GroundCheck");
@@ -168,6 +236,14 @@ namespace MysticCombat.Core
             HitboxController hitbox = hitboxObj.AddComponent<HitboxController>();
             hitbox.Setup(fighter.transform, 10, 5f, 6f);
             fc.SetHitbox(hitbox);
+
+            // Fighter Audio (Voice shouts, martial hits, anime powers)
+            FighterAudio fa = fighter.AddComponent<FighterAudio>();
+            fa.EnsureClipsLoaded();
+            fa.KiAuraVolume = 0.12f;
+            fa.VoiceVolume = 1.0f;
+            fa.VoiceSkillMultiplier = 1.45f;
+            fa.VoiceUltimateMultiplier = 1.70f;
 
             // Systems
             HealthSystem health = fighter.AddComponent<HealthSystem>();
