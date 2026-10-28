@@ -78,6 +78,9 @@ namespace MysticCombat.UI
         [Header("Options & Controls Modal")]
         [SerializeField] private GameObject optionsPanel;
 
+        [Header("LAN Multiplayer Modal")]
+        [SerializeField] private LanLobbyModal lanLobbyModal;
+
         [Header("Character Selection Screen")]
         [SerializeField] private GameObject characterSelectRoot;
         [SerializeField] private CharacterSelectController characterSelectController;
@@ -376,6 +379,22 @@ namespace MysticCombat.UI
                 return;
             }
 
+            if (lanLobbyModal != null && lanLobbyModal.gameObject.activeSelf)
+            {
+                if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+                {
+                    lanLobbyModal.Close();
+                }
+                return;
+            }
+
+            // Quick Hotkey [L] for instant LAN Duel Lobby
+            if (UnityEngine.Input.GetKeyDown(KeyCode.L))
+            {
+                OpenLanLobby();
+                return;
+            }
+
             float vAxis = UnityEngine.Input.GetAxisRaw("Vertical");
             bool upPressed = UnityEngine.Input.GetKeyDown(KeyCode.UpArrow) || UnityEngine.Input.GetKeyDown(KeyCode.W) || (vAxis > 0.5f && Time.time - lastNavInputTime > NAV_REPEAT_DELAY);
             bool downPressed = UnityEngine.Input.GetKeyDown(KeyCode.DownArrow) || UnityEngine.Input.GetKeyDown(KeyCode.S) || (vAxis < -0.5f && Time.time - lastNavInputTime > NAV_REPEAT_DELAY);
@@ -430,21 +449,63 @@ namespace MysticCombat.UI
                 PlaySelectAudio();
             }
 
-            switch (index)
+            if (menuItems.Count >= 5)
             {
-                case 0:
-                    StartGameMode(GameManager.GameMode.VsCpu);
-                    break;
-                case 1:
-                    StartGameMode(GameManager.GameMode.LocalPvP);
-                    break;
-                case 2:
-                    OpenOptions();
-                    break;
-                case 3:
-                    QuitGame();
-                    break;
+                switch (index)
+                {
+                    case 0:
+                        StartGameMode(GameManager.GameMode.VsCpu);
+                        break;
+                    case 1:
+                        StartGameMode(GameManager.GameMode.LocalPvP);
+                        break;
+                    case 2:
+                        OpenLanLobby();
+                        break;
+                    case 3:
+                        OpenOptions();
+                        break;
+                    case 4:
+                        QuitGame();
+                        break;
+                }
             }
+            else
+            {
+                switch (index)
+                {
+                    case 0:
+                        StartGameMode(GameManager.GameMode.VsCpu);
+                        break;
+                    case 1:
+                        StartGameMode(GameManager.GameMode.LocalPvP);
+                        break;
+                    case 2:
+                        OpenOptions();
+                        break;
+                    case 3:
+                        QuitGame();
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Opens the LAN Lobby Modal to Host or Join local network battles.
+        /// </summary>
+        public void OpenLanLobby()
+        {
+            Debug.Log("<color=#00e676>[MainMenuController]</color> Opening LAN Multiplayer Lobby...");
+
+            if (lanLobbyModal == null)
+            {
+                GameObject go = new GameObject("LanLobbyModal");
+                go.transform.SetParent(transform, false);
+                lanLobbyModal = go.AddComponent<LanLobbyModal>();
+            }
+
+            if (menuRoot != null) menuRoot.SetActive(false);
+            lanLobbyModal.Open();
         }
 
         private void StartGameMode(GameManager.GameMode mode)

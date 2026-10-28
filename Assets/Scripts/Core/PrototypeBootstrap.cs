@@ -7,6 +7,7 @@ using MysticCombat.Data;
 using MysticCombat.Combat;
 using MysticCombat.UI;
 using MysticCombat.AI;
+using MysticCombat.Network;
 
 namespace MysticCombat.Core
 {
@@ -151,28 +152,27 @@ namespace MysticCombat.Core
             GameObject fighter1 = DeployFighter(p1Name, p1SpawnPosition, PlayerInputHandler.PlayerIndex.P1, p1Char);
             GameObject fighter2 = DeployFighter(p2Name, p2SpawnPosition, PlayerInputHandler.PlayerIndex.P2, p2Char);
 
-            // Mirror Match Support (Player 2 Alternate Palette)
-            if (p1Char == p2Char)
-            {
-                SpriteRenderer sr2 = fighter2.GetComponent<SpriteRenderer>();
-                if (sr2 != null)
-                {
-                    if (p2Char == "goku")
-                    {
-                        sr2.color = new Color(0.70f, 0.85f, 1.25f, 1.0f); // Cool Cyan/Ice Alternate Gi
-                    }
-                    else
-                    {
-                        sr2.color = new Color(1.15f, 0.85f, 0.70f, 1.0f); // Solar Amber Alternate Suit
-                    }
-                }
-            }
-
             // Wire cross-references (each fighter auto-faces the other)
             FighterController fc1 = fighter1.GetComponent<FighterController>();
             FighterController fc2 = fighter2.GetComponent<FighterController>();
             fc1.opponent = fighter2.transform;
             fc2.opponent = fighter1.transform;
+
+            // Mirror Match Support (Player 2 Alternate Palette)
+            if (p1Char == p2Char)
+            {
+                Color altColor = FighterController.GetAlternatePaletteColor(p2Char);
+                if (fc2 != null)
+                {
+                    fc2.SetBaseTintColor(altColor);
+                }
+                else
+                {
+                    SpriteRenderer sr2 = fighter2.GetComponent<SpriteRenderer>();
+                    if (sr2 != null) sr2.color = altColor;
+                }
+                Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Mirror Match detected ({p1Char} vs {p2Char})! Applied Alternate Palette ({altColor}) to Player 2.");
+            }
 
             // Ensure VFXManager is bootstrapped
             if (Object.FindAnyObjectByType<Combat.VFXManager>() == null)
@@ -218,6 +218,14 @@ namespace MysticCombat.Core
                     fighter1.GetComponent<EnergySystem>(),
                     fighter2.GetComponent<EnergySystem>()
                 );
+            }
+
+            // Wire LAN NetworkMatchSynchronizer if in LAN mode
+            if (GameManager.Instance != null && GameManager.Instance.CurrentGameMode == GameManager.GameMode.LanPvP)
+            {
+                GameObject syncObj = new GameObject("NetworkMatchSynchronizer");
+                NetworkMatchSynchronizer synchronizer = syncObj.AddComponent<NetworkMatchSynchronizer>();
+                synchronizer.Initialize(fc1, fc2, matchManager, GameManager.Instance.IsLanHost);
             }
 
             // Ensure CombatMenuController is active and ready on HUD_Canvas
@@ -273,31 +281,78 @@ namespace MysticCombat.Core
             FighterController fc = fighter.GetComponent<FighterController>();
             if (fc == null) fc = fighter.AddComponent<FighterController>();
 
-            // Input Provider Assignment (Decoupled: Human Keyboard vs Tactical CPU HFSM)
-            bool isCpu = (playerIndex == PlayerInputHandler.PlayerIndex.P2) &&
-                         (GameManager.Instance == null || GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu);
+            // Input Provider Assignment (Decoupled: Human Keyboard vs Tactical CPU HFSM vs LAN Network)
+            bool isLan = (GameManager.Instance != null && GameManager.Instance.CurrentGameMode == GameManager.GameMode.LanPvP);
+            bool isHost = (GameManager.Instance == null || GameManager.Instance.IsLanHost);
 
-            if (isCpu)
+            if (isLan)
             {
-                PlayerInputHandler existingInput = fighter.GetComponent<PlayerInputHandler>();
-                if (existingInput != null) Destroy(existingInput);
+                if (playerIndex == PlayerInputHandler.PlayerIndex.P1)
+                {
+                    if (isHost)
+                    {
+                        PlayerInputHandler inputHandler = fighter.GetComponent<PlayerInputHandler>();
+                        if (inputHandler == null) inputHandler = fighter.AddComponent<PlayerInputHandler>();
+                        inputHandler.playerIndex = PlayerInputHandler.PlayerIndex.P1;
+                        fc.SetInputHandler(inputHandler);
+                        Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} as Host Local Player 1!");
+                    }
+                    else
+                    {
+                        PlayerInputHandler existing = fighter.GetComponent<PlayerInputHandler>();
+                        if (existing != null) Destroy(existing);
+                        Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} as Client Remote Mirror (Host P1)!");
+                    }
+                }
+                else // P2
+                {
+                    if (isHost)
+                    {
+                        PlayerInputHandler existing = fighter.GetComponent<PlayerInputHandler>();
+                        if (existing != null) Destroy(existing);
 
-                CpuDifficulty diff = (GameManager.Instance != null) ? GameManager.Instance.CurrentCpuDifficulty : CpuDifficulty.Easy;
-                CpuFighterBrain brain = characterId == "goku"
-                    ? (CpuFighterBrain)fighter.AddComponent<GokuBrain>()
-                    : (CpuFighterBrain)fighter.AddComponent<SaitamaBrain>();
-
-                brain.Configure(diff);
-                fc.SetInputHandler(brain);
-                Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} from {prefabName}.prefab as CPU ({diff})!");
+                        NetworkFighterInput netInput = fighter.GetComponent<NetworkFighterInput>();
+                        if (netInput == null) netInput = fighter.AddComponent<NetworkFighterInput>();
+                        fc.SetInputHandler(netInput);
+                        Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} as Host Remote Player 2 (NetworkFighterInput)!");
+                    }
+                    else
+                    {
+                        PlayerInputHandler inputHandler = fighter.GetComponent<PlayerInputHandler>();
+                        if (inputHandler == null) inputHandler = fighter.AddComponent<PlayerInputHandler>();
+                        inputHandler.playerIndex = PlayerInputHandler.PlayerIndex.P1; // Solo ergonomic keyboard controls
+                        fc.SetInputHandler(inputHandler);
+                        Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} as Client Local Player 2!");
+                    }
+                }
             }
             else
             {
-                PlayerInputHandler inputHandler = fighter.GetComponent<PlayerInputHandler>();
-                if (inputHandler == null) inputHandler = fighter.AddComponent<PlayerInputHandler>();
-                inputHandler.playerIndex = playerIndex;
-                fc.SetInputHandler(inputHandler);
-                Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} from {prefabName}.prefab for Player {playerIndex}!");
+                bool isCpu = (playerIndex == PlayerInputHandler.PlayerIndex.P2) &&
+                             (GameManager.Instance == null || GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu);
+
+                if (isCpu)
+                {
+                    PlayerInputHandler existingInput = fighter.GetComponent<PlayerInputHandler>();
+                    if (existingInput != null) Destroy(existingInput);
+
+                    CpuDifficulty diff = (GameManager.Instance != null) ? GameManager.Instance.CurrentCpuDifficulty : CpuDifficulty.Easy;
+                    CpuFighterBrain brain = characterId == "goku"
+                        ? (CpuFighterBrain)fighter.AddComponent<GokuBrain>()
+                        : (CpuFighterBrain)fighter.AddComponent<SaitamaBrain>();
+
+                    brain.Configure(diff);
+                    fc.SetInputHandler(brain);
+                    Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} from {prefabName}.prefab as CPU ({diff})!");
+                }
+                else
+                {
+                    PlayerInputHandler inputHandler = fighter.GetComponent<PlayerInputHandler>();
+                    if (inputHandler == null) inputHandler = fighter.AddComponent<PlayerInputHandler>();
+                    inputHandler.playerIndex = playerIndex;
+                    fc.SetInputHandler(inputHandler);
+                    Debug.Log($"<color=#00e676>[PrototypeBootstrap]</color> Deployed {fighterName} from {prefabName}.prefab for Player {playerIndex}!");
+                }
             }
 
             fc.SetGroundLayer(1 << GROUND_LAYER);
@@ -314,7 +369,7 @@ namespace MysticCombat.Core
             CharacterData data = CharacterDataLoader.Load(characterId);
             if (data != null)
             {
-                fc.ApplyStats(data.moveSpeed, data.jumpForce, data.gravityScale);
+                fc.ApplyStats(data.moveSpeed, data.jumpForce, data.gravityScale, data.meditateKiPerSecond > 0f ? data.meditateKiPerSecond : (characterId == "goku" ? 8.0f : 5.0f));
                 if (health != null) health.Initialize(data.maxHealth);
                 if (energy != null)
                 {

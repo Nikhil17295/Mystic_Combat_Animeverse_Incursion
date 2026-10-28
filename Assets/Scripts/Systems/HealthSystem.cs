@@ -15,6 +15,7 @@ namespace MysticCombat.Systems
 
         private int currentHealth;
         private EnergySystem energySystem;
+        private Fighter.FighterController fighterController;
 
         #endregion
 
@@ -34,6 +35,11 @@ namespace MysticCombat.Systems
         /// Whether the fighter is still alive (health > 0).
         /// </summary>
         public bool IsAlive => currentHealth > 0;
+
+        /// <summary>
+        /// Whether the fighter is currently invulnerable (e.g. final 1.0s of ultimate casting).
+        /// </summary>
+        public bool IsInvulnerable => (fighterController != null && fighterController.IsInvulnerable);
 
         /// <summary>
         /// Current health as a 0-1 fraction of max health.
@@ -89,6 +95,12 @@ namespace MysticCombat.Systems
         public void TakeDamage(int amount)
         {
             if (!IsAlive) return;
+            if (fighterController == null) fighterController = GetComponent<Fighter.FighterController>();
+            if (fighterController != null && fighterController.IsInvulnerable)
+            {
+                Debug.Log($"<color=#38bdf8>[INVULNERABLE / SUPER ARMOR]</color> {gameObject.name} absorbed {amount} damage during ultimate climax!");
+                return;
+            }
             if (amount <= 0) return;
 
             if (energySystem == null)
@@ -136,6 +148,15 @@ namespace MysticCombat.Systems
         public void ResetHealth()
         {
             currentHealth = maxHealth;
+            OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        }
+
+        /// <summary>
+        /// Directly synchronizes health from an authoritative LAN snapshot.
+        /// </summary>
+        public void SetHealthDirect(int val)
+        {
+            currentHealth = Mathf.Clamp(val, 0, maxHealth);
             OnHealthChanged?.Invoke(currentHealth, maxHealth);
         }
 

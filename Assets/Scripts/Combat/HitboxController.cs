@@ -238,6 +238,15 @@ namespace MysticCombat.Combat
 
         private void ResolveHit(HealthSystem targetHealth, Transform target)
         {
+            Fighter.FighterController targetFc = target.GetComponent<Fighter.FighterController>();
+            bool targetInvulnerable = targetHealth.IsInvulnerable || (targetFc != null && targetFc.IsInvulnerable);
+
+            if (targetInvulnerable)
+            {
+                Debug.Log($"<color=#38bdf8>[INVULNERABLE SUPER ARMOR]</color> {target.name} absorbed hit during ultimate casting!");
+                return;
+            }
+
             // 1. Deal Damage
             targetHealth.TakeDamage(damage);
 
@@ -247,11 +256,11 @@ namespace MysticCombat.Combat
                 ownerEnergy.AddKi(kiGainOnHit);
             }
 
-            // 3. Grant Comeback Ki to Target
+            // 3. Grant Comeback Ki to Target (nerfed from 3f to 1.5f)
             EnergySystem targetEnergy = target.GetComponent<EnergySystem>();
             if (targetEnergy != null)
             {
-                targetEnergy.AddKi(3f);
+                targetEnergy.AddKi(1.5f);
             }
 
             // 4. Apply Knockback Physics
@@ -321,7 +330,6 @@ namespace MysticCombat.Combat
             }
 
             // 8. Apply Hitstun & Hurt Reaction
-            Fighter.FighterController targetFc = target.GetComponent<Fighter.FighterController>();
             if (targetFc != null)
             {
                 float stun = damage >= 7 ? 0.38f : 0.22f;

@@ -1179,6 +1179,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2016754307926928992, guid: 0ea944eb9cbecd84385c7e23c3b6efaf, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
+    - target: {fileID: 2028315363120593131, guid: 0ea944eb9cbecd84385c7e23c3b6efaf, type: 3}
+      propertyPath: m_AdditionalShaderChannelsFlag
+      value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 2215310514243633088, guid: 0ea944eb9cbecd84385c7e23c3b6efaf, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
     - target: {fileID: 2822410774152285625, guid: 0ea944eb9cbecd84385c7e23c3b6efaf, type: 3}
       propertyPath: m_Name
       value: HUD_Canvas
@@ -1262,6 +1274,14 @@ PrefabInstance:
     - target: {fileID: 4883263420755772400, guid: 0ea944eb9cbecd84385c7e23c3b6efaf, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139997761473451352, guid: 0ea944eb9cbecd84385c7e23c3b6efaf, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
+    - target: {fileID: 7037577613280744679, guid: 0ea944eb9cbecd84385c7e23c3b6efaf, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

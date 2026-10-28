@@ -31,6 +31,22 @@ namespace MysticCombat.UI
         [Tooltip("P1 Ki energy bar fill.")]
         [SerializeField] private Image p1KiBar;
 
+        [Header("Tactical Segmented Ki Meter Elements")]
+        [SerializeField] private Color kiRedZoneColor = new Color(1.00f, 0.22f, 0.22f, 1f);       // Danger Red
+        [SerializeField] private Color kiSafeZoneColor = new Color(0.20f, 0.95f, 0.35f, 1f);      // Safe Green
+        [SerializeField] private Color kiSkillSafeColor = new Color(0.12f, 0.75f, 1.00f, 1f);     // Skill-Ready Blue
+        [SerializeField] private Color kiSurplusColor = new Color(1.00f, 0.88f, 0.18f, 1f);       // Ultimate Surplus Gold
+        [SerializeField] private Color kiNotchColor = new Color(0.92f, 0.95f, 1.00f, 0.95f);       // Metallic Divider Notch
+
+        [Header("Player 1 Ki Segments & Marks")]
+        [SerializeField] private Image p1KiRed;
+        [SerializeField] private Image p1KiGreen;
+        [SerializeField] private Image p1KiBlue;
+        [SerializeField] private Image p1KiYellow;
+        [SerializeField] private RectTransform p1MarkRedZone;
+        [SerializeField] private RectTransform p1MarkSkillSafe;
+        [SerializeField] private RectTransform p1MarkUltSafe;
+
         [Header("Player 1 Round Point Gems")]
         [Tooltip("P1 round point gem 1 (Hollow when 0, Shiny Blue when 1).")]
         [SerializeField] private Image p1PointGem1;
@@ -47,6 +63,15 @@ namespace MysticCombat.UI
 
         [Tooltip("P2 Ki energy bar fill.")]
         [SerializeField] private Image p2KiBar;
+
+        [Header("Player 2 Ki Segments & Marks")]
+        [SerializeField] private Image p2KiRed;
+        [SerializeField] private Image p2KiGreen;
+        [SerializeField] private Image p2KiBlue;
+        [SerializeField] private Image p2KiYellow;
+        [SerializeField] private RectTransform p2MarkRedZone;
+        [SerializeField] private RectTransform p2MarkSkillSafe;
+        [SerializeField] private RectTransform p2MarkUltSafe;
 
         [Header("Player 2 Round Point Gems")]
         [Tooltip("P2 round point gem 1 (Hollow when 0, Shiny Blue when 1).")]
@@ -114,6 +139,14 @@ namespace MysticCombat.UI
         private bool isSubscribed;
         private bool isMatchPoint;
         private Vector3 initialGoldGemScale = Vector3.one;
+
+        private float p1T1 = 10f;
+        private float p1T2 = 45f;
+        private float p1T3 = 90f;
+        private float p2T1 = 10f;
+        private float p2T2 = 30f;
+        private float p2T3 = 90f;
+        private Sprite cachedWhiteKiFillSprite;
 
         #endregion
 
@@ -204,6 +237,8 @@ namespace MysticCombat.UI
                 Transform t = transform.Find("P2_KiBar_Container/KiFill");
                 if (t != null) p2KiBar = t.GetComponent<Image>();
             }
+
+            EnsureKiMeterHierarchyBuilt();
 
             // Resolve Avatar cards and Name text elements
             if (p1AvatarCard == null)
@@ -387,17 +422,19 @@ namespace MysticCombat.UI
 
         private void SyncInitialState()
         {
+            SyncFighterAvatarsAndNames();
+
             if (p1Health != null) UpdateHealthBar(0, p1Health.HealthPercent);
             else UpdateHealthBar(0, 1f);
 
             if (p2Health != null) UpdateHealthBar(1, p2Health.HealthPercent);
             else UpdateHealthBar(1, 1f);
 
-            if (p1Energy != null) UpdateKiBar(0, p1Energy.KiPercent);
-            else UpdateKiBar(0, 0.5f);
+            if (p1Energy != null) UpdateKiBar(0, p1Energy.CurrentKi, p1Energy.MaxKi);
+            else UpdateKiBar(0, 50f, 100f);
 
-            if (p2Energy != null) UpdateKiBar(1, p2Energy.KiPercent);
-            else UpdateKiBar(1, 0.5f);
+            if (p2Energy != null) UpdateKiBar(1, p2Energy.CurrentKi, p2Energy.MaxKi);
+            else UpdateKiBar(1, 50f, 100f);
 
             if (matchManager != null)
             {
@@ -409,8 +446,6 @@ namespace MysticCombat.UI
                 UpdateRoundScore(0, 0);
                 UpdateTimer(199f);
             }
-
-            SyncFighterAvatarsAndNames();
         }
 
         private void SyncFighterAvatarsAndNames()
@@ -421,6 +456,9 @@ namespace MysticCombat.UI
             string p2Id = (GameManager.Instance != null && !string.IsNullOrEmpty(GameManager.Instance.P2SelectedCharacterId))
                 ? GameManager.Instance.P2SelectedCharacterId.ToLower()
                 : "saitama";
+
+            CalibrateKiThresholds(0, p1Id);
+            CalibrateKiThresholds(1, p2Id);
 
             if (p1NameText != null)
             {
@@ -456,8 +494,15 @@ namespace MysticCombat.UI
                 }
             }
 
-            // Avatars remain 100% original full color in all cases (no tinting)
-            img.color = Color.white;
+            // If Player 2 in a Mirror Match, apply the matching Alternate Palette!
+            if (isMirrorP2)
+            {
+                img.color = Fighter.FighterController.GetAlternatePaletteColor(charId);
+            }
+            else
+            {
+                img.color = Color.white;
+            }
         }
 
         #endregion
@@ -499,14 +544,294 @@ namespace MysticCombat.UI
             }
         }
 
-        public void UpdateKiBar(int playerIndex, float percent)
+        public void UpdateKiBar(int playerIndex, float currentKi, float maxKi)
         {
-            Image bar = playerIndex == 0 ? p1KiBar : p2KiBar;
-            if (bar != null)
+            float t1 = playerIndex == 0 ? p1T1 : p2T1;
+            float t2 = playerIndex == 0 ? p1T2 : p2T2;
+            float t3 = playerIndex == 0 ? p1T3 : p2T3;
+
+            float cur = Mathf.Max(0f, currentKi);
+            float max = Mathf.Max(1f, maxKi);
+
+            // Calculate fill percentages for each of the 4 zones
+            float redFill = Mathf.Clamp01(cur / t1);
+            float greenFill = cur <= t1 ? 0f : Mathf.Clamp01((cur - t1) / Mathf.Max(0.001f, t2 - t1));
+            float blueFill = cur <= t2 ? 0f : Mathf.Clamp01((cur - t2) / Mathf.Max(0.001f, t3 - t2));
+            float yellowFill = cur <= t3 ? 0f : Mathf.Clamp01((cur - t3) / Mathf.Max(0.001f, max - t3));
+
+            if (playerIndex == 0)
             {
-                bar.fillAmount = Mathf.Clamp01(percent);
+                if (p1KiRed != null) p1KiRed.fillAmount = redFill;
+                if (p1KiGreen != null) p1KiGreen.fillAmount = greenFill;
+                if (p1KiBlue != null) p1KiBlue.fillAmount = blueFill;
+                if (p1KiYellow != null) p1KiYellow.fillAmount = yellowFill;
+                if (p1KiBar != null && p1KiBar.gameObject.activeSelf) p1KiBar.fillAmount = Mathf.Clamp01(cur / max);
+            }
+            else
+            {
+                if (p2KiRed != null) p2KiRed.fillAmount = redFill;
+                if (p2KiGreen != null) p2KiGreen.fillAmount = greenFill;
+                if (p2KiBlue != null) p2KiBlue.fillAmount = blueFill;
+                if (p2KiYellow != null) p2KiYellow.fillAmount = yellowFill;
+                if (p2KiBar != null && p2KiBar.gameObject.activeSelf) p2KiBar.fillAmount = Mathf.Clamp01(cur / max);
             }
         }
+
+        public void UpdateKiBar(int playerIndex, float percent)
+        {
+            float maxKi = 100f;
+            UpdateKiBar(playerIndex, Mathf.Clamp01(percent) * maxKi, maxKi);
+        }
+
+        #region Segmented Ki Meter Hierarchy & Calibration
+
+        private void EnsureKiMeterHierarchyBuilt()
+        {
+            EnsurePlayerKiMeter(0);
+            EnsurePlayerKiMeter(1);
+        }
+
+        private Sprite GetWhiteKiFillSprite()
+        {
+            if (cachedWhiteKiFillSprite != null) return cachedWhiteKiFillSprite;
+
+            cachedWhiteKiFillSprite = Resources.Load<Sprite>("Sprites/UI/ki_bar_grand_fill_white");
+            if (cachedWhiteKiFillSprite != null) return cachedWhiteKiFillSprite;
+
+            string path = System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "ki_bar_grand_fill_white.png");
+            if (System.IO.File.Exists(path))
+            {
+                byte[] bytes = System.IO.File.ReadAllBytes(path);
+                Texture2D tex = new Texture2D(2, 2);
+                tex.filterMode = FilterMode.Point;
+                if (tex.LoadImage(bytes))
+                {
+                    cachedWhiteKiFillSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                    return cachedWhiteKiFillSprite;
+                }
+            }
+
+            return null;
+        }
+
+        private void EnsurePlayerKiMeter(int playerIndex)
+        {
+            string containerName = playerIndex == 0 ? "P1_KiBar_Container" : "P2_KiBar_Container";
+            Transform container = transform.Find(containerName);
+            if (container == null) return;
+
+            // Deactivate legacy single-color KiFill if present
+            Transform legacyFill = container.Find("KiFill");
+            if (legacyFill != null)
+            {
+                legacyFill.gameObject.SetActive(false);
+            }
+
+            // Find or create SegmentContainer
+            Transform segTrans = container.Find("SegmentContainer");
+            GameObject segObj;
+            RectTransform segRt;
+            if (segTrans == null)
+            {
+                segObj = new GameObject("SegmentContainer", typeof(RectTransform));
+                segObj.transform.SetParent(container, false);
+                segRt = segObj.GetComponent<RectTransform>();
+                segRt.anchorMin = Vector2.zero;
+                segRt.anchorMax = Vector2.one;
+                segRt.offsetMin = new Vector2(3f, 3f);
+                segRt.offsetMax = new Vector2(-3f, -3f);
+            }
+            else
+            {
+                segObj = segTrans.gameObject;
+                segRt = segObj.GetComponent<RectTransform>();
+            }
+
+            Sprite whiteFill = GetWhiteKiFillSprite();
+            Image.OriginHorizontal origin = playerIndex == 0 ? Image.OriginHorizontal.Left : Image.OriginHorizontal.Right;
+
+            // Get or create 4 colored fill segments
+            Image red = GetOrCreateSegment(segObj.transform, "KiFill_Red", whiteFill, kiRedZoneColor, origin);
+            Image green = GetOrCreateSegment(segObj.transform, "KiFill_Green", whiteFill, kiSafeZoneColor, origin);
+            Image blue = GetOrCreateSegment(segObj.transform, "KiFill_Blue", whiteFill, kiSkillSafeColor, origin);
+            Image yellow = GetOrCreateSegment(segObj.transform, "KiFill_Yellow", whiteFill, kiSurplusColor, origin);
+
+            // Get or create 3 divider notches (Mark 1, 2, 3)
+            RectTransform mark1 = GetOrCreateMark(segObj.transform, "Mark_RedZone");
+            RectTransform mark2 = GetOrCreateMark(segObj.transform, "Mark_SkillSafe");
+            RectTransform mark3 = GetOrCreateMark(segObj.transform, "Mark_UltimateSafe");
+
+            if (playerIndex == 0)
+            {
+                p1KiRed = red;
+                p1KiGreen = green;
+                p1KiBlue = blue;
+                p1KiYellow = yellow;
+                p1MarkRedZone = mark1;
+                p1MarkSkillSafe = mark2;
+                p1MarkUltSafe = mark3;
+            }
+            else
+            {
+                p2KiRed = red;
+                p2KiGreen = green;
+                p2KiBlue = blue;
+                p2KiYellow = yellow;
+                p2MarkRedZone = mark1;
+                p2MarkSkillSafe = mark2;
+                p2MarkUltSafe = mark3;
+            }
+
+            ApplyKiSegmentAnchors(playerIndex);
+        }
+
+        private Image GetOrCreateSegment(Transform parent, string name, Sprite sprite, Color tint, Image.OriginHorizontal origin)
+        {
+            Transform existing = parent.Find(name);
+            GameObject obj;
+            Image img;
+            if (existing == null)
+            {
+                obj = new GameObject(name, typeof(RectTransform), typeof(Image));
+                obj.transform.SetParent(parent, false);
+                img = obj.GetComponent<Image>();
+            }
+            else
+            {
+                obj = existing.gameObject;
+                img = obj.GetComponent<Image>() ?? obj.AddComponent<Image>();
+            }
+
+            if (sprite != null) img.sprite = sprite;
+            img.color = tint;
+            img.type = Image.Type.Filled;
+            img.fillMethod = Image.FillMethod.Horizontal;
+            img.fillOrigin = (int)origin;
+            return img;
+        }
+
+        private RectTransform GetOrCreateMark(Transform parent, string name)
+        {
+            Transform existing = parent.Find(name);
+            GameObject obj;
+            RectTransform rt;
+            Image img;
+            if (existing == null)
+            {
+                obj = new GameObject(name, typeof(RectTransform), typeof(Image));
+                obj.transform.SetParent(parent, false);
+                rt = obj.GetComponent<RectTransform>();
+                img = obj.GetComponent<Image>();
+                Outline outline = obj.AddComponent<Outline>();
+                outline.effectColor = new Color(0f, 0f, 0f, 0.75f);
+                outline.effectDistance = new Vector2(1f, 0f);
+            }
+            else
+            {
+                obj = existing.gameObject;
+                rt = obj.GetComponent<RectTransform>();
+                img = obj.GetComponent<Image>() ?? obj.AddComponent<Image>();
+                if (obj.GetComponent<Outline>() == null)
+                {
+                    Outline outline = obj.AddComponent<Outline>();
+                    outline.effectColor = new Color(0f, 0f, 0f, 0.75f);
+                    outline.effectDistance = new Vector2(1f, 0f);
+                }
+            }
+
+            img.color = kiNotchColor;
+            return rt;
+        }
+
+        public void CalibrateKiThresholds(int playerIndex, string charId)
+        {
+            string id = !string.IsNullOrEmpty(charId) ? charId.ToLower() : (playerIndex == 0 ? "goku" : "saitama");
+            float t1 = 10f; // Red Zone danger threshold (10 Ki)
+            float t2 = id == "goku" ? 45f : 30f; // Goku: 10 + 35 = 45; Saitama: 10 + 20 = 30
+            float t3 = 90f; // Goku & Saitama: 10 + 80 = 90
+
+            if (playerIndex == 0)
+            {
+                p1T1 = t1;
+                p1T2 = t2;
+                p1T3 = t3;
+            }
+            else
+            {
+                p2T1 = t1;
+                p2T2 = t2;
+                p2T3 = t3;
+            }
+
+            ApplyKiSegmentAnchors(playerIndex);
+        }
+
+        private void ApplyKiSegmentAnchors(int playerIndex)
+        {
+            float t1 = playerIndex == 0 ? p1T1 : p2T1;
+            float t2 = playerIndex == 0 ? p1T2 : p2T2;
+            float t3 = playerIndex == 0 ? p1T3 : p2T3;
+
+            float p1 = Mathf.Clamp01(t1 / 100f);
+            float p2 = Mathf.Clamp01(t2 / 100f);
+            float p3 = Mathf.Clamp01(t3 / 100f);
+
+            Image red = playerIndex == 0 ? p1KiRed : p2KiRed;
+            Image green = playerIndex == 0 ? p1KiGreen : p2KiGreen;
+            Image blue = playerIndex == 0 ? p1KiBlue : p2KiBlue;
+            Image yellow = playerIndex == 0 ? p1KiYellow : p2KiYellow;
+
+            RectTransform m1 = playerIndex == 0 ? p1MarkRedZone : p2MarkRedZone;
+            RectTransform m2 = playerIndex == 0 ? p1MarkSkillSafe : p2MarkSkillSafe;
+            RectTransform m3 = playerIndex == 0 ? p1MarkUltSafe : p2MarkUltSafe;
+
+            if (playerIndex == 0)
+            {
+                // Player 1: Fills Left to Right [0 -> 1]
+                SetSegmentRect(red, 0f, p1);
+                SetSegmentRect(green, p1, p2);
+                SetSegmentRect(blue, p2, p3);
+                SetSegmentRect(yellow, p3, 1f);
+
+                SetMarkPosition(m1, p1);
+                SetMarkPosition(m2, p2);
+                SetMarkPosition(m3, p3);
+            }
+            else
+            {
+                // Player 2: Mirrored Right to Left [1 -> 0]
+                SetSegmentRect(red, 1f - p1, 1f);
+                SetSegmentRect(green, 1f - p2, 1f - p1);
+                SetSegmentRect(blue, 1f - p3, 1f - p2);
+                SetSegmentRect(yellow, 0f, 1f - p3);
+
+                SetMarkPosition(m1, 1f - p1);
+                SetMarkPosition(m2, 1f - p2);
+                SetMarkPosition(m3, 1f - p3);
+            }
+        }
+
+        private void SetSegmentRect(Image img, float minX, float maxX)
+        {
+            if (img == null) return;
+            RectTransform rt = img.rectTransform;
+            rt.anchorMin = new Vector2(minX, 0f);
+            rt.anchorMax = new Vector2(maxX, 1f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
+        private void SetMarkPosition(RectTransform rt, float xAnchor)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(xAnchor, 0.5f);
+            rt.anchorMax = new Vector2(xAnchor, 0.5f);
+            rt.sizeDelta = new Vector2(3f, 26f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.SetAsLastSibling();
+        }
+
+        #endregion
 
         public void UpdateTimer(float time)
         {
@@ -638,10 +963,10 @@ namespace MysticCombat.UI
         }
 
         private void OnP1KiChanged(float current, float max) =>
-            UpdateKiBar(0, max > 0f ? current / max : 0f);
+            UpdateKiBar(0, current, max);
 
         private void OnP2KiChanged(float current, float max) =>
-            UpdateKiBar(1, max > 0f ? current / max : 0f);
+            UpdateKiBar(1, current, max);
 
         /// <summary>
         /// Immediately resets both active and ghost health bars to 100% full with zero ghost lag.

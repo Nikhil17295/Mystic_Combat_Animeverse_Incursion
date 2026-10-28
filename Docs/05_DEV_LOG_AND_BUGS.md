@@ -1433,3 +1433,221 @@ When Saitama executed his Ultimate attack, attaching the enlarged Big Punch spri
 #### Verification:
 - Code reviewed and tested with dynamic canvas resolution scaling ($1920 \times 1080$).
 - Verified that regardless of where Saitama stands on stage (left corner, center, or right corner), the cut-in remains cleanly framed on screen and never extends behind Saitama's $X$ coordinate.
+
+
+---
+
+### Bug 39: Mirror Match Alternate Color Tint Frame-1 Update Wipeout & UI Hardcoding Disconnect
+
+- **Date:** October 28, 2026
+- **Severity:** Medium (Visual Fighter Differentiation & Tournament UX)
+- **Component:** `Assets/Scripts/Fighter/FighterController.cs`, `Assets/Scripts/Core/PrototypeBootstrap.cs`, `Assets/Scripts/UI/CharacterSelectController.cs`, `Assets/Scripts/UI/HUDController.cs`
+
+#### Symptom:
+1. When selecting the same fighter (e.g. Goku vs Goku or Saitama vs Saitama), Player 2 appeared with the exact same default color palette as Player 1 in the combat arena, making it impossible to tell the fighters apart.
+2. In the Character Select screen, Player 2's selection badge did not distinguish that Player 2 was using an Alternate Palette.
+3. In the cinematic Versus splash screen and in-game HUD top bar, Player 2's avatar bust remained pure white rather than matching the alternate costume.
+
+#### Root Causes:
+1. **The Frame-1 `Update()` Wipeout:**
+   In `FighterController.HandleRedZoneVisuals()`, non-exhausted states executed `else if (spriteRenderer.color != Color.white) spriteRenderer.color = Color.white;`. Because this ran on every frame in `Update()`, the alternate tint assigned at instantiation by `PrototypeBootstrap` was overwritten within 16 milliseconds of the scene starting!
+2. **Subtle Clamped RGB Values:**
+   `PrototypeBootstrap` originally configured Saitama's alternate tint as `new Color(1.15f, 0.85f, 0.70f, 1.0f)`. Because Unity's `Sprites-Default` shader clamps colors to $[0.0, 1.0]$, the color became `(1.0, 0.85, 0.70)`, which was nearly indistinguishable from pure white on a yellow suit.
+3. **UI Overlay Hardcoding:**
+   `HUDController.UpdateAvatarCard()` had `img.color = Color.white;` hardcoded, ignoring `isMirrorP2`. Similarly, `CharacterSelectController.SetupCinematicVersusScreen()` hardcoded `versusP2AvatarImage.color = Color.white;`.
+
+#### Resolution:
+1. **The `baseTintColor` State Pattern in `FighterController.cs`:**
+   - Added `[SerializeField] private Color baseTintColor = Color.white;` and `public void SetBaseTintColor(Color tint)`.
+   - Updated `HandleRedZoneVisuals()` to pulse between `baseTintColor` and danger red when in the Red Zone, and cleanly restore `baseTintColor` during normal combat.
+   - Updated `ResetForNewRound()` to preserve `baseTintColor` across round resets.
+2. **Canonical High-Contrast Palettes (`GetAlternatePaletteColor`):**
+   - Established a single source of truth in `FighterController.GetAlternatePaletteColor()`:
+     - **Goku P2:** `new Color(0.45f, 0.75f, 1.0f, 1.0f)` (Cool Ice / Cyan Gi).
+     - **Saitama P2:** `new Color(1.0f, 0.50f, 0.45f, 1.0f)` (Fiery Sunset / Crimson Suit).
+3. **Integrated `PrototypeBootstrap.cs`:**
+   - In `DeployFighters()`, when `p1Char == p2Char`, executes `fc2.SetBaseTintColor(altColor)`.
+4. **Synchronized `CharacterSelectController.cs`:**
+   - When hovering on the same character, `card.p2IndicatorText` displays `[ P2: ALT PALETTE ]` (or `[ CPU: ALT PALETTE ]`).
+   - In the Versus fly-in overlay, tints `versusP2AvatarImage` with `GetAlternatePaletteColor(p2Id)` and appends `[ALT]` to the name.
+5. **Synchronized `HUDController.cs`:**
+   - In `UpdateAvatarCard()`, when `isMirrorP2` is true, tints `p2AvatarCard` with `GetAlternatePaletteColor(charId)`.
+
+#### Verification:
+- Ran `python scratch/verify_compilation.py`: Both `Assembly-CSharp.csproj` and `Assembly-CSharp-Editor.csproj` compiled cleanly with **ZERO (0) ERRORS**.
+- Verified cross-system palette persistence across Character Select, Versus overlay, live combat arena, in-combat HUD, and round resets.
+
+
+---
+
+### Bug 40: Dangling Vocal Dialogue on Hit Interruption & Infinite Skill Spam Vulnerability (Resolved via Dedicated Voice Cancellation & 15s Cooldowns)
+
+- **Date:** October 28, 2026
+- **Severity:** High (Combat Polish, Competitive Fairness & Audio Immersion)
+- **Component:** `Assets/Scripts/Combat/FighterAudio.cs`, `Assets/Scripts/Fighter/FighterController.cs`, `HitboxController.cs`, `HealthSystem.cs`
+
+#### Symptom:
+1. When Saitama was interrupted during his Consecutive Normal Punches or Serious Punch startup by an opponent's attack, his character animation snapped into `HitStun`, but the vocal audio line (*"Consecutive Normal Punches!"* or *"Hissatsu..."*) continued playing in full in the background.
+2. Fighters could repeatedly mash their Skill or Ultimate moves back-to-back as soon as they possessed Ki, with zero cooldown enforcement.
+3. Saitama's 15-punch flurry hit so rapidly with zero gaps that the defender had no window to retaliate or escape.
+4. Long ultimate cast windups ($2.15\text{s}\text{--}2.40\text{s}$) could be cheaply cancelled on the final frame by a light jab.
+
+#### Root Causes:
+1. **Detached Fire-and-Forget Audio Voices:**
+   `FighterAudio.PlayVoiceSound()` called `voiceSource.PlayOneShot(clip)`. Unity's `PlayOneShot` detaches playback from the component's main playback state; calling `voiceSource.Stop()` does not stop active `PlayOneShot` audio clips.
+2. **Missing Anti-Spam Cooldown State:**
+   `FighterController` only checked `energySystem.CanAfford(cost)`. Once energy was charged, special moves could be chained without limit.
+3. **Continuous Hitstun Lock:**
+   15 hits @ 2 damage with a $0.15\text{s}$ interval trapped the defender in unbreakable hitstun.
+4. **Lack of Climax Super Armor:**
+   No invulnerability flag protected fighters during the decisive final second of their ultimate windup.
+
+#### Resolution:
+1. **Dedicated Monophonic Voice Channel:**
+   In `FighterAudio.cs`, changed voice playback from `PlayOneShot` to direct assignment:
+   `voiceSource.clip = clip; voiceSource.Play();`
+   Added `public void StopVoice() { voiceSource.Stop(); }`.
+   Called `StopVoice()` in `FighterController.TransitionTo()` upon entering `HitStun`, `KnockBack`, or `Knockout`, and inside `PlayVoiceHurt()`.
+2. **15-Second Anti-Spam Cooldowns:**
+   Added `skillCooldownTimer` and `ultimateCooldownTimer` ($15.0\text{s}$). Reverting from Super Saiyan or casting a special move initiates the 15-second timer.
+3. **Saitama Skill Rework (5 Hits @ 6 Dmg):**
+   Re-tuned Consecutive Normal Punches to 5 spaced strikes ($0.35\text{s}$ spacing) for 6 damage each ($30\text{ damage}$ total). The gaps provide counter-hit windows where the defender can strike Saitama and cancel his flurry.
+4. **Climax Invulnerability:**
+   Exposed `IsInvulnerable => CurrentState == FighterState.Ultimate && attackStartupTimer <= 1.0f;`. In `HitboxController.cs` and `HealthSystem.cs`, incoming attacks deal 0 damage and cause 0 hitstun while invulnerable.
+5. **Goku Super Saiyan Active Drain Toggle:**
+   Replaced static 15s timer with an active toggle draining $2.5\text{ Ki/s}$. Reverts automatically upon energy depletion.
+6. **Ki Cost & Economy Balance:**
+   - Saitama Skill cost: $30\text{ Ki}$ (up from $20$).
+   - Saitama Ultimate cost: $100\text{ Ki}$ (up from $80$).
+   - Goku Ultimate cost: $70\text{ Ki}$ (down from $80$).
+   - Removed starting free 25 Ki.
+   - Meditation tuned to $8.0\text{ Ki/s}$ for Goku, $5.0\text{ Ki/s}$ for Saitama.
+
+#### Verification:
+- Code reviewed and verified across all systems.
+- Tested voice cancellation: taking damage during voice playback immediately silences the battle cry.
+- Tested cooldowns: abilities reject activation during the 15-second cooldown window.
+
+---
+
+### Bug 41: Ki Meter Tactical Threshold Blindness & Option A 4-Tier Segmented Gauge Implementation
+
+- **Date:** October 28, 2026
+- **Severity:** Medium (Competitive UX, Clarity & Ki Economy Legibility)
+- **Component:** `Assets/Scripts/UI/HUDController.cs`, `Assets/Scripts/Editor/SceneSetupTool.cs`, `Assets/Sprites/UI/ki_bar_grand_fill_white.png`
+
+#### Symptom:
+1. Players had no immediate in-combat visual reference to know whether they had enough Ki to activate a Skill or Ultimate without dropping into the debilitating **Red Zone Exhaustion State** ($Ki \le 10$).
+2. The legacy Ki bar used a single monolithic cyan fill (`ki_bar_grand_fill.png`). Players had to mentally guess whether their current energy bar percentage ($30\%$, $45\%$, $90\%$) was above or below their fighter's safety thresholds.
+3. In fast-paced 60 FPS combat, players frequently executed skills only to immediately trigger exhaustion self-stun because they misjudged the 10 Ki Red Zone buffer.
+
+#### Root Causes:
+1. **Monolithic Single-Color Progress Bar:**
+   A single-color progress bar communicates magnitude ($0\% \to 100\%$) but zero tactical boundaries. In competitive fighting games, thresholds dictate tactical action states (Danger vs Safe vs Skill-Ready vs Ultimate Surplus).
+2. **Baked Cyan Sprite Tinting Limitation:**
+   The legacy texture `ki_bar_grand_fill.png` had an intense cyan/blue gradient baked into its RGB channels. Multiplying baked cyan by bright red yielded muddy brown/black due to subtractive color channel multiplication ($R \times 0 \approx 0$).
+3. **Asymmetric Character Ki Economy:**
+   Goku and Saitama have distinct skill Ki costs (Goku Super Saiyan transformation costs 35 Ki; Saitama Consecutive Normal Punches costs 20–30 Ki), meaning Mark 2 is character-dependent and cannot be a static hardcoded texture.
+
+#### Resolution (Option A: Segmented Multi-Color Gauge):
+1. **Grayscale Specular Base Texture (`ki_bar_grand_fill_white.png`):**
+   - Synthesized a pure grayscale 512x18 texture preserving the 3D beveled specular rim (row 0: 255; rows 1-8: 238; rows 9-17: 165 to 147).
+   - Saved to both `Assets/Sprites/UI/` and `Assets/Resources/Sprites/UI/` with unique `.meta` files, allowing 100% true tinting to Red, Green, Blue, and Solar Gold.
+2. **Option A Segmented Visual Architecture:**
+   - **Zone 1: Danger Red Zone ($0 \to \text{Mark 1}$):** Fills in Danger Crimson (`#FF3838`). When Ki is in this zone, fighter is in or near Red Zone exhaustion.
+   - **Zone 2: Safe Buffer ($ \text{Mark 1} \to \text{Mark 2}$):** Fills in Neon Mint Green (`#33F259`). Reaching Mark 2 ensures that spending Ki on a Skill will **NOT** drop the fighter into the Red Zone!
+   - **Zone 3: Skill-Safe Buffer ($ \text{Mark 2} \to \text{Mark 3}$):** Fills in Electric Sky Blue (`#1FC0FF`). Reaching Mark 3 ensures that unleashing an Ultimate will **NOT** drop the fighter into the Red Zone!
+   - **Zone 4: Ultimate Surplus ($ \text{Mark 3} \to \text{Max 100}$):** Fills in Solar Gold (`#FFE02E`), providing an overcharge buffer.
+3. **Divider Notches (Marks 1, 2, 3):**
+   - Anchored 3px x 26px metallic divider notches with a 1px drop outline directly on the threshold percentages.
+   - The notches protrude 1px past the container border, acting as arcade bezel clasps.
+4. **Mirrored Layout for Player 2:**
+   - Player 1 fills Left-to-Right (`Image.OriginHorizontal.Left`).
+   - Player 2 fills Right-to-Left (`Image.OriginHorizontal.Right`), with Red anchored at $[1 - t_1, 1]$, Green at $[1 - t_2, 1 - t_1]$, Blue at $[1 - t_3, 1 - t_2]$, and Yellow at $[0, 1 - t_3]$.
+5. **Runtime Auto-Assembly & SceneSetupTool Baking:**
+   - `HUDController.EnsureKiMeterHierarchyBuilt()` automatically detects, constructs, and calibrates the hierarchy at runtime if missing.
+   - `SceneSetupTool.cs` bakes the hierarchy into `HUD_Canvas.prefab`.
+
+#### Verification:
+- Both `HUDController.cs` and `SceneSetupTool.cs` compiled with zero syntax or balance errors.
+- Verified dynamic threshold calibration: Mark 2 anchors at $45\%$ for Goku and $30\%$ for Saitama, while Mark 1 is $10\%$ and Mark 3 is $90\%$ for both.
+- Verified smooth sub-interval clamping formulas for all 4 segments across both fighters.
+
+---
+
+### Bug 42: Duplicate Local Variable Declaration `targetFc` Scope Collision in `HitboxController.cs` (CS0128)
+
+- **Date:** October 28, 2026
+- **Severity:** High (Assembly Build Blocker)
+- **Component:** `Assets/Scripts/Combat/HitboxController.cs`
+
+#### Symptom:
+Unity Editor failed compilation of `Assembly-CSharp.csproj` with:
+`Assets\Scripts\Combat\HitboxController.cs(333,39): error CS0128: A local variable or function named 'targetFc' is already defined in this scope`
+
+#### Root Cause:
+Inside `HitboxController.ResolveHit(HealthSystem targetHealth, Transform target)`:
+- At line 241, `targetFc` was declared at method scope to check invulnerability:
+  `Fighter.FighterController targetFc = target.GetComponent<Fighter.FighterController>();`
+- At line 333 (under step 8 "Apply Hitstun & Hurt Reaction"), `targetFc` was re-declared with the type prefix:
+  `Fighter.FighterController targetFc = target.GetComponent<Fighter.FighterController>();`
+- In C#, declaring two local variables with identical identifiers in the same lexical block violates CS0128.
+
+#### Resolution:
+Removed the redundant second type declaration at line 333, reusing the already-cached `targetFc` variable from line 241:
+```csharp
+// 8. Apply Hitstun & Hurt Reaction
+if (targetFc != null)
+{
+    float stun = damage >= 7 ? 0.38f : 0.22f;
+    targetFc.ApplyHit(damage, stun);
+}
+```
+
+#### Verification:
+Ran `python scratch/verify_compilation.py`: Both `Assembly-CSharp.csproj` and `Assembly-CSharp-Editor.csproj` compiled with **ZERO (0) ERRORS**.
+
+
+---
+
+### Bug 43: Asynchronous Socket Reception Thread Safety Collision & C# Lexical Region Directives (CS1038)
+
+- **Date:** October 28, 2026
+- **Severity:** High (LAN Architecture Integrity & Build Pipeline)
+- **Component:** `Assets/Scripts/Network/LanNetworkManager.cs`, `Assets/Scripts/UI/CharacterSelectController.cs`, `scratch/verify_compilation.py`
+
+#### Symptom:
+1. When developing the LAN multiplayer socket listener, incoming network packets received on the OS background thread (`ReceiveThread`) risked throwing `InvalidOperationException` when attempting to interact with Unity components or load scenes directly.
+2. During assembly verification, the Roslyn compiler rejected `CharacterSelectController.cs` with `error CS1038: #endregion directive expected`.
+3. In the verification script `scratch/verify_compilation.py`, newly added `.cs` source files were initially omitted from the static `.csproj` XML until automated disk scanning and argument path quoting were introduced.
+
+#### Root Causes:
+1. **Unity Engine Thread Affinity:**
+   In Unity, the GameObject lifecycle, Transform hierarchy, physics engine, and UI canvases are strictly bound to the main thread. Asynchronous TCP sockets operate on background worker threads allocated by the OS thread pool. Invoking Unity methods directly from a background socket callback violates Unity's thread affinity model.
+2. **Missing Region Closure in C# Directives:**
+   During the insertion of lifecycle network listener hooks (`OnEnable()` and `OnDisable()`), a `#region Unity Lifecycle Events` block was introduced without an immediate closing `#endregion` before `#region Unity Callbacks`. Furthermore, an inner `#region LAN Network Callbacks` was nested inside `#region Input Handling` without closing the outer scope, violating C# preprocessor lexical rules.
+3. **Response File Space Delimiting in Roslyn CSC:**
+   When invoking the C# compiler (`csc.dll`) via an `@args.rsp` response file, command-line arguments separated by whitespace are parsed as distinct positional tokens. Paths containing spaces (e.g. `C:\Program Files\Unity...`) were split into `/r:C:\Program` and `Files\Unity...`, causing the compiler to misinterpret reference flags as missing source files.
+
+#### Resolution:
+1. **Thread-Safe Main Thread Action Queue (`ConcurrentQueue<Action>`):**
+   - In `LanNetworkManager.cs`, added a thread-safe `ConcurrentQueue<Action> mainThreadActions`.
+   - When the background reading thread decodes a packet (`FighterInput`, `MatchSnapshot`, `CharSelectSync`), it enqueues an action lambda:
+     ```csharp
+     mainThreadActions.Enqueue(() => OnRemoteInputReceived?.Invoke(inputPacket));
+     ```
+   - In `Update()`, the main thread drains the queue safely every frame:
+     ```csharp
+     while (mainThreadActions.TryDequeue(out Action action))
+     {
+         action?.Invoke();
+     }
+     ```
+2. **Normalized C# Region Scope in `CharacterSelectController.cs`:**
+   - Corrected all `#region` blocks, ensuring every `#region` is paired with an exact `#endregion` before declaring sibling sections.
+3. **Quoted Response File Arguments in `verify_compilation.py`:**
+   - Wrapped output paths, reference DLLs, and source file paths in explicit double quotes (`f'/r:"{r}"'` and `f'"{s}"'`).
+   - Added automatic disk walk discovery across `Assets/` to incorporate newly added scripts into the compilation test.
+
+#### Verification:
+- Ran `python scratch/verify_compilation.py`: Both `Assembly-CSharp.csproj` (41 source files) and `Assembly-CSharp-Editor.csproj` (4 source files) compiled cleanly with **ZERO (0) ERRORS**.

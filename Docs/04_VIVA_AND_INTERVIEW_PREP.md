@@ -1167,3 +1167,184 @@ When demonstrating the game to evaluators:
    - The Victory screen's micro-header, epithet text, score badge, and buttons were increased to $16.0\text{pt}\text{--}22.0\text{pt}$, ensuring instant legibility upon match conclusion.
 4. **Comparison to Godot:**
    - In **Godot Engine**, input actions are configured in the Project Settings Input Map (`ui_cancel` mapped to `KEY_ESCAPE`). Removing `KEY_P` from `ui_cancel` achieves the same isolation without hardcoding keys in scripts. For UI text, Godot developers configure `theme_override_font_sizes` or use a Theme resource to ensure uniform typography scale across scenes.
+
+
+---
+
+## Question 46: How did you implement mirror match support, why did Player 2's alternate tint initially disappear on Frame 1, and how do you ensure visual consistency across UI and arena sprites?
+
+### Short Answer (30-second elevator pitch):
+"In competitive fighting games, mirror matches (same character on both sides) require unambiguous visual differentiation. We discovered a classic architectural pitfall: [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs) correctly tinted Player 2's `SpriteRenderer` at spawn, but our combat loop's Red Zone exhaustion handler ran `else if (spriteRenderer.color != Color.white) spriteRenderer.color = Color.white;` every frame in `Update()`, wiping out the custom tint on Frame 1! We resolved this by introducing a persistent `baseTintColor` state on [`FighterController`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs), allowing visual effect pulses to blend relative to the player's own palette. We then established a single canonical source of truth (`GetAlternatePaletteColor`) that synchronizes the high-contrast palette across the Character Select cards, the cinematic Versus screen, the in-combat arena sprite, and the top-bar HUD portrait card."
+
+### Detailed Technical Explanation:
+1. **The Frame-1 `Update()` Wipeout Bug:**
+   - When introducing visual indicators (like Red Zone exhaustion or invulnerability flashes), scripts often fall into the trap of assuming a character's resting color is always `Color.white`.
+   - In `HandleRedZoneVisuals()`, whenever the fighter was not exhausted, it forced `spriteRenderer.color = Color.white`.
+   - On scene launch, within 16 milliseconds of spawning, Player 2's alternate tint was completely erased.
+2. **The `baseTintColor` State Pattern:**
+   - We decoupled resting palette state from dynamic visual effects by storing `baseTintColor` on `FighterController`.
+   - When Red Zone exhaustion occurs, `Mathf.PingPong` lerps between `baseTintColor` and danger red. When normal combat resumes, it restores `baseTintColor`.
+   - Round resets in `ResetForNewRound()` explicitly re-apply `baseTintColor`, maintaining palette persistence across multi-round matches.
+3. **High-Contrast Tournament Palettes:**
+   - **Goku P2 (`Cool Ice / Cyan Gi`):** `new Color(0.45f, 0.75f, 1.0f, 1.0f)` — Multiplies across his orange dogi to produce an electrifying cobalt/cyan alternate gi.
+   - **Saitama P2 (`Fiery Sunset / Crimson Suit`):** `new Color(1.0f, 0.50f, 0.45f, 1.0f)` — Multiplies across his yellow jumpsuit to produce a blazing coral/crimson combat suit.
+4. **Cross-System Visual Pipeline:**
+   - **Character Select:** `card.p2IndicatorText` updates to `[ P2: ALT PALETTE ]` (or `[ CPU: ALT PALETTE ]`).
+   - **Versus Screen:** `versusP2AvatarImage` is multiplied by `GetAlternatePaletteColor(p2Id)` and displays `[ALT]` in the title.
+   - **HUD:** `HUDController.UpdateAvatarCard()` checks `isMirrorP2` and tints `p2AvatarCard` accordingly.
+5. **Comparison to Godot:**
+   - In **Godot Engine**, `CanvasItem.modulate` or `self_modulate` controls node tinting. Overwriting `modulate = Color.WHITE` inside `_process()` causes the identical wipeout bug.
+   - Godot developers avoid this by storing `var base_modulate: Color = Color.WHITE` on the `CharacterBody2D` script.
+   - For alternate character colors, Godot projects often feed a palette index to a custom shader material with a palette texture lookup (`tex_color = texture(palette_lut, vec2(screen_uv.x, palette_idx))`). In Unity, our single-pass `SpriteRenderer.color` multiplication provides clean, zero-overhead alternate palettes for 2D sprites.
+
+
+---
+
+## Question 46: How do you design an asymmetric resource economy and anti-spam cooldown system in a fighting game, and how does Super Saiyan stamina drain compare between Unity and Godot?
+
+### Short Answer (30-second elevator pitch):
+"In competitive fighting games, unmitigated resource abundance leads to repetitive special move spam. We solved this with two balancing pillars: **Asymmetric Ki Generation** and a **15-second Anti-Spam Cooldown** on all Skills and Ultimates. In accordance with lore, Son Goku gathers Ki rapidly (8.0 Ki/s meditating, +4/+7 Ki per attack) while Saitama has a slower physical rate (5.0 Ki/s meditating, +2.5/+5 Ki per attack). Furthermore, Goku's Super Saiyan is an active toggle that continuously drains 2.5 Ki/s rather than using a static timer; if Ki hits 0, he exhausts his stamina and automatically reverts to Base form, triggering the 15-second cooldown. To protect long theatrical ultimate cast times, both fighters receive an Invulnerability Super Armor buff during the final 1.0 second of casting."
+
+### Detailed Technical Explanation:
+1. **Asymmetric Economy Formula:**
+   - In 2D competitive titles (*Dragon Ball FighterZ*, *Guilty Gear Strive*), different characters possess distinct meter accumulation rates.
+   - Goku represents an energy specialist: higher Ki returns on hits ($+4\text{ Ki}$ on light, $+7\text{ Ki}$ on heavy) and meditation ($8.0\text{ Ki/s}$).
+   - Saitama represents pure physical mass: lower Ki generation ($+2.5\text{ Ki}$ light, $+5\text{ Ki}$ heavy, $5.0\text{ Ki/s}$ meditation), but higher base punch damage ($4\text{ vs }3$, $9\text{ vs }7$).
+2. **Continuous Resource Drain vs Frame Independence:**
+   - In `FighterController.HandleSuperSaiyanTimer()`, the energy drain is computed using `Time.deltaTime`:
+     `energySystem.SpendKi(2.5f * Time.deltaTime);`
+   - This ensures the exact same $2.5\text{ Ki/s}$ consumption regardless of whether the game runs at $60\text{ FPS}$ or $144\text{ FPS}$.
+3. **Climax Invulnerability:**
+   - Because ultimate startups are theatrical ($2.40\text{s}$ for Saitama, $2.15\text{s}$ for Goku), opponents could easily tap the fighter on the last frame to nullify the move.
+   - Exposing `IsInvulnerable => CurrentState == FighterState.Ultimate && attackStartupTimer <= 1.0f` allows `HitboxController` and `HealthSystem` to absorb incoming hits without taking damage or flinching into `HitStun`.
+4. **Comparison to Godot:**
+   - In **Godot Engine**, a continuous drain is implemented in `_process(delta)`:
+     ```gdscript
+     func _process(delta: float) -> void:
+         if is_super_saiyan:
+             energy_system.spend_ki(2.5 * delta)
+             if energy_system.current_ki <= 0.0:
+                 revert_super_saiyan()
+     ```
+   - For cooldowns, Godot developers typically attach a `Timer` node or run a decrementing variable in `_physics_process`. Invulnerability is handled by toggling `collision_layer`/`collision_mask` on the `Area2D` hurtbox.
+
+---
+
+## Question 47: Why was voice audio continuing to play after character animation was cancelled by hitstun, and how does the audio interruption architecture fix it?
+
+### Short Answer (30-second elevator pitch):
+"The dangling voice bug occurred because character vocal lines were being played using `AudioSource.PlayOneShot()`. In Unity, `PlayOneShot` allocates a detached, fire-and-forget audio voice in the sound engine; calling `AudioSource.Stop()` on the component does not stop sounds played via `PlayOneShot`. We solved this by creating a dedicated monophonic `voiceSource` channel where dialogue is assigned directly via `voiceSource.clip = clip; voiceSource.Play();`. In `FighterController.TransitionTo()`, whenever a fighter is hit into `HitStun`, `KnockBack`, or `Knockout`, we invoke `fighterAudio.StopVoice()`, immediately cutting off the vocal scream the exact frame the character flinches!"
+
+### Detailed Technical Explanation:
+1. **The Fire-and-Forget Pitfall (`PlayOneShot`):**
+   - `PlayOneShot` is designed for polyphonic sound effects (such as multiple rapid punches or footstep swishes) where each playback overlaps without cutting off previous instances.
+   - When applied to long vocal cries ($2.5\text{s}\text{--}3.8\text{s}$ like *"Consecutive Normal Punches!"* or *"Hissatsu... Maji Series..."*), interrupting the character's physical state in the game engine left the sound engine playing the detached voice.
+2. **Dedicated Channel Architecture:**
+   - We partitioned audio into three explicit sources on `FighterAudio`:
+     1. `sfxSource`: Polyphonic one-shot hits, swishes, and impacts (`PlayOneShot`).
+     2. `auraSource`: Looping ambient Ki charging hum (`loop = true`, `Play()`, `Stop()`).
+     3. `voiceSource`: Monophonic dialogue channel (`clip = ...`, `Play()`, `Stop()`).
+3. **State-Driven Interruption Hook:**
+   - Inside `FighterController.TransitionTo()`:
+     ```csharp
+     if (newState == FighterState.HitStun || newState == FighterState.KnockBack || newState == FighterState.Knockout)
+     {
+         fighterAudio?.StopVoice();
+     }
+     ```
+   - When taking damage, `PlayVoiceHurt()` is invoked, immediately stopping any active battle cry and substituting the authentic pain reaction grunt.
+4. **Comparison to Godot:**
+   - In **Godot Engine**, this corresponds to assigning dialogue to a dedicated `AudioStreamPlayer2D` node (e.g., `VoicePlayer`). Calling `$VoicePlayer.play()` sets the stream, and calling `$VoicePlayer.stop()` cancels it instantly when receiving the `hit_stun_entered` signal.
+
+---
+
+## Question 48: How does the 4-tier segmented Ki meter communicate tactical risk vs reward without cluttering the screen with numbers, and how did you implement it in Unity UI?
+
+### Short Answer (30-second elevator pitch):
+"Instead of forcing players to mentally subtract Ki numbers during high-speed 60 FPS combat, our HUD features an **Option A 4-Tier Segmented Gauge** with 3 physical metallic divider notches. The gauge is partitioned into four tactical color zones: **Red** (Danger Exhaustion Zone, 0–10 Ki), **Green** (Safe Neutral Buffer), **Blue** (Skill-Safe Zone: spending Ki on a Skill leaves you above Red Zone), and **Yellow** (Ultimate Surplus: firing an Ultimate leaves you above Red Zone). The boundaries are dynamically calibrated based on the chosen character (Mark 2 sits at 45% for Goku vs 30% for Saitama). Player 1 fills left-to-right, while Player 2 is mirrored right-to-left. A pure grayscale base texture (`ki_bar_grand_fill_white.png`) ensures 100% true color saturation without muddying tint colors."
+
+### Detailed Technical Explanation:
+1. **The Human-Computer Interaction (HCI) Problem in Fighting Games:**
+   - At 60 FPS, players have less than 200 ms to confirm whether they should cancel a normal hit into a special move.
+   - If energy is displayed purely as a percentage or single-color bar, players suffer from **Threshold Blindness**: they know they have energy, but they cannot tell at a glance if executing a move will plunge them into the self-stun Red Zone exhaustion state ($Ki \le 10$).
+2. **The 4-Tier Tactical Architecture:**
+   - **Mark 1 (10 Ki / 10%):** The Red Zone danger threshold. $0 \to 10\text{ Ki}$ fills in danger scarlet (`#FF3838`).
+   - **Mark 2 ($\text{RedZone} + \text{SkillCost}$):** The Safe Skill threshold. For Goku ($10 + 35 = 45\text{ Ki}$), for Saitama ($10 + 20 = 30\text{ Ki}$). Reaching Mark 2 visually guarantees that activating a Skill will **never** drop the fighter into the Red Zone!
+   - **Mark 3 ($\text{RedZone} + \text{UltimateCost}$):** The Safe Ultimate threshold ($10 + 80 = 90\text{ Ki}$). Guarantees that unleashing an Ultimate leaves the fighter safely above the Red Zone.
+   - **Surplus Zone ($90\% \to 100\%$):** Fills in solar gold (`#FFE02E`) as an overcharge buffer.
+3. **Unity UI Sub-Interval Math & Anchoring:**
+   - Instead of one bar, `SegmentContainer` holds 4 sibling `Image` GameObjects with `Image.Type.Filled` and `Image.FillMethod.Horizontal`.
+   - Each segment's `RectTransform` spans its assigned threshold interval:
+     $$\text{Fill}_{\text{zone}} = \text{clamp}_{0}^{1}\left(\frac{\text{CurrentKi} - T_{\text{start}}}{T_{\text{end}} - T_{\text{start}}}\right)$$
+   - Player 2 uses `fillOrigin = (int)Image.OriginHorizontal.Right` and inverted coordinate anchors ($[1 - t_{\text{end}}, 1 - t_{\text{start}}]$) to produce an arcade-authentic mirrored layout.
+4. **The Specular Grayscale Base Texture:**
+   - In Unity UI, `Image.color` operates by multiplicative blending ($C_{\text{final}} = C_{\text{texture}} \times C_{\text{tint}}$).
+   - If the texture already has a baked cyan tint, multiplying by red (`(1, 0, 0)`) results in black (`(0, 0, 0)`).
+   - We authored `ki_bar_grand_fill_white.png` preserving the vertical specular gradient (rows 0–8: highlight bevel; rows 9–17: lower shadow) in pure grayscale, enabling vivid red, green, blue, and yellow tints with identical specular pop.
+5. **Comparison to Godot Engine:**
+   - In **Godot Engine**, a progress bar is represented by the `TextureProgressBar` node with `fill_mode = FILL_LEFT_TO_RIGHT` or `FILL_RIGHT_TO_LEFT`.
+   - To achieve multi-color segmented bars in Godot, developers either layer multiple `TextureProgressBar` nodes in a parent `Control` with custom min/max ranges, or use a custom `CanvasItem` shader with `step()` / `smoothstep()` threshold logic on `UV.x`.
+   - Divider notches in Godot are implemented as child `ColorRect` or `Line2D` nodes anchored at the threshold percentage via Godot's anchor layout system (`anchor_left = pct, anchor_right = pct`).
+
+---
+
+## Question 49: How does C# lexical scope differ from dynamically typed languages like Python or GDScript when declaring local variables, and how did CS0128 affect HitboxController?
+
+### Short Answer (30-second elevator pitch):
+"In C#, a local variable cannot be declared twice within the same method block, even if the second declaration occurs 90 lines later. When adding hitstun reaction logic to `HitboxController.ResolveHit()`, `targetFc` was re-declared as `FighterController targetFc = ...` when it was already declared at line 241 for invulnerability checks. The Roslyn compiler immediately rejected the build with error `CS0128: A local variable or function named 'targetFc' is already defined in this scope`. We resolved this by removing the redundant type prefix, reusing the existing cached reference which also saved a redundant `GetComponent<T>()` call."
+
+### Detailed Technical Explanation:
+1. **Lexical Scope in C# vs GDScript:**
+   - In **C#**, local variables declared within an outer method block have a scope that extends throughout the entire enclosing block `{ ... }`. Introducing another variable with the same name triggers compiler error **CS0128**, regardless of nesting or distance.
+   - In **GDScript** or Python, assigning `var target_fc = ...` a second time simply overwrites the variable in local scope without throwing a compilation error.
+2. **Performance Implication of Caching:**
+   - In Unity, `GetComponent<T>()` traverses the GameObject's component list. Calling `target.GetComponent<FighterController>()` at the top of `ResolveHit` and reusing `targetFc` at the bottom avoids redundant memory traversal and unneeded native-to-managed bridge calls.
+3. **Automated Verification:**
+   - We maintain a Roslyn compilation verification pipeline in `scratch/verify_compilation.py` that invokes Unity's Roslyn compiler against all `.csproj` assembly definitions, guaranteeing 100% clean builds across both runtime and editor assemblies before any feature is finalized.
+
+
+---
+
+## Question 50: Why did you choose a Host-Authoritative architecture over Peer-to-Peer Lockstep for LAN play, and how did your decoupled `IFighterInput` interface make networking effortless?
+
+### Short Answer (30-second elevator pitch):
+*"In competitive fighting games, Peer-to-Peer lockstep simulations frequently suffer from physics desyncs due to sub-pixel floating-point rounding differences across machines. Because Mystic Combat runs over local LAN with sub-3ms latency, we chose a Host-Authoritative State Mirroring architecture. The Host machine is the sole authority for physics, hitboxes, and timer, while the Client streams button inputs and mirrors the display. Crucially, because our fighters rely on the `IFighterInput` interface rather than reading the keyboard directly, attaching network multiplayer required zero modifications to combat code: the Host simply attaches a `NetworkFighterInput` component to Fighter 2!"*
+
+### Detailed Technical Explanation:
+1. **The Trap of Peer-to-Peer Lockstep in Unity 2D Physics:**
+   - In 2D fighting games, physics collisions (`Box2D`) involve micro-calculations for knockback impulses and friction deceleration.
+   - On separate CPU architectures or frame rates, floating-point rounding errors accumulate over a Best-of-3 round match. In P2P lockstep, this leads to fatal desyncs where a hit connects on Screen A but whiffs on Screen B.
+   - Under **Host-Authoritative Mirroring**, the Host executes the ground truth. The Client receives 60Hz snapshots containing coordinates, velocities, health, and state, guaranteeing that both players experience identical gameplay without desynchronization.
+2. **Architectural Decoupling via `IFighterInput`:**
+   - In standard rookie Unity code, scripts call `Input.GetKey()` directly inside `FighterController.Update()`.
+   - In Mystic Combat, `FighterController` delegates all input queries to `IFighterInput`:
+     - Local Match: `PlayerInputHandler` (Hardware polling)
+     - Single Player: `CpuFighterBrain` (Hierarchical FSM)
+     - LAN Match: `NetworkFighterInput` (Decoded packet stream)
+   - This adheres directly to the **Open/Closed Principle (SOLID)**: our combat controller was completely closed to modification yet open to network extension.
+3. **Kinematic Client Optimization:**
+   - To prevent the Client's local 2D physics engine from fighting the Host's position updates, `NetworkMatchSynchronizer` automatically switches both Client fighters to `RigidbodyType2D.Kinematic` and disables local trigger colliders, reducing Client CPU overhead and eliminating jitter.
+
+---
+
+## Question 51: How does your custom binary framing protocol prevent packet tearing, what is Nagle's algorithm (`NoDelay`), and how do you achieve 60Hz multiplayer synchronization with less than 3 KB/s bandwidth?
+
+### Short Answer (30-second elevator pitch):
+*"Standard TCP sockets can concatenate or fragment packets, causing packet tearing if not framed properly. We implemented a 3-byte binary header `[1B Type][2B Length][Payload]` using `BinaryWriter` so the receiver always reconstructs complete discrete messages. By setting `tcpClient.NoDelay = true`, we disable Nagle's buffering algorithm to eliminate 40ms transmission delays. Furthermore, by bitmasking 7 fighter actions into a single byte, our input packets are only 9 bytes and match snapshots are 38 bytes, requiring only 2.4 KB/s total bandwidth at 60Hz!"*
+
+### Detailed Technical Explanation:
+1. **Packet Framing & Preventing Stream Fragmentation:**
+   - TCP is a streaming protocol, not a message protocol. If the Host sends three consecutive packets quickly, TCP may merge them into a single blob or split one packet across two socket reads.
+   - To guarantee complete packet extraction, `LanNetworkManager.cs` prepends every payload with a 3-byte header:
+     $$\text{Header} = \underbrace{\text{Opcode}}_{1\text{ byte}} + \underbrace{\text{Payload Length}}_{2\text{ bytes (short)}}$$
+   - The background reader thread reads exactly 1 byte for type, 2 bytes for length, and then calls `reader.ReadBytes(length)` to extract the exact unfragmented payload.
+2. **The Critical Role of `NoDelay = true` (Disabling Nagle's Algorithm):**
+   - The TCP protocol defaults to Nagle's algorithm, which delays small packets for up to $40\text{ms}$ in hopes of coalescing them with future traffic.
+   - In a 60 FPS fighting game, $40\text{ms}$ represents 2.4 frames of artificial input lag.
+   - By setting `activeClient.NoDelay = true`, packets are dispatched onto the network wire immediately upon flushing, achieving sub-2ms round-trip times on local Wi-Fi.
+3. **Data Compression Mathematics:**
+   - Client Input Packet: `Vector2 MoveInput` ($2 \times 4\text{B} = 8\text{B}$) + 1 Button Bitmask ($1\text{B}$) = **$9\text{ Bytes}$**.
+     $$\text{Client Upload Bandwidth} = 9\text{ B} \times 60\text{ packets/s} = 540\text{ Bytes/s} \approx 0.54\text{ KB/s}$$
+   - Host Snapshot Packet: Round ($1\text{B}$) + Timer ($4\text{B}$) + MatchState ($1\text{B}$) + Wins ($2\text{B}$) + 2 Fighters ($2 \times 15\text{B} = 30\text{B}$) = **$38\text{ Bytes}$**.
+     $$\text{Host Download Bandwidth} = 38\text{ B} \times 60\text{ packets/s} = 2,280\text{ Bytes/s} \approx 2.28\text{ KB/s}$$
+   - Total match bandwidth is under **$3\text{ KB/s}$**, ensuring zero packet congestion even on crowded university or conference Wi-Fi networks!

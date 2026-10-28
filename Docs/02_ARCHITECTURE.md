@@ -1407,3 +1407,258 @@ sequenceDiagram
    The physical sprite frames (`ultimate_0` through `ultimate_13`) represent an uninterrupted martial arts sequence: crouch $\rightarrow$ deep coil $\rightarrow$ braced transition (frame 6) $\rightarrow$ strike release $\rightarrow$ recovery.
 4. **Hitbox Range Discipline:**
    The damaging collision shape is kept strictly to `new Vector2(1.4f, 1.0f)` offset at `(1.25f, 0.95f)`. This guarantees that opponents outside close melee range remain completely safe, preserving competitive balance.
+
+
+---
+
+## 48. Mirror Match Architecture: Persistent Base Tinting, Cross-System Visual Pipeline & Single Source of Truth
+
+### System Architecture Diagram
+```mermaid
+flowchart TD
+    subgraph Single Source of Truth
+        SSOT["FighterController.GetAlternatePaletteColor(characterId)"]
+        GOKU["Goku P2: Cool Cyan/Ice (0.45, 0.75, 1.0, 1.0)"]
+        SAITAMA["Saitama P2: Fiery Sunset/Crimson (1.0, 0.50, 0.45, 1.0)"]
+        SSOT --> GOKU
+        SSOT --> SAITAMA
+    end
+
+    subgraph Character Selection Layer
+        CS[CharacterSelectController] -->|p1Id == p2Id| CS_MIRROR{Is Mirror Match?}
+        CS_MIRROR -->|true| CS_BADGE["Update Card Badge: [ P2: ALT PALETTE ]"]
+        CS_MIRROR -->|true| CS_VS["Versus Screen: Tint versusP2AvatarImage<br/>Append [ALT] to P2 Name"]
+    end
+
+    subgraph Match Bootstrap Layer
+        BOOT[PrototypeBootstrap.DeployFighters] -->|p1Char == p2Char| B_MIRROR{Is Mirror Match?}
+        B_MIRROR -->|true| FC2["FighterController.SetBaseTintColor(altColor)"]
+        FC2 --> STORE["Store in baseTintColor field"]
+        B_MIRROR -->|true| HUD["HUDController.SyncFighterAvatarsAndNames"]
+        HUD --> HUD_TINT["UpdateAvatarCard: Tint p2AvatarCard with altColor"]
+    end
+
+    subgraph Runtime Combat Render Loop
+        STORE --> UPD["FighterController.Update()"]
+        UPD --> RZ["FighterController.HandleRedZoneVisuals()"]
+        RZ -->|IsInRedZone = true| PULSE["Lerp(baseTintColor, DangerRed, pulse)"]
+        RZ -->|IsInRedZone = false| RESTORE["spriteRenderer.color = baseTintColor<br/>(Guarantees Zero Wipeout!)"]
+        MM_RESET["MatchManager.ResetRound()"] --> FC_RESET["FighterController.ResetForNewRound()"]
+        FC_RESET --> RESTORE
+    end
+
+    SSOT -.-> CS_VS
+    SSOT -.-> FC2
+    SSOT -.-> HUD_TINT
+```
+
+### Architectural Principles:
+1. **Single Source of Truth (`GetAlternatePaletteColor`):**
+   Alternate palette definitions are defined centrally in `FighterController.GetAlternatePaletteColor()`. Both UI layers (`CharacterSelectController`, `HUDController`) and in-world systems (`PrototypeBootstrap`, `FighterController`) pull from this canonical source, preventing color divergence.
+2. **Persistent Baseline State (`baseTintColor`):**
+   `FighterController` encapsulates `baseTintColor` as a first-class state variable. Dynamic runtime effects—such as Red Zone exhaustion pulsing or Super Saiyan aura transitions—throb relative to `baseTintColor` rather than hardcoding `Color.white`.
+3. **Round-Persistent Integrity:**
+   During round resets (`ResetForNewRound()`), `spriteRenderer.color` is restored directly to `baseTintColor`, ensuring Player 2 retains their alternate tournament identity across all rounds without re-triggering bootstrap routines.
+4. **End-to-End Visual Synchronization:**
+   The alternate palette is reflected consistently across:
+   - The Character Select hover/selection cards.
+   - The cinematic Versus screen fly-in.
+   - The in-world fighting arena character sprite.
+   - The in-combat top-bar HUD avatar bust.
+
+
+---
+
+# 26. Combat Resource Economy, Transformation State Machine & Interruption Pipeline
+
+### Architecture Diagram: Anti-Spam, Active Toggle Drain & Interruption Pipeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Input as PlayerInputHandler
+    participant FC as FighterController
+    participant ES as EnergySystem
+    participant Audio as FighterAudio (voiceSource)
+    participant Hit as HitboxController
+    participant Health as HealthSystem
+
+    rect rgb(30, 41, 59)
+    Note over Input,FC: 1. Goku Super Saiyan Toggle & Drain
+    Input->>FC: SkillPressed (Key Z / U)
+    FC->>FC: Check skillCooldownTimer <= 0f
+    alt Base Form (Toggle ON)
+        FC->>FC: ActivateSuperSaiyan()
+        FC->>Audio: StartKiMeditationAura() (Looping Hum)
+        loop Every Frame in Update()
+            FC->>ES: SpendKi(2.5f * Time.deltaTime)
+            opt Ki <= 0f (Exhaustion)
+                FC->>FC: RevertSuperSaiyan()
+                FC->>FC: skillCooldownTimer = 15.0f
+            end
+        end
+    else Super Saiyan Form (Toggle OFF)
+        FC->>FC: RevertSuperSaiyan()
+        FC->>Audio: StopKiMeditationAura()
+        FC->>FC: skillCooldownTimer = 15.0f
+    end
+    end
+
+    rect rgb(15, 23, 42)
+    Note over Input,FC: 2. Climax Invulnerability & Super Armor
+    Input->>FC: UltimatePressed (Spend Ki, Start Cooldown: 15s)
+    FC->>FC: attackStartupTimer = 2.40s
+    Note over FC: Countdown reaches <= 1.0s -> IsInvulnerable = true!
+    Hit->>FC: Opponent Attack Connects
+    Hit->>Health: Check targetHealth.IsInvulnerable
+    Note over Hit,Health: Invulnerability Active: Zero Damage, Zero Flinch!
+    end
+
+    rect rgb(30, 20, 20)
+    Note over Hit,Audio: 3. Interruption Voice Cancellation
+    Hit->>Health: Normal Hit Connects (Vulnerable State)
+    Health->>FC: ApplyHit()
+    FC->>FC: TransitionTo(FighterState.HitStun)
+    FC->>Audio: StopVoice() (Halts ongoing dialogue instantly!)
+    FC->>Audio: PlayVoiceHurt() (Plays hurt grunt)
+    end
+```
+
+### Architectural Principles:
+1. **Decoupled Continuous Drain vs One-Shot Costs:**
+   Instant abilities (like Saitama's Consecutive Normal Punches) draw an upfront cost ($30\text{ Ki}$). Transformation buffs (Goku's Super Saiyan) operate on a per-second drain pipeline ($2.5\text{ Ki/s}$) evaluated inside the core physics tick, cleanly handling auto-reversion upon energy exhaustion.
+2. **State-Driven Cooldown Enforcement:**
+   Cooldown timers (`skillCooldownTimer`, `ultimateCooldownTimer`) are managed independently of the character's active animation state machine. Toggling off a buff starts the cooldown immediately, preventing rapid toggle-flickering.
+3. **Dedicated Voice Channel vs SFX Channel Separation:**
+   SFX sounds (punches, swishes, hitsparks) require polyphonic overlap (`PlayOneShot`). In contrast, vocal cords are physically monophonic: a character cannot shout a battle cry and gasp in pain simultaneously. Routing dialogue to a dedicated `voiceSource` enables clean preemption and immediate cutoff on damage interruption.
+
+---
+
+## 49. Visual Tactical Feedback: The 4-Tier Segmented Ki Meter System
+
+### System Architecture
+The 4-tier segmented Ki meter replaces monolithic gauge rendering with a **multi-image sub-interval pipeline** calibrated dynamically to character energy costs.
+
+```mermaid
+graph TD
+    subgraph Character Config ["Character Definition (JSON / Controller)"]
+        RedThreshold["RedZoneThreshold = 10 Ki"]
+        SkillCost["SkillCost: 35 Ki (Goku) / 20-30 Ki (Saitama)"]
+        UltCost["UltCost: 70-80 Ki (Goku) / 100 Ki (Saitama)"]
+    end
+
+    subgraph Calibration ["HUDController.CalibrateKiThresholds()"]
+        M1["Mark 1 = 10 Ki (10%) [Danger Threshold]"]
+        M2["Mark 2 = Red + Skill (45% Goku / 30% Saitama) [Safe Skill]"]
+        M3["Mark 3 = Red + Ult (90%) [Safe Ultimate]"]
+    end
+
+    subgraph Visual Render ["SegmentContainer Hierarchy (514px x 18px)"]
+        RedSeg["KiFill_Red (Color: #FF3838)"]
+        GreenSeg["KiFill_Green (Color: #33F259)"]
+        BlueSeg["KiFill_Blue (Color: #1FC0FF)"]
+        YellowSeg["KiFill_Yellow (Color: #FFE02E)"]
+        Notch1["Mark_RedZone (3px x 26px Platinum Notch)"]
+        Notch2["Mark_SkillSafe (3px x 26px Platinum Notch)"]
+        Notch3["Mark_UltimateSafe (3px x 26px Platinum Notch)"]
+    end
+
+    CharacterConfig --> Calibration
+    Calibration --> VisualRender
+```
+
+### Mathematical Pipeline for Fill Clamping
+Given current Ki $K \in [0, K_{\max}]$ and calibrated thresholds $T_1, T_2, T_3$:
+$$f_{\text{red}} = \text{clamp}_{0}^{1}\left(\frac{K}{T_1}\right)$$
+$$f_{\text{green}} = \begin{cases} 0 & K \le T_1 \\ \text{clamp}_{0}^{1}\left(\frac{K - T_1}{T_2 - T_1}\right) & K > T_1 \end{cases}$$
+$$f_{\text{blue}} = \begin{cases} 0 & K \le T_2 \\ \text{clamp}_{0}^{1}\left(\frac{K - T_2}{T_3 - T_2}\right) & K > T_2 \end{cases}$$
+$$f_{\text{yellow}} = \begin{cases} 0 & K \le T_3 \\ \text{clamp}_{0}^{1}\left(\frac{K - T_3}{K_{\max} - T_3}\right) & K > T_3 \end{cases}$$
+
+### Dynamic Anchoring & Mirrored Coordinate Symmetry
+Each segment's `RectTransform` is anchored as follows:
+- **Player 1 (Left-to-Right):**
+  - Red: $[0, \frac{T_1}{100}]$, Green: $[\frac{T_1}{100}, \frac{T_2}{100}]$, Blue: $[\frac{T_2}{100}, \frac{T_3}{100}]$, Yellow: $[\frac{T_3}{100}, 1]$
+  - Marks: Anchored at $X = \frac{T_i}{100}$
+  - `Image.fillOrigin = Image.OriginHorizontal.Left`
+- **Player 2 (Mirrored Right-to-Left):**
+  - Red: $[1 - \frac{T_1}{100}, 1]$, Green: $[1 - \frac{T_2}{100}, 1 - \frac{T_1}{100}]$, Blue: $[1 - \frac{T_3}{100}, 1 - \frac{T_2}{100}]$, Yellow: $[0, 1 - \frac{T_3}{100}]$
+  - Marks: Anchored at $X = 1 - \frac{T_i}{100}$
+  - `Image.fillOrigin = Image.OriginHorizontal.Right`
+
+
+---
+
+## 49. LAN Multiplayer Architecture: Host-Authoritative Simulation, Decoupled Input Bridge & Zero-Allocation Packet Framing
+
+### Architectural Overview
+Multiplayer fighting games require ultra-low latency ($< 5\text{ms}$) and absolute state consistency to prevent hit detection discrepancies. Mystic Combat implements a **Host-Authoritative State Mirroring Architecture** using native C# `.NET Sockets` (`TcpListener` on Host, `TcpClient` on Client) with `NoDelay = true` for zero-buffer transmission.
+
+```mermaid
+flowchart TD
+    subgraph HostPC ["Host Machine (PC 1 - Master Authority)"]
+        H_Input["P1: PlayerInputHandler (Local Keyboard)"]
+        H_NetInput["P2: NetworkFighterInput (Buffered Stream)"]
+        H_Sim["Simulation Engine (Physics, Hitboxes, Health, MatchManager)"]
+        H_Sync["NetworkMatchSynchronizer (Host Broadcast 60Hz)"]
+        H_NetMgr["LanNetworkManager (TcpListener Port 7777)"]
+
+        H_Input --> H_Sim
+        H_NetInput --> H_Sim
+        H_Sim --> H_Sync
+        H_Sync --> H_NetMgr
+    end
+
+    subgraph ClientPC ["Client Machine (PC 2 - Input Streamer & Screen Mirror)"]
+        C_Input["P2: Local Keyboard Input Collector (WASD / Arrows)"]
+        C_Sync["NetworkMatchSynchronizer (Client Mirror)"]
+        C_NetMgr["LanNetworkManager (TcpClient)"]
+        C_Mirror["Kinematic Fighter Presentation (Sprites, State, HUD)"]
+
+        C_Input --> C_NetMgr
+        C_NetMgr --> C_Sync
+        C_Sync --> C_Mirror
+    end
+
+    H_NetMgr -- "MatchSnapshotPacket (38 Bytes @ 60Hz)" --> C_NetMgr
+    C_NetMgr -- "FighterInputPacket (9 Bytes @ 60Hz)" --> H_NetMgr
+```
+
+### Key Architectural Pillars
+
+#### 1. Decoupled Input Architecture (`IFighterInput` Bridge)
+Because `FighterController.cs` depends solely on the `IFighterInput` interface rather than reading hardware directly, the host machine swaps out the local input provider for `NetworkFighterInput`:
+```csharp
+public interface IFighterInput
+{
+    Vector2 MoveInput { get; }
+    bool JumpPressed { get; }
+    bool CrouchHeld { get; }
+    bool LightAttackPressed { get; }
+    bool HeavyAttackPressed { get; }
+    bool SkillPressed { get; }
+    bool UltimatePressed { get; }
+    bool MeditateHeld { get; }
+}
+```
+When `LanNetworkManager.OnRemoteInputReceived` fires on the Host, `NetworkFighterInput.FeedInput()` buffers the remote commands. On the next frame, `FighterController` executes the moves identically to a local player with 0 code branch penalties.
+
+#### 2. Compact Binary Packet Protocol
+To prevent garbage collection allocation and ensure minimal MTU utilization, all network traffic is framed into discrete binary packets with a 3-byte header:
+$$\text{Packet Format} = [\text{Type}: 1\text{ byte}] [\text{Payload Length}: 2\text{ bytes}] [\text{Payload}: N\text{ bytes}]$$
+
+| Packet Type | Opcode | Size | Payload Description | Frequency |
+| :--- | :---: | :---: | :--- | :--- |
+| `FighterInput` | `0x04` | $9\text{ B}$ | `Vector2 MoveInput` ($8\text{B}$) + $1\text{B}$ button bitmask (Jump, Crouch, Light, Heavy, Skill, Ult, Meditate). | $60\text{Hz}$ (Client $\rightarrow$ Host) |
+| `MatchSnapshot` | `0x05` | $38\text{ B}$ | Round ($1\text{B}$), Timer ($4\text{B}$), MatchState ($1\text{B}$), Wins ($2\text{B}$), P1 State ($15\text{B}$), P2 State ($15\text{B}$). | $60\text{Hz}$ (Host $\rightarrow$ Client) |
+| `CharSelectSync`| `0x02` | $\sim 12\text{ B}$| PlayerIndex ($1\text{B}$), CharacterId string, LockedIn bool. | On Selection Change |
+| `MatchStart` | `0x03` | $\sim 16\text{ B}$| P1 & P2 finalized CharacterId strings. | On Match Launch |
+
+#### 3. Kinematic Client Mirroring (Zero Physics Drift)
+In fighting games, dual physics simulations will inevitably drift due to sub-pixel floating-point rounding. On the Client machine, `NetworkMatchSynchronizer` automatically sets both fighters' `Rigidbody2D` components to `isKinematic = true` and deactivates local `HitboxController` scripts:
+- **Authority:** All hit registration, knockback, damage scaling, and Red Zone exhaustion occur exclusively on the Host.
+- **Client Presentation:** The Client receives authoritative positions $(X, Y)$, linear velocities $(V_x, V_y)$, health, Ki, facing flips, and active `FighterState` values, ensuring flawless visual mirroring with zero desyncs.
+
+#### 4. Thread-Safe Unity Dispatch (`ConcurrentQueue<Action>`)
+Network streaming threads cannot call Unity API methods directly without triggering `InvalidOperationException`. `LanNetworkManager` utilizes a thread-safe `ConcurrentQueue<Action>`:
+1. Incoming socket thread decodes binary packets and enqueues lambda dispatchers.
+2. In `LanNetworkManager.Update()`, the main thread drains the queue and fires C# events safely within Unity's execution cycle.

@@ -51,6 +51,14 @@ namespace MysticCombat.Fighter
 
 
 
+        [Header("Skill & Ultimate Cooldowns")]
+        [Tooltip("Cooldown duration for special skill attacks (seconds).")]
+        [SerializeField] private float skillCooldownDuration = 15f;
+        [Tooltip("Cooldown duration for ultimate attacks (seconds).")]
+        [SerializeField] private float ultimateCooldownDuration = 15f;
+        private float skillCooldownTimer;
+        private float ultimateCooldownTimer;
+
         [Header("Super Saiyan Transformation")]
 
         [Tooltip("Whether this fighter is currently in Super Saiyan form.")]
@@ -84,6 +92,7 @@ namespace MysticCombat.Fighter
         private float flurryHitTimer;
         private int flurryHitsRemaining;
         private bool hasHitTargetThisSwing;
+        [SerializeField] private Color baseTintColor = Color.white;
 
         #endregion
 
@@ -102,6 +111,64 @@ namespace MysticCombat.Fighter
         public float AttackStartupTimer => attackStartupTimer;
         public float AttackActiveTimer => attackActiveTimer;
         public bool HasHitTargetThisSwing => hasHitTargetThisSwing;
+        public Color BaseTintColor => baseTintColor;
+
+        public float SkillCooldownTimer => skillCooldownTimer;
+        public float UltimateCooldownTimer => ultimateCooldownTimer;
+        public float SkillCooldownDuration => skillCooldownDuration;
+        public float UltimateCooldownDuration => ultimateCooldownDuration;
+
+        /// <summary>
+        /// Whether the fighter is currently invulnerable (e.g. final 1.0s of ultimate casting and active release).
+        /// </summary>
+        public bool IsInvulnerable => CurrentState == FighterState.Ultimate && attackStartupTimer <= 1.0f;
+
+        /// <summary>
+        /// Configures the base palette tint (e.g. Player 2 mirror match alternate color).
+        /// </summary>
+        public void SetBaseTintColor(Color tint)
+        {
+            baseTintColor = tint;
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.color = tint;
+            }
+        }
+
+        /// <summary>
+        /// Forces fighter state from an authoritative network snapshot (used by Client).
+        /// </summary>
+        public void ForceNetworkState(FighterState state)
+        {
+            CurrentState = state;
+        }
+
+        /// <summary>
+        /// Sets horizontal facing flip directly from network state.
+        /// </summary>
+        public void SetFacing(bool flipX)
+        {
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.flipX = flipX;
+            }
+        }
+
+        /// <summary>
+        /// Canonical alternate palette color for mirror matches.
+        /// </summary>
+        public static Color GetAlternatePaletteColor(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId)) return new Color(0.45f, 0.75f, 1.0f, 1.0f);
+            if (characterId.ToLower().Contains("goku"))
+            {
+                return new Color(0.45f, 0.75f, 1.0f, 1.0f); // Cool Ice/Cyan Alternate Gi
+            }
+            else
+            {
+                return new Color(1.0f, 0.50f, 0.45f, 1.0f); // Blazing Coral/Crimson Alternate Suit
+            }
+        }
 
         #endregion
 
@@ -168,15 +235,19 @@ namespace MysticCombat.Fighter
 
         private void Start()
         {
-            // Give fighters 25 initial Ki so players can immediately test special skills!
-            if (energySystem != null && energySystem.CurrentKi < 25f)
+            // Initialize asymmetric character meditation rates if at default
+            bool isGokuChar = gameObject.name.ToLower().Contains("goku");
+            if (meditateKiPerSecond >= 10f)
             {
-                energySystem.AddKi(25f);
+                meditateKiPerSecond = isGokuChar ? 8.0f : 5.0f;
             }
         }
 
         private void Update()
         {
+            if (skillCooldownTimer > 0f) skillCooldownTimer -= Time.deltaTime;
+            if (ultimateCooldownTimer > 0f) ultimateCooldownTimer -= Time.deltaTime;
+
             CheckGround();
             HandleSuperSaiyanTimer();
             HandleRedZoneVisuals();
@@ -262,13 +333,14 @@ namespace MysticCombat.Fighter
 
             if (hurtboxCollider != null)
             {
-                hurtboxCollider.size = new Vector2(0.70f, 1.50f);
-                hurtboxCollider.offset = new Vector2(0f, 0.78f);
+                hurtboxCollider.size = new Vector2(0.85f, 1.80f);
+                hurtboxCollider.offset = new Vector2(0f, 0.95f);
             }
 
             if (spriteRenderer != null)
             {
                 spriteRenderer.flipX = !faceRight;
+                spriteRenderer.color = baseTintColor;
             }
 
             FighterAnimator anim = GetComponent<FighterAnimator>();
@@ -320,7 +392,7 @@ namespace MysticCombat.Fighter
             TransitionTo(FighterState.HitStun);
         }
 
-        public void ApplyStats(float speed, float jump, float gravity, float meditateRate = 15f, float redZoneSpeedMult = 0.35f)
+        public void ApplyStats(float speed, float jump, float gravity, float meditateRate = 8f, float redZoneSpeedMult = 0.35f)
         {
             moveSpeed = speed;
             jumpForce = jump;
@@ -476,7 +548,7 @@ namespace MysticCombat.Fighter
                             if (flurryHitsRemaining > 0)
                             {
                                 attackHitbox.Activate();
-                                flurryHitTimer = 0.23f;
+                                flurryHitTimer = 0.35f;
                             }
                         }
                     }
@@ -488,7 +560,7 @@ namespace MysticCombat.Fighter
                             flurryHitTimer -= Time.deltaTime;
                             if (flurryHitTimer <= 0f)
                             {
-                                flurryHitTimer = 0.23f;
+                                flurryHitTimer = 0.35f;
                                 flurryHitsRemaining--;
                                 if (attackHitbox != null)
                                 {
@@ -623,6 +695,12 @@ namespace MysticCombat.Fighter
                 attackHitbox.Deactivate();
             }
 
+            // Voice Cancellation on Interruption: Immediately cut off active voice lines if interrupted or KO'd
+            if (newState == FighterState.HitStun || newState == FighterState.KnockBack || newState == FighterState.Knockout)
+            {
+                fighterAudio?.StopVoice();
+            }
+
             // Dynamic Hurtbox Height: Ducking lowers vulnerable body area under high & heavy attacks!
             // (Physical body collider is NEVER resized at runtime to prevent Box2D depenetration impulses and infinite jumping)
             if (hurtboxCollider != null)
@@ -709,59 +787,43 @@ namespace MysticCombat.Fighter
 
 
 
-        public void ActivateSuperSaiyan(float duration = 15f)
-
+        public void ActivateSuperSaiyan(float duration = 0f)
         {
-
             isSuperSaiyan = true;
-
             superSaiyanTimer = duration;
             if (CurrentState == FighterState.Meditating) TransitionTo(FighterState.Idle);
 
             fighterAudio?.StartKiMeditationAura();
 
-            Debug.Log($"<color=#fbbf24>[FighterController] {gameObject.name} ASCENDED TO SUPER SAIYAN! Duration: {duration}s</color>");
-
+            Debug.Log($"<color=#fbbf24>[FighterController] {gameObject.name} ASCENDED TO SUPER SAIYAN! Consuming 2.5 Ki/s.</color>");
         }
 
-
-
         public void RevertSuperSaiyan()
-
         {
-
             if (!isSuperSaiyan) return;
 
             isSuperSaiyan = false;
-
             superSaiyanTimer = 0f;
+            skillCooldownTimer = skillCooldownDuration; // 15s Skill cooldown begins upon reverting
 
             fighterAudio?.StopKiMeditationAura();
 
-            Debug.Log($"[FighterController] {gameObject.name} reverted to Base form.");
-
+            Debug.Log($"[FighterController] {gameObject.name} reverted to Base form. 15s Skill cooldown started.");
         }
 
-
-
         private void HandleSuperSaiyanTimer()
-
         {
-
             if (!isSuperSaiyan) return;
 
-
-
-            superSaiyanTimer -= Time.deltaTime;
-
-            if (superSaiyanTimer <= 0f)
-
+            // Drains 2.5 Ki/sec while in Super Saiyan form
+            if (energySystem != null)
             {
-
-                RevertSuperSaiyan();
-
+                energySystem.SpendKi(2.5f * Time.deltaTime);
+                if (energySystem.CurrentKi <= 0f)
+                {
+                    RevertSuperSaiyan();
+                }
             }
-
         }
 
 
@@ -869,7 +931,8 @@ namespace MysticCombat.Fighter
             attackActiveTimer = 0.20f;
             if (attackHitbox != null)
             {
-                attackHitbox.ConfigureAttack(damage, knockbackX, 6f, new Vector2(0.80f, 1.05f), new Vector2(0.75f, 0.45f), 0.5f);
+                float kiGain = isGoku ? 4.0f : 2.5f; // Asymmetric Ki gain: Goku generates more Ki than Saitama
+                attackHitbox.ConfigureAttack(damage, knockbackX, kiGain, new Vector2(0.80f, 1.05f), new Vector2(0.75f, 0.45f), 0.5f);
             }
             TransitionTo(FighterState.LightAttack);
         }
@@ -885,31 +948,29 @@ namespace MysticCombat.Fighter
             attackActiveTimer = 0.32f;
             if (attackHitbox != null)
             {
+                float kiGain = isGoku ? 7.0f : 5.0f; // Asymmetric Ki gain: Goku generates more Ki than Saitama
                 // Heavy Attack is calibrated ~10% larger than Light Attack for close-range commitment (whiffs above ducking hurtbox at Y=0.675m with 0.135m clearance)
-                attackHitbox.ConfigureAttack(damage, knockbackX, 10f, new Vector2(0.84f, 1.05f), new Vector2(0.82f, 0.48f), 1.8f);
+                attackHitbox.ConfigureAttack(damage, knockbackX, kiGain, new Vector2(0.84f, 1.05f), new Vector2(0.82f, 0.48f), 1.8f);
             }
             TransitionTo(FighterState.HeavyAttack);
         }
 
         private void ExecuteSkillAttack()
         {
+            if (skillCooldownTimer > 0f) return;
+
             bool isGoku = gameObject.name.ToLower().Contains("goku");
-            float skillCost = isGoku ? 35f : 20f;
-            if (energySystem != null && !energySystem.CanAfford(skillCost)) return;
-
-            if (energySystem != null) energySystem.SpendKi(skillCost);
-
             if (isGoku)
             {
-                // Pure Super Saiyan transformation / power-up! Zero damage dealt.
+                // Goku Skill: Active Toggle between Base and Super Saiyan (drains 2.5 Ki/s)
                 if (!isSuperSaiyan)
                 {
-                    ActivateSuperSaiyan(15f);
+                    if (energySystem == null || energySystem.CurrentKi < 2.5f) return;
+                    ActivateSuperSaiyan();
                 }
                 else
                 {
-                    superSaiyanTimer = 15f;
-                    fighterAudio?.StartKiMeditationAura();
+                    RevertSuperSaiyan();
                 }
 
                 if (attackHitbox != null) attackHitbox.Deactivate();
@@ -921,31 +982,41 @@ namespace MysticCombat.Fighter
                 return;
             }
 
-            // Saitama Skill (Consecutive Normal Punches - 15 hits @ 2 damage = 30 total damage)
-            attackTimer = 2.70f;
+            // Saitama Skill (Consecutive Normal Punches - 5 hits @ 6 damage = 30 total damage, 30 Ki cost)
+            float skillCost = 30f;
+            if (energySystem != null && !energySystem.CanAfford(skillCost)) return;
+
+            if (energySystem != null) energySystem.SpendKi(skillCost);
+            skillCooldownTimer = skillCooldownDuration; // 15-second cooldown
+
+            attackTimer = 2.00f;
             attackStartupTimer = 0.15f;
-            attackActiveTimer = 2.30f;
-            flurryHitsRemaining = 15;
-            flurryHitTimer = 0.15f;
+            attackActiveTimer = 1.80f;
+            flurryHitsRemaining = 5;
+            flurryHitTimer = 0.35f; // Spaced punches give opponent windows to counter-hit and interrupt!
             if (attackHitbox != null)
             {
                 Vector2 offset = new Vector2(1.05f, 0.90f);
                 Vector2 size = new Vector2(1.4f, 0.90f);
-                int damage = 2; // 2 damage per punch x 15 hits = 30 damage total
-                float knockbackX = 0.30f; // Micro-knockback to prevent flying away
+                int damage = 6; // 6 damage per punch x 5 hits = 30 damage total
+                float knockbackX = 0.35f;
                 float knockbackY = 0.0f;
-                attackHitbox.ConfigureAttack(damage, knockbackX, 1f, offset, size, knockbackY, hitStop: false, shakeMult: 0.20f);
+                attackHitbox.ConfigureAttack(damage, knockbackX, 0.5f, offset, size, knockbackY, hitStop: false, shakeMult: 0.20f);
             }
             TransitionTo(FighterState.Skill);
         }
 
         private void ExecuteUltimateAttack()
         {
-            float ultCost = 80f;
+            if (ultimateCooldownTimer > 0f) return;
+
+            bool isGoku = gameObject.name.ToLower().Contains("goku");
+            float ultCost = isGoku ? 70f : 100f; // Goku Kamehameha costs 70 Ki, Saitama Serious Punch costs 100 Ki
             if (energySystem != null && !energySystem.CanAfford(ultCost)) return;
 
             if (energySystem != null) energySystem.SpendKi(ultCost);
-            bool isGoku = gameObject.name.ToLower().Contains("goku");
+            ultimateCooldownTimer = ultimateCooldownDuration; // 15-second cooldown
+
             if (!isGoku)
             {
                 // Saitama Serious Punch: Synced to voice audio (3.80s total)
@@ -983,13 +1054,14 @@ namespace MysticCombat.Fighter
 
             if (energySystem != null && energySystem.IsInRedZone)
             {
-                // Visual exhaustion pulse: throb between white and danger amber-red
+                // Visual exhaustion pulse: throb between base tint and danger amber-red
                 float pulse = Mathf.PingPong(Time.time * 5f, 1f);
-                spriteRenderer.color = Color.Lerp(Color.white, new Color(1f, 0.40f, 0.40f, 1f), pulse);
+                Color dangerColor = new Color(1f, 0.40f, 0.40f, 1f);
+                spriteRenderer.color = Color.Lerp(baseTintColor, dangerColor, pulse);
             }
-            else if (spriteRenderer.color != Color.white)
+            else if (spriteRenderer.color != baseTintColor)
             {
-                spriteRenderer.color = Color.white;
+                spriteRenderer.color = baseTintColor;
             }
         }
 

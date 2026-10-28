@@ -1526,3 +1526,227 @@ In classic 2D fighters (*Street Fighter*, *Guilty Gear*, *Dragon Ball FighterZ*)
 > **Godot Comparison:**
 > - In **Godot**, you would create a `CanvasLayer` at `layer = 10` holding a solid black `ColorRect` and a centered `TextureRect` displaying the punch, toggled for 0.28 seconds via `get_tree().create_timer(0.28)`.
 > - In **Unity**, `SaitamaSeriousPunchCinematic.cs` uses a `Canvas` set to `ScreenSpaceOverlay` (`sortingOrder = 950`) with an `Image` black void panel and a centered `RectTransform` cut-in, auto-managed without polluting the in-world physics hierarchy.
+
+
+---
+
+## 47. Mirror Match Architecture: The Frame-1 Update Wipeout Trap & Cross-System Palette Swapping (Godot vs Unity)
+
+### 1. The Rookie Trap: Why Player 2's Alternate Tint Kept Disappearing
+In competitive fighting games, when both players select the same character (e.g. Goku vs Goku or Saitama vs Saitama—a "Mirror Match"), Player 2 must receive an **alternate color palette** so both players and viewers can immediately tell the fighters apart.
+
+- **The Setup:** In [`PrototypeBootstrap.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Core/PrototypeBootstrap.cs), our deployment code checked:
+  ```csharp
+  if (p1Char == p2Char)
+  {
+      SpriteRenderer sr2 = fighter2.GetComponent<SpriteRenderer>();
+      sr2.color = altColor; // Set alternate tint at spawn
+  }
+  ```
+- **The Disappearing Bug:** Despite spawning with the alternate color, Player 2 appeared completely identical to Player 1 in the arena!
+- **The Culprit (Frame-1 `Update()` Wipeout):**
+  In [`FighterController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/Fighter/FighterController.cs), we recently implemented a visual pulsing effect for exhausted fighters in the Red Zone:
+  ```csharp
+  private void HandleRedZoneVisuals()
+  {
+      if (energySystem.IsInRedZone)
+      {
+          spriteRenderer.color = Color.Lerp(Color.white, dangerRed, pulse);
+      }
+      else if (spriteRenderer.color != Color.white)
+      {
+          spriteRenderer.color = Color.white; // <-- Clobbered the tint on Frame 1!
+      }
+  }
+  ```
+  Because `HandleRedZoneVisuals()` ran on **every single frame** inside `Update()`, the moment the scene began (Frame 1), it detected that `spriteRenderer.color != Color.white`, and immediately erased Player 2's custom tint back to pure white!
+
+### 2. The Professional Solution: The `baseTintColor` State Pattern
+Never assume that a sprite's default baseline color is `Color.white`. Instead, store a persistent baseline tint:
+```csharp
+[SerializeField] private Color baseTintColor = Color.white;
+
+public void SetBaseTintColor(Color tint)
+{
+    baseTintColor = tint;
+    if (spriteRenderer != null) spriteRenderer.color = tint;
+}
+
+private void HandleRedZoneVisuals()
+{
+    if (energySystem != null && energySystem.IsInRedZone)
+    {
+        // Pulse between the player's OWN base palette and the danger red!
+        float pulse = Mathf.PingPong(Time.time * 5f, 1f);
+        spriteRenderer.color = Color.Lerp(baseTintColor, dangerRed, pulse);
+    }
+    else if (spriteRenderer.color != baseTintColor)
+    {
+        spriteRenderer.color = baseTintColor; // Restores player's custom palette!
+    }
+}
+```
+
+### 3. High-Contrast Arcade Palettes
+To prevent subtle tints from blending in with background lights or standard costumes:
+- **Goku P2 (Cool Ice / Cyan Gi):** `new Color(0.45f, 0.75f, 1.0f, 1.0f)` — Shifts his classic orange dogi into an electrifying cobalt/cyan tournament gi.
+- **Saitama P2 (Fiery Sunset / Crimson Suit):** `new Color(1.0f, 0.50f, 0.45f, 1.0f)` — Multiplies across his yellow jumpsuit, shifting it into an intense blazing coral/crimson combat suit.
+
+### 4. Cross-System Consistency (UI & HUD Synchronization)
+A fighting game palette swap cannot exist only on the 3D/2D sprite in the arena—it must be consistent across the entire user experience:
+1. **Character Selection Screen:** When Player 2 hovers on the same character, the card indicator updates to `[ P2: ALT PALETTE ]` (or `[ CPU: ALT PALETTE ]`).
+2. **Cinematic Versus Screen:** The fly-in versus splash screen tints Player 2's bust avatar image with `GetAlternatePaletteColor()` and adds `[ALT]` to their name.
+3. **In-Combat HUD:** In [`HUDController.cs`](file:///b:/Unity/Projects/Mystic_Combat_Animeverse_Incursion/Assets/Scripts/UI/HUDController.cs), Player 2's portrait card next to their health bar receives the matching palette tint.
+
+> **Godot Comparison:**
+> - In **Godot Engine**, `CanvasItem.modulate` or `self_modulate` controls sprite tinting. If you reset `modulate = Color.WHITE` in `_process()`, you cause the exact same Frame-1 wipeout bug!
+> - Godot developers store `var base_modulate: Color = Color.WHITE` on the player node.
+> - For advanced games, Godot developers often pass a `palette_index` uniform to a custom `CanvasItemMaterial` shader that replaces pixel colors from a 1D palette texture. In Unity, setting `SpriteRenderer.color` with `SetBaseTintColor()` achieves the same result using Unity's native multi-pass sprite pipeline.
+
+
+---
+
+# 39. Fighting Game Balance, Asymmetric Ki Economy & Anti-Spam Cooldown Architectures
+
+### 1. The Problem with Special Move Spamming
+In novice fighting game prototypes, players often discover an abusive strategy: charge energy and repeatedly mash the Special Skill or Ultimate button! If there are no cooldowns, the opponent remains trapped in an endless cycle of special attacks.
+To solve this, professional fighting games implement two complementary gating layers:
+1. **Resource Gate (Ki Energy Cost):** You cannot execute the move unless you have enough energy.
+2. **Temporal Gate (Cooldown Timer):** Once executed, the move cannot be cast again for a set cooldown window (e.g., $15.0\text{s}$), regardless of how much energy you possess!
+
+### 2. Designing an Asymmetric Lore-Friendly Economy
+Not all fighters should generate or gather energy at the same rate. In our crossover:
+- **Son Goku (Ki Martial Artist):** Masters energy control. He meditates rapidly ($8.0\text{ Ki/s}$), gains higher Ki per punch ($+4\text{ Ki}$ light, $+7\text{ Ki}$ heavy), and can enter an active Super Saiyan transformation.
+- **Saitama (Pure Physical Brawler):** Does not understand or control spiritual Ki. His meditation is slower ($5.0\text{ Ki/s}$), punch generation is lower ($+2.5\text{ Ki}$ light, $+5\text{ Ki}$ heavy), but his moves deal devastating physical payload when unleashed!
+
+### 3. Active Toggles with Continuous Resource Drain
+Instead of a fixed duration timer, Goku's Super Saiyan is an **Active Toggle**:
+- Pressing Skill toggles Super Saiyan **ON**.
+- In Unity's `Update()` loop, every frame drains energy continuously:
+  `energySystem.SpendKi(2.5f * Time.deltaTime);`
+- If Ki reaches 0, Goku exhausts his stamina and drops back to Base form automatically.
+- Pressing Skill while transformed toggles it **OFF**, conserving remaining Ki! Leaving Super Saiyan initiates the 15-second cooldown.
+
+### 4. Climax Super Armor (The 1-Second Invulnerability Window)
+Because cinematic Ultimates have long theatrical startup cast times (Saitama: $2.40\text{s}$, Goku: $2.15\text{s}$), a vulnerable fighter could be hit on the very last millisecond, cancelling the entire super move.
+To reward players who successfully survive the windup, fighters gain **Super Armor / Invulnerability** during the final $1.0\text{s}$ of casting (`attackStartupTimer <= 1.0f`) and through the attack release:
+- Any incoming hits deal zero damage (`HealthSystem.TakeDamage()` returns early).
+- The fighter does not flinch or enter `HitStun`, guaranteeing that the cinematic climax executes cleanly!
+
+### 5. Decoupled Voice Audio Cancellation on Hit
+A classic rookie audio bug occurs when animation cancels on hit, but the sound continues playing!
+- If an audio clip is fired via `AudioSource.PlayOneShot()`, calling `AudioSource.Stop()` **does not stop it**—`PlayOneShot` is fire-and-forget.
+- By routing character dialogue to a dedicated `voiceSource` using `voiceSource.clip = clip; voiceSource.Play();`, the engine can call `voiceSource.Stop()` the exact millisecond the fighter takes a hit (`TransitionTo(FighterState.HitStun)`).
+
+> **Godot Comparison:**
+> - In **Godot Engine**, a continuous Ki drain is written in `_process(delta)`: `energy_system.spend_ki(2.5 * delta)`.
+> - Cooldowns use a `Timer` node or a `float` countdown variable in `_physics_process`.
+> - Dialogue interruption is implemented on an `AudioStreamPlayer2D` node by connecting the character's `hit_taken` signal to `audio_player.stop()`.
+
+---
+
+## 48. The 4-Tier Segmented Ki Meter: Communicating Tactical Danger vs Safety Without UI Numbers (Godot vs Unity)
+
+### 1. The Design Philosophy: "Don't Make Me Do Math Mid-Combo"
+In fast-paced arcade fighting games, players make decisions in fractions of a second (16.6 milliseconds per frame). If a game expects players to read a number like `Ki: 42 / 100` and mentally calculate `42 - 35 = 7`, and realize `7 < 10` so using their skill will cause Red Zone exhaustion, **they will make mistakes and feel frustrated**.
+
+Instead, modern fighting games use **Color-Coded Threshold Segmenting**:
+- **Zone 1 (0 to Mark 1 - RED):** Danger Zone ($0 \to 10\text{ Ki}$). Any action here risks or triggers exhaustion.
+- **Zone 2 (Mark 1 to Mark 2 - GREEN):** Safe Neutral Zone. You are safe from exhaustion, but spending Ki on your Skill will drop you below Mark 1 into the Red Zone!
+- **Zone 3 (Mark 2 to Mark 3 - BLUE):** Skill-Safe Zone. Reaching Mark 2 means you can unleash your character's Skill and **still stay safely above the Red Zone**!
+- **Zone 4 (Mark 3 to 100 - YELLOW):** Ultimate Surplus Zone. Reaching Mark 3 guarantees you can fire your Ultimate without exhausting into the Red Zone!
+
+```
+Player 1 (Left-to-Right):
+[ === RED === | ======= GREEN ======= | ============= BLUE ============= | == YELLOW == ]
+0%          Mark 1                 Mark 2                             Mark 3          100%
+(Danger Zone)  (Safe Neutral Zone)    (Skill-Safe Zone: Red + Skill)     (Ult-Safe Zone) (Surplus)
+```
+
+### 2. Implementation in Unity UI: Partitioned RectTransforms vs Sub-interval Fill
+In Unity, an `Image` with `Image.Type.Filled` fills proportionally from $0.0$ to $1.0$. If you want 4 distinct zones that fill sequentially:
+1. Divide a parent container into 4 sibling `Image` GameObjects.
+2. Anchor each `RectTransform` to its respective fractional interval $[x_{\min}, x_{\max}]$:
+   - Red: `anchorMin = (0, 0)`, `anchorMax = (t1, 1)`
+   - Green: `anchorMin = (t1, 0)`, `anchorMax = (t2, 1)`
+   - Blue: `anchorMin = (t2, 0)`, `anchorMax = (t3, 1)`
+   - Yellow: `anchorMin = (t3, 0)`, `anchorMax = (1, 1)`
+3. Calculate fill amount for each segment by clamping into that sub-interval:
+   ```csharp
+   float redFill = Mathf.Clamp01(cur / t1);
+   float greenFill = cur <= t1 ? 0f : Mathf.Clamp01((cur - t1) / (t2 - t1));
+   float blueFill = cur <= t2 ? 0f : Mathf.Clamp01((cur - t2) / (t3 - t2));
+   float yellowFill = cur <= t3 ? 0f : Mathf.Clamp01((cur - t3) / (max - t3));
+   ```
+
+### 3. The Mirrored Arcade Layout (Player 2)
+In a tournament fighter, Player 2's HUD is mirrored so energy flows inward toward the center timer:
+- For Player 2, $0\text{ Ki}$ is at the **far right edge**, and $100\text{ Ki}$ is at the **left edge**.
+- Each zone's anchors are inverted:
+  - Red sits at $[1 - t_1, 1]$
+  - Green sits at $[1 - t_2, 1 - t_1]$
+  - Blue sits at $[1 - t_3, 1 - t_2]$
+  - Yellow sits at $[0, 1 - t_3]$
+- Every segment image has `fillOrigin = (int)Image.OriginHorizontal.Right`.
+- Divider tick marks are placed at $1 - t_i$.
+
+> **Godot Comparison:**
+> - In **Godot Engine**, a progress bar is represented by the `TextureProgressBar` node with `fill_mode = FILL_LEFT_TO_RIGHT` (for P1) and `FILL_RIGHT_TO_LEFT` (for P2).
+> - To create a multi-color segmented meter in Godot, developers stack multiple `TextureProgressBar` nodes inside a `Control` container, or write a custom `CanvasItem` shader that uses `step()` or `smoothstep()` functions on the UV's $X$ coordinate to change colors at thresholds.
+> - Divider lines in Godot are represented by child `ColorRect` or `Line2D` nodes anchored using Godot's Anchor/Margin presets (`anchor_left = threshold`, `anchor_right = threshold`).
+
+
+
+---
+
+## 40. Local Area Network (LAN) Multiplayer & Sockets for Beginners
+
+### 1. What is LAN Multiplayer?
+In single-player or local multiplayer games, both players sit at the same physical computer and share one screen and keyboard. In **Local Area Network (LAN) Multiplayer**, two separate computers (Laptop A and Laptop B) are connected to the same Wi-Fi router or phone mobile hotspot. They exchange data packets across the local room without needing any internet servers (Steam, AWS, or cloud matchmakers).
+
+### 2. The Host vs. Client Architecture
+To play a multiplayer fighting game, one computer must act as the **Host**, and the other acts as the **Client**:
+- **The Host (PC 1):** The "boss" machine. It opens a server listener on a chosen network port (e.g. `7777`) and runs the actual fighting game simulation—calculating hits, damage, physics velocities, and round timers.
+- **The Client (PC 2):** Connects to the Host's IP address (e.g. `192.168.1.15`). The Client reads Player 2's local keyboard inputs and streams them to the Host. In return, the Client receives the Host's 60Hz match snapshot and smoothly mirrors the action on screen!
+
+```
+[ PC 1: THE HOST ]                                   [ PC 2: THE CLIENT ]
+Runs Full Combat Simulation                         Reads Player 2 Local Keyboard
+   • Fighter 1: Local Inputs                           • Move, Jump, Punch, Skill
+   • Fighter 2: NetworkFighterInput ◄── [Inputs] ─────── Streams buttons to Host
+   • Broadcasts 60Hz Snapshot ───────── [Snapshot] ────► Mirrors Sprites & HUD
+```
+
+### 3. IP Addresses & Ports Explained Simply
+- **IP Address (Internet Protocol):** Like a house address. On a home Wi-Fi network, your router assigns your computer a local address like `192.168.1.24`. When you play alone on one machine, you use `127.0.0.1` (the universal computer alias for **Localhost** / "this computer").
+- **Port:** Like an apartment door number. Your computer has thousands of ports. Mystic Combat uses port `7777`. When the Host listens on port `7777`, it tells Windows: *"Any network messages sent to door 7777 belong to Mystic Combat!"*
+
+### 4. Nagle's Algorithm & Why `NoDelay = true` Matters in Fighting Games
+By default, standard computer networking uses **Nagle's Algorithm**. To save bandwidth, Windows waits up to $40	ext{ms}$ to gather small messages into one big envelope before sending them.
+- In email or file downloading, a $40	ext{ms}$ wait is invisible.
+- **In a competitive fighting game, $40	ext{ms}$ is catastrophic lag (2.5 full frames of delay)!**
+- By setting `tcpClient.NoDelay = true` in C#, we order Windows to **bypass Nagle's algorithm completely**. The instant a player taps Light Attack, that packet is fired across Wi-Fi in less than $2	ext{ms}$!
+
+### 5. The 1-Byte Bitmask Super-Compression Trick
+A fighting game controller has 7 action buttons: Jump, Crouch, Light Attack, Heavy Attack, Skill, Ultimate, and Meditate.
+- If we sent each button as a separate `bool` (1 byte each) or `string`, an input packet would take 100+ bytes per frame.
+- Instead, computer engineers use **Bitmasking**: a single byte has **8 binary bits** (`0` or `1`). We assign each button to a single bit:
+  - Bit 0 (`1`): Jump
+  - Bit 1 (`2`): Crouch
+  - Bit 2 (`4`): Light Attack
+  - Bit 3 (`8`): Heavy Attack
+  - Bit 4 (`16`): Special Skill
+  - Bit 5 (`32`): Ultimate Attack
+  - Bit 6 (`64`): Meditate (Ki Charge)
+- If a player holds Crouch (`2`) and presses Light Attack (`4`), their input is simply the number `6` ($2 + 4 = 6$ or binary `00000110`)! All 7 buttons fit into **1 single byte**, using virtually zero network bandwidth!
+
+### 6. Thread-Safety: Why Sockets Must Not Call Unity Directly
+In C#, network sockets receive messages on a background operating system thread (`ReceiveThread`).
+- **Unity Rule:** Unity's core APIs (`GameObject`, `Transform`, `SceneManager`) can **ONLY** be modified on the main Unity thread! If a background network thread touches a Unity GameObject, Unity immediately crashes with an `InvalidOperationException`.
+- **The Solution (Main Thread Queue):**
+  When a packet arrives in `LanNetworkManager.cs`, the background thread places the packet into a thread-safe `ConcurrentQueue<Action>`. Then, inside Unity's normal `Update()` method on the main thread, we dequeue and execute the actions safely!
+
+> **Godot Comparison:**
+> - In **Godot Engine**, high-level networking is handled by `ENetMultiplayerPeer`. You attach a `MultiplayerSpawner` and `MultiplayerSynchronizer` node, and use the `@rpc("any_peer")` decorator above GDScript functions to send data across peers.
+> - In Godot, ENet automatically dispatches incoming RPCs during `_process()` on Godot's main thread.
+> - In Unity C#, rather than relying on bloated external packages, we built our own native `.NET Sockets` engine (`TcpListener` and `TcpClient`) with a thread-safe `ConcurrentQueue` that achieves identical sub-millisecond dispatch!

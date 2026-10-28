@@ -504,6 +504,19 @@ namespace MysticCombat.Core
             StartMatch();
         }
 
+        /// <summary>
+        /// Synchronizes the round clock, round number, and score from an authoritative LAN host.
+        /// </summary>
+        public void SyncFromNetwork(int round, float timer, MatchState state, int p1Wins, int p2Wins)
+        {
+            currentRound = round;
+            roundTimer = timer;
+            currentMatchState = state;
+            p1RoundWins = p1Wins;
+            p2RoundWins = p2Wins;
+            OnTimerUpdate?.Invoke(roundTimer);
+        }
+
         #endregion
 
         #region Private Methods

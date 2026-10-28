@@ -1336,3 +1336,158 @@ In the original sprite exports, the standing forward frame (`ultimate_0`) was er
 - Damaging Hitbox Size: `Vector2(1.4f, 1.0f)`
 - Damaging Hitbox Offset: `Vector2(1.25f, 0.95f)`
 - **Competitive Rule:** Even though the Big Punch cut-in is visually massive during the super freeze, the damaging hitbox is strictly confined to close melee range. A defender who anticipates the 2.40s telegraphed buildup and spaces backward or neutral-jumps will safely avoid all damage!
+
+
+---
+
+## 49. Mirror Match Alternate Palette Engine & Multi-Screen Synchronization
+
+### Overview
+In fighting game tournament play, mirror matches (Goku vs. Goku or Saitama vs. Saitama) require unambiguous visual differentiation between Player 1 and Player 2/CPU across every game state. The Mirror Match Engine provides high-contrast alternate palettes, persistent baseline state tracking (`baseTintColor`), and multi-screen visual synchronization.
+
+### 1. Alternate Palette Specifications
+
+| Character | Base Identity | P1 Palette (Original) | P2 Alternate Palette (Mirror) | RGB Multiplier | Visual Presentation |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Son Goku** | Turtle School Dogi | Classic Orange / Indigo | **Cool Ice / Cyan Gi** | `RGBA(0.45, 0.75, 1.0, 1.0)` | Multiplies across orange gi into an electrifying cobalt/cyan dogi, preserving deep black hair and martial arts belt. |
+| **Saitama** | Hero for Fun Suit | Yellow Suit / Red Gloves / White Cape | **Fiery Sunset / Crimson Suit** | `RGBA(1.0, 0.50, 0.45, 1.0)` | Multiplies across yellow suit into a bold blazing coral/crimson combat uniform with warm cape highlights. |
+
+### 2. Multi-Screen Synchronization Table
+
+| Stage / System | Visual Component | Mirror Match Behavior (`p1 == p2`) | Normal Match Behavior (`p1 != p2`) |
+| :--- | :--- | :--- | :--- |
+| **Character Select** | P2 Indicator Badge | Updates to **`[ P2: ALT PALETTE ]`** or **`[ CPU: ALT PALETTE ]`** | Displays standard `[ PLAYER 2 ]` or `[ CPU: DIFFICULTY ]` |
+| **Character Select** | Mirror Match Banner | Activates `Mirror_Match_Notice`: `? MIRROR MATCH: P2 RECEIVES ALTERNATE PALETTE ?` | Hidden |
+| **Versus Screen** | `versusP2AvatarImage` | Multiplied by `GetAlternatePaletteColor(p2Id)` | Multiplied by `Color.white` (Original) |
+| **Versus Screen** | P2 Name / Badge | Appends **`[ALT]`** to character name and **`(ALT PALETTE)`** to badge | Standard name and badge |
+| **Arena Combat** | In-World `SpriteRenderer` | Set to `baseTintColor` via `SetBaseTintColor()`. Red Zone pulses relative to this tint. | Normal `Color.white` |
+| **Combat HUD** | `p2AvatarCard` | Top-right avatar bust card tinted with `GetAlternatePaletteColor(p2Id)` | Normal `Color.white` |
+| **Round Reset** | Reset Subsystem | `ResetForNewRound()` explicitly restores `spriteRenderer.color = baseTintColor` | Restores `Color.white` |
+
+### 3. Architecture & Bug Resolution
+- **Root Cause of Missing Tint:** Previous implementation set `sr2.color` once at instantiation in `PrototypeBootstrap`, but `FighterController.HandleRedZoneVisuals()` in `Update()` executed `else if (spriteRenderer.color != Color.white) spriteRenderer.color = Color.white;`, instantly clobbering the alternate tint on Frame 1.
+- **The State Pattern Solution:** `FighterController` now stores `baseTintColor`. Runtime effects pulse between `baseTintColor` and effect colors (e.g. Red Zone danger red), and non-exhausted states cleanly restore `baseTintColor`, guaranteeing that Player 2's alternate palette persists throughout the entire match.
+
+
+---
+
+# 38. Fighter Rebalance, Asymmetric Ki Economy, SSJ Toggle & Climax Invulnerability
+
+### Combat Tuning Matrix
+
+| Parameter / Mechanic | Son Goku (Ki Martial Artist) | Saitama (Physical Brawler) | Design Rationale |
+| :--- | :--- | :--- | :--- |
+| **Meditation Ki Rate** | **$8.0\text{ Ki/s}$** | **$5.0\text{ Ki/s}$** | Goku has formal spiritual training; Saitama lacks ki control. |
+| **Light Attack Ki Gain** | **$+4.0\text{ Ki}$** | **$+2.5\text{ Ki}$** | Fast Ki accumulation for Goku; slower for Saitama. |
+| **Heavy Attack Ki Gain** | **$+7.0\text{ Ki}$** | **$+5.0\text{ Ki}$** | Rewards heavy commitment with higher energy return. |
+| **Target Comeback Ki** | $+1.5\text{ Ki}$ (both fighters) | $+1.5\text{ Ki}$ (both fighters) | Nerfed from $3.0\text{ Ki}$ to slow down unearned supers. |
+| **Starting Ki** | **$0\text{ Ki}$** | **$0\text{ Ki}$** | Free initial $25\text{ Ki}$ removed; players must earn specials. |
+| **Skill Mechanism** | **Super Saiyan (Active Toggle)** | **Consecutive Normal Punches** | Strategic buff toggle vs instant multi-hit melee strike. |
+| **Skill Ki Cost** | **$2.5\text{ Ki/s}$ continuous drain** | **$30\text{ Ki}$ upfront cost** | Goku burns stamina over time; Saitama expends upfront energy. |
+| **Skill Cooldown** | **$15.0\text{s}$** (begins upon deactivation) | **$15.0\text{s}$** (begins on cast) | Anti-spam discipline prevents back-to-back activation. |
+| **Skill Payload** | $+25\%$ Spd, $+66\%$ Light Dmg, $+43\%$ Heavy Dmg | **5 hits @ 6 damage = 30 dmg** ($0.35\text{s}$ hit spacing) | Spaced punches allow defender to counter-hit or interrupt! |
+| **Ultimate Mechanism** | Kamehameha Beam ($45\text{ dmg}$) | Serious Punch ($90\text{ decisive dmg}$) | Long-range beam vs point-blank execution blow. |
+| **Ultimate Ki Cost** | **$70\text{ Ki}$** | **$100\text{ Ki}$** (Full meter required) | Reflects payload disparity ($45\text{ dmg}$ vs $90\text{ dmg}$). |
+| **Ultimate Cooldown** | **$15.0\text{s}$** | **$15.0\text{s}$** | Ensures fair neutral resets after super attacks. |
+| **Climax Invulnerability** | **Active during final $1.0\text{s}$ & beam** | **Active during final $1.0\text{s}$ & strike** | Prevents cheap late-startup interruptions. |
+| **Voice Interruption** | Voice cuts off on `HitStun` / `Knockout` | Voice cuts off on `HitStun` / `Knockout` | Stops dangling vocal scream when flinching. |
+
+---
+
+### Saitama Skill Rework: Interruption & Defense Windows
+Previously, Consecutive Normal Punches delivered 15 micro-hits @ 2 damage ($15 \times 2 = 30$), which locked the opponent in continuous hitstun with zero counterplay.
+- **New Tuning:** 5 deliberate punches @ 6 damage ($5 \times 6 = 30$ total damage).
+- **Hit Interval:** $0.35\text{s}$ between punches.
+- **Defensive Counterplay:** If the opponent is hit by punch 1 or blocks, there are small recovery windows between subsequent punches where a fast jab or armored move can strike Saitama.
+- **Interruption Consequence:** If Saitama is struck, his flurry immediately halts, his hitbox deactivates, and his battle shout (*"Consecutive Normal Punches!"*) is instantly stopped.
+
+---
+
+## 50. Option A 4-Tier Segmented Ki Meter: Dynamic Threshold Calibration & Visual Economy
+
+### 1. Functional Specification
+
+| Segment Zone | Fill Color | Hex Code | Ki Interval | Tactical Meaning & In-Game Value |
+| :--- | :--- | :--- | :--- | :--- |
+| **Zone 1: Red Zone** | Crimson Scarlet | `#FF3838` | $0 \to \text{Mark 1}$ ($10\text{ Ki}$) | **Danger Zone:** Fighter is vulnerable to or inside Red Zone Exhaustion ($30\%$ move speed, no attack canceling). |
+| **Zone 2: Safe Buffer** | Neon Mint Green | `#33F259` | $\text{Mark 1} \to \text{Mark 2}$ | **Safe Neutral Zone:** Fighter is safe from exhaustion, but activating Skill will consume Ki below Mark 1 into the Red Zone. |
+| **Zone 3: Skill-Safe** | Sky Electric Blue | `#1FC0FF` | $\text{Mark 2} \to \text{Mark 3}$ | **Skill-Ready Buffer:** Reaching Mark 2 ensures that activating Skill leaves the fighter safely above the Red Zone! |
+| **Zone 4: Ultimate Surplus** | Solar Gold | `#FFE02E` | $\text{Mark 3} \to \text{Max 100}$ | **Ultimate Buffer:** Reaching Mark 3 ensures that firing an Ultimate leaves the fighter safely above the Red Zone. Above Mark 3 is pure surplus/overcharge. |
+
+### 2. Fighter-Specific Threshold Calibration
+
+| Threshold Mark | Visual Geometry | Son Goku Calibration | Saitama Calibration | Rationale |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mark 1 (Red Zone)** | 3px x 26px Platinum Divider | **$10\text{ Ki}$ ($10\%$)** | **$10\text{ Ki}$ ($10\%$)** | Identical exhaustion threshold across both characters. |
+| **Mark 2 (Safe Skill)** | 3px x 26px Platinum Divider | **$45\text{ Ki}$ ($45\%$)** | **$30\text{ Ki}$ ($30\%$)** | Calculated as $\text{RedZone} + \text{SkillCost}$. For Goku: $10 + 35 = 45$. For Saitama: $10 + 20 = 30$. |
+| **Mark 3 (Safe Ultimate)** | 3px x 26px Platinum Divider | **$90\text{ Ki}$ ($90\%$)** | **$90\text{ Ki}$ ($90\%$)** | Calculated as $\text{RedZone} + \text{UltimateCost}$ ($10 + 80 = 90$). Reaching this mark allows unleasing super attacks safely. |
+
+### 3. Visual Polish & Symmetry
+- **Grayscale Specular Texture:** Created `ki_bar_grand_fill_white.png` so colors tint with $100\%$ saturation and zero hue contamination while retaining the 3D beveled rim highlight.
+- **Divider Notches:** 3px wide metallic notches with 1px black outline drop-shadows positioned directly on the threshold lines, extending 1px above and below the bar frame to evoke physical arcade bezel brackets.
+- **Mirrored Tournament P2:** Inverted coordinate anchors ensure Player 2 fills cleanly from the right border inward toward the center timer.
+
+
+
+---
+
+## 51. LAN Multiplayer Duel System: Peer Discovery, Socket Streaming & Synchronized Roster Selection
+
+### Overview
+The LAN Multiplayer Duel System enables two separate computers on the same local Wi-Fi or Ethernet network to compete head-to-head in tournament-grade fighting game combat. It eliminates shared keyboard cramping while providing instant, zero-desync gameplay through a Host-Authoritative binary protocol.
+
+### 1. Functional System Flow
+
+```
+[ Main Menu ]
+      │
+      ├── Select "1 VS 1 LAN MULTIPLAYER" or Press [L]
+      │
+      ▼
+[ LanLobbyModal ]
+      │
+      ├── [ HOST MATCH ] ──► Binds Port 7777, Discovers IPv4 ──► "Waiting for Challenger..."
+      │                                                                  │
+      └── [ JOIN MATCH ] ──► Enters Host IP ──► Connects to Port 7777 ───┘
+                                                                         │
+                                                                         ▼
+                                                       [ Connection Handshake Success ]
+                                                                         │
+                                                                         ▼
+                                                       [ Character Select Screen (Synced) ]
+                                                       • Host controls P1 Selection
+                                                       • Client controls P2 Selection
+                                                       • Both Lock In ──► Cinematic Fly-In
+                                                                         │
+                                                                         ▼
+                                                       [ Combat Arena (SampleScene) ]
+                                                       • Host runs physics & hitboxes
+                                                       • Client streams buttons & mirrors view
+```
+
+### 2. Detailed Component Breakdown
+
+#### A. `LanLobbyModal.cs` (Lobby UI & Automatic IP Discovery)
+- **Automatic IP Scanning:** Calls `LanNetworkManager.Instance.GetLocalIPv4Address()` which traverses `NetworkInterface.GetAllNetworkInterfaces()`, automatically filtering for operational, non-loopback IPv4 addresses (e.g. `192.168.1.45`).
+- **One-Click Host:** Instantly spins up a `TcpListener` on port `7777`, configures `GameManager.Instance.IsLanHost = true`, and displays instructions for the joining player.
+- **Client Connect:** Provides an arcade-styled text field with pre-filled default `127.0.0.1` (enabling single-machine two-window testing) and a Connect button.
+- **Resilient Fallback Generation:** If UI elements are not pre-baked in the scene, `EnsureUIBuilt()` procedurally constructs all panels, buttons, and TextMeshPro labels at runtime!
+
+#### B. `CharacterSelectController.cs` (Network Synchronization)
+- **Bidirectional Packet Sync:** Whenever either player presses Left/Right to browse characters, `SendCharSelectSync()` transmits a `CharSelectSyncPacket` containing `(PlayerIndex, CharacterId, IsLockedIn)`.
+- **Decoupled Roles:**
+  - Host acts as Player 1 (`currentPhase = SelectingP1`).
+  - Client acts as Player 2 (`currentPhase = SelectingP2OrCpu`).
+- **Coordinated Launch:** When both players confirm their fighters, the Host dispatches a `MatchStartPacket` containing the finalized character IDs, triggering the dramatic `VERSUS!` slide animation on both screens simultaneously!
+
+#### C. `NetworkMatchSynchronizer.cs` (In-Combat Real-Time Engine)
+- **Host Role:**
+  - Deploys Fighter 1 with local keyboard controls.
+  - Deploys Fighter 2 with `NetworkFighterInput`.
+  - In `FixedUpdate()`, packages a 38-byte `MatchSnapshotPacket` containing positions, velocities, health, Ki, active states, and round clocks, broadcasting to the Client at 60Hz.
+  - Receives `FighterInputPacket` from Client and pipes directly into Fighter 2's input buffer.
+- **Client Role:**
+  - Reads local keyboard using comfortable single-player ergonomic mappings (WASD or Arrow keys).
+  - Sends a 9-byte `FighterInputPacket` with bitmasked actions to the Host every frame.
+  - Receives the Host's 60Hz snapshot and smoothly positions both fighters, mirrors facing direction, updates animation states, and keeps the tournament HUD in perfect synchronization.
+  - Automatically disables local physics simulation (`Rigidbody2D.bodyType = Kinematic`) and attack hitboxes, completely preventing local physics drift or duplicate damage calculations.

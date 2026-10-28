@@ -11,9 +11,15 @@
     "startupFrames": 3,
     "activeFrames": 4,
     "recoveryFrames": 6,
-    "hitboxOffset": { "x": 0.80, "y": 1.05 },
-    "hitboxSize": { "x": 0.75, "y": 0.45 },
-    "kiGainOnHit": 5
+    "hitboxOffset": {
+      "x": 0.8,
+      "y": 1.05
+    },
+    "hitboxSize": {
+      "x": 0.75,
+      "y": 0.45
+    },
+    "kiGainOnHit": 4
   },
   "heavyAttack": {
     "damage": 7,
@@ -21,33 +27,42 @@
     "startupFrames": 6,
     "activeFrames": 5,
     "recoveryFrames": 10,
-    "hitboxOffset": { "x": 0.84, "y": 1.05 },
-    "hitboxSize": { "x": 0.82, "y": 0.48 },
-    "kiGainOnHit": 8
+    "hitboxOffset": {
+      "x": 0.84,
+      "y": 1.05
+    },
+    "hitboxSize": {
+      "x": 0.82,
+      "y": 0.48
+    },
+    "kiGainOnHit": 7
   },
   "skill": {
-    "name": "Super Saiyan",
+    "name": "Super Saiyan (Toggle)",
     "type": "transformation",
-    "kiCost": 35,
+    "kiCost": 0,
     "damage": 0,
     "speed": 0.0,
     "lifetime": 15.0,
-    "buffs": "+25% Speed, +66% Light Dmg (5), +43% Heavy Dmg (10)",
+    "buffs": "Toggle: Consumes 2.5 Ki/s. Buffs: +25% Speed, +66% Light Dmg (5), +43% Heavy Dmg (10)",
     "startupFrames": 0,
     "recoveryFrames": 0
   },
   "ultimate": {
     "name": "Kamehameha",
-    "kiCost": 80,
+    "kiCost": 70,
     "damage": 45,
-    "hitboxSize": { "x": 3.0, "y": 3.0 },
+    "hitboxSize": {
+      "x": 3.0,
+      "y": 3.0
+    },
     "startupFrames": 30,
     "activeFrames": 15,
     "recoveryFrames": 25,
     "drawback": "Leaves Goku at 0 Ki after use"
   },
-  "meditateKiPerSecond": 15.0,
-  "kiGainOnDamageTaken": 3,
+  "meditateKiPerSecond": 8.0,
+  "kiGainOnDamageTaken": 1.5,
   "redZone": {
     "threshold": 10,
     "duration": 5.0,

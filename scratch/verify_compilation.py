@@ -17,7 +17,8 @@ def check_project(csproj_path, out_dll_name):
     
     references = []
     defines = []
-    sources = []
+    sources = set()
+    is_editor = "Editor" in csproj_path
     
     for elem in root.iter():
         tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
@@ -36,13 +37,27 @@ def check_project(csproj_path, out_dll_name):
             if inc:
                 src_path = os.path.join(PROJECT_ROOT, inc)
                 if os.path.exists(src_path):
-                    sources.append(src_path)
+                    sources.add(os.path.abspath(src_path))
         elif tag == "DefineConstants":
             if elem.text:
                 defines.extend(elem.text.strip().split(';'))
 
+    # Automatically discover all .cs files in Assets to catch newly added files
+    assets_dir = os.path.join(PROJECT_ROOT, "Assets")
+    for r, d, files in os.walk(assets_dir):
+        for f in files:
+            if f.endswith(".cs"):
+                full_p = os.path.abspath(os.path.join(r, f))
+                in_editor = "\\Editor\\" in full_p or "/Editor/" in full_p
+                if is_editor and in_editor:
+                    sources.add(full_p)
+                elif not is_editor and not in_editor:
+                    sources.add(full_p)
+
+    sources = sorted(list(sources))
+
     # If compiling Editor assembly, ensure test runtime dll is referenced
-    if "Editor" in csproj_path:
+    if is_editor:
         runtime_dll = os.path.join(PROJECT_ROOT, "Temp", "test_Assembly-CSharp.dll")
         if os.path.exists(runtime_dll):
             references.append(runtime_dll)
@@ -56,7 +71,7 @@ def check_project(csproj_path, out_dll_name):
     
     cmd = [
         "/target:library",
-        f"/out:{out_path}",
+        f'/out:"{out_path}"',
         "/langversion:9.0",
         "/noconfig",
         "/nostdlib",
@@ -66,50 +81,47 @@ def check_project(csproj_path, out_dll_name):
         cmd.append(f"/define:{';'.join(set(defines))}")
         
     for r in references:
-        cmd.append(f"/r:{r}")
+        cmd.append(f'/r:"{r}"')
         
     for s in sources:
-        cmd.append(s)
+        cmd.append(f'"{s}"')
 
-    # Use response file
+    # Write response file
     rsp_path = os.path.join(PROJECT_ROOT, "Temp", f"{out_dll_name}.rsp")
     with open(rsp_path, "w", encoding="utf-8") as f:
         for arg in cmd:
-            if " " in arg and not (arg.startswith('"') and arg.endswith('"')):
-                arg = f'"{arg}"'
-            f.write(arg + "\n")
+            f.write(f"{arg}\n")
             
     print(f"Compiling {len(sources)} source files with {len(references)} references...")
-    result = subprocess.run([DOTNET_PATH, CSC_DLL_PATH, f"@{rsp_path}"], capture_output=True, text=True)
     
-    # Filter output: errors vs warnings
-    lines = result.stdout.splitlines() + result.stderr.splitlines()
-    errors = [l for l in lines if ": error " in l]
-    warnings = [l for l in lines if ": warning " in l]
+    proc = subprocess.run(
+        [DOTNET_PATH, CSC_DLL_PATH, f"@{rsp_path}"],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT
+    )
     
-    if len(errors) == 0 and result.returncode == 0:
-        print(f"-> SUCCESS! {out_dll_name} compiled with ZERO (0) ERRORS!")
-        if warnings:
-            print(f"   ({len(warnings)} compiler warnings present - informational only)")
+    if proc.returncode == 0:
+        print(f"-> SUCCESS! Compiled {out_dll_name} without errors.")
         return True
     else:
-        print(f"-> FAILED with {len(errors)} errors (exit code {result.returncode}):")
-        for err in errors:
-            print("  ", err)
-        if not errors:
-            print("\nFull output:\n", result.stdout, result.stderr)
+        print(f"-> FAILED with {proc.stdout.count('error CS')} errors (exit code {proc.returncode}):")
+        for line in proc.stdout.splitlines():
+            if "error CS" in line:
+                print("   " + line)
         return False
 
 if __name__ == "__main__":
-    ok1 = check_project(os.path.join(PROJECT_ROOT, "Assembly-CSharp.csproj"), "test_Assembly-CSharp.dll")
-    ok2 = check_project(os.path.join(PROJECT_ROOT, "Assembly-CSharp-Editor.csproj"), "test_Assembly-CSharp-Editor.dll")
+    runtime_ok = check_project(os.path.join(PROJECT_ROOT, "Assembly-CSharp.csproj"), "test_Assembly-CSharp.dll")
+    editor_ok = check_project(os.path.join(PROJECT_ROOT, "Assembly-CSharp-Editor.csproj"), "test_Assembly-CSharp-Editor.dll")
     
-    print("\n--------------------------------------------------------")
-    if ok1 and ok2:
-        print(">>> ALL C# ASSEMBLIES COMPILED CLEANLY WITH ZERO (0) ERRORS! <<<")
-        print("--------------------------------------------------------")
+    if runtime_ok and editor_ok:
+        print("\n--------------------------------------------------------")
+        print(">>> ALL C# PROJECTS COMPILED CLEANLY WITH ZERO ERRORS <<<")
+        print("--------------------------------------------------------\n")
         sys.exit(0)
     else:
+        print("\n--------------------------------------------------------")
         print(">>> COMPILATION ERRORS DETECTED! <<<")
-        print("--------------------------------------------------------")
+        print("--------------------------------------------------------\n")
         sys.exit(1)
