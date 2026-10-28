@@ -188,7 +188,7 @@ High-performance local area network play powered by low-latency TCP sockets with
 
 <div align="center">
 
-**Developed by [Nikhil Bansal](https://github.com/Nikhil17295)**  
+**Developed by [Nikhil Bansal](https://github.com/Nikhil17295) and [Madhav Gaba]**  
 *Built with Unity 6 & Universal Render Pipeline 2D*
 
 </div>
