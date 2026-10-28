@@ -6,141 +6,178 @@
 ![Render Pipeline](https://img.shields.io/badge/Pipeline-Universal%20RP%202D-1E88E5?style=for-the-badge)
 ![Language](https://img.shields.io/badge/Language-C%23%20%7C%20.NET%20Standard%202.1-512BD4?style=for-the-badge&logo=csharp&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20PC%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
-![Multiplayer](https://img.shields.io/badge/Netcode-Mirror%20LAN%20Networking-E53935?style=for-the-badge)
-![Frame Target](https://img.shields.io/badge/Performance-Locked%2060%20FPS-43A047?style=for-the-badge)
+![Developer](https://img.shields.io/badge/Developer-Nikhil%20Bansal-FF6F00?style=for-the-badge&logo=github&logoColor=white)
+![Netcode](https://img.shields.io/badge/Netcode-Symmetric%20LAN%20Input%20Exchange-E53935?style=for-the-badge)
+![Target FPS](https://img.shields.io/badge/Performance-Locked%2060%20FPS-43A047?style=for-the-badge)
 
 <br/>
 
-**A high-octane 16-bit arcade anime fighting game developed in Unity 6.**  
-*Featuring authentic pixel art, sub-pixel combat physics, dynamic Doctor Strange mystic relics, adaptive tactical AI, and seamless local & LAN multiplayer.*
+**A tournament-grade, 16-bit arcade anime fighting game developed from scratch in Unity 6.**  
+*Featuring authentic pixel art, sub-pixel hitbox physics, Doctor Strange mystic relics, data-driven balance, adaptive footsies AI, and lag-free symmetric LAN multiplayer.*
 
-[🎮 Key Features](#-key-features) • [🕹️ Controls](#️-controls) • [👥 Character Roster](#-character-roster) • [🌐 Game Modes](#-game-modes) • [⚙️ Architecture](#-technical-architecture) • [🚀 Quick Start](#-quick-start)
+[🌌 Lore](#-lore--narrative) • [🕹️ Exact Controls](#️-controls--input-mappings) • [👥 Character Roster & Frame Data](#-character-roster--exact-move-data) • [🔮 Unique Mechanics](#-unique-game-mechanics) • [🌐 Game Modes & Netcode](#-game-modes--network-architecture) • [🚀 Quick Start](#-quick-start)
 
 ---
 
 </div>
 
-## 🌌 Lore & Setting
+## 🌌 Lore & Narrative
 
-When the Sorcerer Supreme attempts a forbidden temporal incantation to seal a fractured cosmic rift, spacetime destabilizes. Reality fractures across the multiverse, violently pulling two of the strongest martial forces in existence into the **Sanctum Sanctorum Mystic Arena**:
+When Doctor Strange attempts a forbidden temporal incantation to seal an eldritch multiversal tear, the spell destabilizes the fabric of space and time. Dimensional rifts violently rupture across the Animeverse, pulling two supreme champions into the ancient **Sanctum Sanctorum Tournament Arena**:
 
-* **Son Goku** — Master of godly Ki, turtle school martial artist, driven by an unyielding spirit to push past every limit.
-* **Saitama** — The caped hero who shattered his physical limiter, wielding incomprehensible kinetic power with nonchalant ease.
+* **Son Goku** (Dragon Ball) — The Saiyan master of godlike Ki, relentless martial artist with transcendent speed, beam zoning, and the golden Super Saiyan transformation.
+* **Saitama** (One-Punch Man) — The hero who shattered his physical limiter, bringing nonchalant demeanor backed by catastrophic, near-instantaneous kinetic power.
 
-Bounded by ancient Taoist runic barriers and governed by the temporal authority of the **Emerald Time Stone**, only one warrior will emerge victorious.
-
----
-
-## 🎮 Key Features
-
-### 🥊 1. Responsive 16-Bit Arcade Combat Engine
-* **Fluid Frame-Data Driven Combat:** Zero input lag, tight cancellation windows, and distinct Startup, Active, and Recovery states for high-level footsies, spacing, and whiff punishment.
-* **Sub-Pixel Hitbox Precision:** Dedicated 2D trigger colliders on a deterministic physics layer matrix with automatic hit-target caches to eliminate duplicate hit registration during active swings.
-* **Authentic Handcrafted Visuals:** Pixel-perfect animation loops covering idle breathing, walking, crouching guards, aerial jumps/falls, impact hitstuns, custom knockdown recoveries, and victory poses.
-
-### ⚡ 2. Tactical Ki & Exhaustion Mechanics
-* **Dynamic 3-Tier Energy System:** Ki governs special abilities and stamina.
-  - **Safe Zone:** Above your threshold buffer, specials can be performed freely.
-  - **Dynamic Threshold Markers:** Real-time HUD indicators calibrated to each fighter's exact move costs.
-  - **Red Zone Exhaustion State:** Over-expending energy drops the fighter into exhaustion ($40\%$ slowed movement, disabled jumps, zero attack power, and vulnerability to punishes).
-* **Active Meditation Stance:** Hold the Meditate key to channel raw spiritual energy ($+25\text{ Ki/s}$), creating high-risk, high-reward tactical resets during spacing neutral.
-
-### 🔮 3. Doctor Strange Taoist Tournament HUD
-* **Spinning Tao Spell Mandala:** Concentric runic green mandala continuously revolving at $22^\circ/\text{s}$ behind the central clock dial.
-* **The Emerald Time Stone Relic:** Faceted, illuminated relic mounted directly atop the countdown dial, tracking round duration.
-* **Championship Match Point Relic:** Central golden crest begins hollow during neutral rounds, dynamically igniting into a pulsing crystal when either fighter reaches Match Point.
-* **Arcade Ghost Health Bars:** High-visibility 2-tone health bars with smoothly trailing warning-red ghost meters that visualize recent chip and combo damage.
-* **Dual Sapphire Gem Indicators:** Socketed win indicators that illuminate upon round victories.
-
-### 🧠 4. Adaptive AI with Tactical Spacing
-* **Turn-Taking Pacing:** CPU bots execute single, readable strikes with full recovery windows, eliminating unfair frame-instant machine loops.
-* **Intelligent Tactical Retreat:** Bots actively disengage and backpedal across the arena after exchanges to grant players breathing room to practice, position, and charge Ki.
-* **Anti-Corner Edge Awareness:** AI monitors stage boundaries and executes athletic jumps toward center stage when backed against the arena wall.
-* **3 Scaled Difficulty Presets:**
-  - **Easy:** Accessible learning profile with generous retreat windows ($1.8\text{s} - 2.8\text{s}$) and relaxed reaction times ($0.45\text{s}$).
-  - **Hard:** Competitive neutral spacing with balanced whiff punishing and tactical meditation.
-  - **Extreme:** Tournament-master difficulty featuring rapid reaction ($0.04\text{s}$), reactive jump escapes, and crouch-ducking.
+Encircled by ancient Taoist runic barriers and governed by the temporal authority of the **Emerald Time Stone**, only one warrior can claim championship victory and return to their home dimension!
 
 ---
 
-## 👥 Character Roster
+## 🕹️ Controls & Input Mappings
+
+The game features **100% exact, verified input profiles** configured through the central `InputSettingsManager`. All keybindings persist across sessions and can be reconfigured directly in the in-game Options menu.
+
+### 1. Single Player Mode (Solo vs CPU & LAN Multiplayer)
+*Optimized for ergonomic one-hand movement and adjacent action triggers:*
+
+| Action | Primary Key | Description |
+| :--- | :---: | :--- |
+| **Move Left** | <kbd>A</kbd> | Walk backward / retreat |
+| **Move Right** | <kbd>D</kbd> | Walk forward / advance |
+| **Jump** | <kbd>W</kbd> | Physics jump arc |
+| **Crouch / Low Guard** | <kbd>S</kbd> | Duck high attacks and crouch |
+| **Light Attack** | <kbd>F</kbd> | Fast frame jab (builds Ki on hit) |
+| **Heavy Attack** | <kbd>C</kbd> | Heavy strike with high knockback |
+| **Special Skill** | <kbd>E</kbd> | Character-specific ability (Super Saiyan Toggle / Consecutive Punches) |
+| **Ultimate Attack** | <kbd>Q</kbd> | Screen-clearing cinematic finisher |
+| **Meditate (Ki Charge)** | <kbd>X</kbd> | Channel spiritual energy to regenerate Ki |
+| **Pause / Return** | <kbd>Escape</kbd> | Open in-game menu or back out |
+
+---
+
+### 2. Local 2-Player Duel Mode (Shared Single Keyboard)
+*A balanced, non-overlapping dual-layout allowing two players to fight on the same keyboard:*
+
+| Action | Player 1 (Left Keyboard Half) | Player 2 (Right Keyboard Half) | Gamepad (Xbox / PlayStation) |
+| :--- | :---: | :---: | :---: |
+| **Move Left** | <kbd>A</kbd> | <kbd>J</kbd> | Left Analog Stick / D-Pad Left |
+| **Move Right** | <kbd>D</kbd> | <kbd>L</kbd> | Left Analog Stick / D-Pad Right |
+| **Jump** | <kbd>W</kbd> | <kbd>I</kbd> | Button South (<kbd>A</kbd> / <kbd>×</kbd>) |
+| **Crouch** | <kbd>S</kbd> | <kbd>K</kbd> | Down on Analog Stick / D-Pad Down |
+| **Light Attack** | <kbd>F</kbd> | <kbd>H</kbd> | Button West (<kbd>X</kbd> / <kbd>□</kbd>) |
+| **Heavy Attack** | <kbd>C</kbd> | <kbd>N</kbd> | Button North (<kbd>Y</kbd> / <kbd>△</kbd>) |
+| **Special Skill** | <kbd>E</kbd> | <kbd>U</kbd> | Right Shoulder (<kbd>RB</kbd> / <kbd>R1</kbd>) |
+| **Ultimate Attack** | <kbd>Q</kbd> | <kbd>O</kbd> | Right Trigger (<kbd>RT</kbd> / <kbd>R2</kbd>) |
+| **Meditate** | <kbd>X</kbd> | <kbd>M</kbd> | Left Trigger (<kbd>LT</kbd> / <kbd>L2</kbd>) |
+
+---
+
+## 👥 Character Roster & Exact Move Data
+
+Every attribute and move frame is externalized in data-driven JSON profiles (`StreamingAssets/Characters/*.json`).
+
+### 🥋 Son Goku (Martial Arts & Ki Transformation Specialist)
 
 ```
-====================================================================================================
-  CHARACTER           SPECIAL SKILL                         CINEMATIC ULTIMATE
-====================================================================================================
-  Son Goku            Kaioken Ki Burst (30 Ki)              Kamehameha Wave (70 Ki)
-                      Rapid horizontal body dash with       Iconic charge-up & full-screen energy
-                      invulnerability startup frames.       beam, triggering Super Saiyan state!
-
-  Saitama             Consecutive Normal Punches (30 Ki)    Serious Punch (80 Ki)
-                      High-frequency multi-punch barrage    Cinematic dramatic camera cut-in, shockwave
-                      shredding enemy guard.                impact, and screen-blackout finishing blow.
-====================================================================================================
+Max Health: 100 HP  |  Move Speed: 5.2 (Fast)  |  Jump Force: 12.5  |  Gravity Scale: 3.0
+Meditation Channel Rate: +8.0 Ki/s  |  Ki Gain on Damage Taken: 1.5 Ki per hit
 ```
 
-### 🥋 Son Goku
-* **Playstyle:** All-rounder martial artist with superior aerial mobility, long-range beam pressure, and Super Saiyan transformation.
-* **Special Skill — Kaioken Burst:** Teleports forward in a red kinetic streak, closing gaps instantaneously.
-* **Ultimate — Super Kamehameha:** Channels energy into a full-screen destructive beam. If Goku lands the beam, he ascends into **Super Saiyan** form, gaining radiant gold particle auras and increased mobility.
-
-### 🥊 Saitama
-* **Playstyle:** Heavy-impact rushdown powerhouse with unmatched single-strike devastation and heavy guard damage.
-* **Special Skill — Consecutive Normal Punches:** Unleashes a rapid flurry of jabs dealing concentrated close-range damage.
-* **Ultimate — Serious Series: Serious Punch:** Initiates a dramatic freeze-frame cinematic cut-in, executing a devastating punch that shakes the entire screen with cosmic kinetic force.
+| Move | Command | Damage | Ki Cost | Frame Data (Startup / Active / Recovery) | Knockback | Properties & Description |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Light Jab** | <kbd>F</kbd> | **3** | $0$ | 3 / 4 / 6 frames | $2.0$ | Fast poking jab. Generates $+4\text{ Ki}$ on hit. |
+| **Fierce Roundhouse** | <kbd>C</kbd> | **7** | $0$ | 6 / 5 / 10 frames | $4.5$ | Heavy turning kick. Generates $+7\text{ Ki}$ on hit. |
+| **Super Saiyan (Toggle)** | <kbd>E</kbd> | Buff | $0$ to activate<br/>(Drains $2.5\text{ Ki/s}$) | Instant Toggle | — | **Ascends to Super Saiyan!** Golden radiant hair & aura burst. Buffs: **$+25\%$ Move Speed**, Light Attack dmg boosted to **$5$** ($+66\%$), Heavy Attack dmg boosted to **$10$** ($+43\%$). Toggles off when deactivated or when Ki reaches zero. |
+| **Super Kamehameha** | <kbd>Q</kbd> | **45** | $70\text{ Ki}$ | 30 / 15 / 25 frames | $8.0$ | Iconic voiced charge-up (*"KA-ME-HA-ME-HA!"*) launching a colossal, screen-spanning energy beam across the arena that obliterates everything in its path. |
 
 ---
 
-## 🕹️ Controls
+### 🥊 Saitama (Devastating Bruiser & Kinetic Powerhouse)
 
-The game supports simultaneous Dual Keyboard and XInput / DirectInput Gamepads.
+```
+Max Health: 100 HP  |  Move Speed: 4.4 (Heavy)  |  Jump Force: 10.8  |  Gravity Scale: 3.0
+Meditation Channel Rate: +5.0 Ki/s  |  Ki Gain on Damage Taken: 1.5 Ki per hit
+```
 
-| Action | Player 1 (Keyboard) | Player 2 (Keyboard) | Gamepad (Xbox / PlayStation) |
-| :--- | :--- | :--- | :--- |
-| **Move Left / Right** | <kbd>A</kbd> / <kbd>D</kbd> | <kbd>←</kbd> / <kbd>→</kbd> | Left Analog Stick / D-Pad |
-| **Jump** | <kbd>W</kbd> | <kbd>↑</kbd> | Button South (<kbd>A</kbd> / <kbd>×</kbd>) |
-| **Crouch / Guard** | <kbd>S</kbd> | <kbd>↓</kbd> | Down on Analog Stick / D-Pad |
-| **Light Attack** | <kbd>J</kbd> | <kbd>Num 1</kbd> | Button West (<kbd>X</kbd> / <kbd>□</kbd>) |
-| **Heavy Attack** | <kbd>K</kbd> | <kbd>Num 2</kbd> | Button North (<kbd>Y</kbd> / <kbd>△</kbd>) |
-| **Special Skill** | <kbd>U</kbd> | <kbd>Num 4</kbd> | Right Shoulder (<kbd>RB</kbd> / <kbd>R1</kbd>) |
-| **Ultimate Attack** | <kbd>I</kbd> | <kbd>Num 5</kbd> | Right Trigger (<kbd>RT</kbd> / <kbd>R2</kbd>) |
-| **Meditate (Ki Charge)** | <kbd>L</kbd> | <kbd>Num 3</kbd> | Left Trigger (<kbd>LT</kbd> / <kbd>L2</kbd>) |
-| **Pause / Menu** | <kbd>Escape</kbd> | <kbd>Escape</kbd> | <kbd>Start</kbd> / <kbd>Options</kbd> |
+| Move | Command | Damage | Ki Cost | Frame Data (Startup / Active / Recovery) | Knockback | Properties & Description |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Light Slap** | <kbd>F</kbd> | **4** | $0$ | **2** / 3 / 5 frames | $2.2$ | Ultra-fast 2-frame startup strike. Generates $+2.5\text{ Ki}$ on hit. |
+| **Heavy Smash** | <kbd>C</kbd> | **9** | $0$ | 5 / 4 / 9 frames | $5.5$ | Brutal kinetic strike. Generates $+5\text{ Ki}$ on hit. |
+| **Consecutive Normal Punches** | <kbd>E</kbd> | **20**<br/>($5\text{ hits} \times 4$) | $30\text{ Ki}$ | 4 / 12 / 8 frames | $3.5$ | A blinding close-range flurry of 5 rapid punches that shreds enemy guard and locks opponent in multi-hit stun. |
+| **Serious Series: Serious Punch** | <kbd>Q</kbd> | **90** | $80\text{ Ki}$ | 20 / 3 / 30 frames | $12.0$ | **Cinematic Finisher:** Dramatic freeze-frame cut-in with menacing death-glare artwork, earth-shaking shockwave, and full-screen blackout blow that deals $90\text{ damage}$ (near one-hit KO). High risk: $30\text{ frames}$ recovery on whiff! |
 
 ---
 
-## 🌐 Game Modes
+## 🔮 Unique Game Mechanics
 
-### 1. Solo Arcade Campaign
-Challenge the CPU AI across **Easy**, **Hard**, or **Extreme** difficulties. Features adaptive spacing footsies, AI meditation management, and dynamic round scaling.
+### 1. Dynamic 3-Tier Energy & Safe-Threshold Markers
+Ki governs special abilities and stamina. Unlike games with static meters, our HUD features **real-time dynamic threshold indicators** calibrated to each fighter:
+* **Marker 1 — Red Zone Exhaustion Threshold ($10\text{ Ki}$):**
+  If a fighter's Ki drops below $10$, they enter **Red Zone Exhaustion**:
+  - Movement speed drops by **$70\%$** ($0.3\times$ speed multiplier).
+  - Jumping and dashing are disabled.
+  - Attacks cannot be initiated for $5\text{ seconds}$ until recovering to $20\text{ Ki}$.
+* **Marker 2 — Dynamic Safe Skill Threshold:**
+  - **Goku:** Drawn at **$30\text{ Ki}$** (warning indicator before transformation stamina drain).
+  - **Saitama:** Drawn dynamically at **$40\text{ Ki}$** ($10\text{ Red Zone} + 30\text{ Skill Cost}$). Activating Consecutive Normal Punches at or above $40\text{ Ki}$ guarantees you will not self-exhaust into the Red Zone!
+* **Marker 3 — Dynamic Safe Ultimate Threshold:**
+  - **Goku:** Drawn at **$80\text{ Ki}$** ($10 + 70\text{ Kamehameha Cost}$).
+  - **Saitama:** Drawn at **$90\text{ Ki}$** ($10 + 80\text{ Serious Punch Cost}$).
+
+### 2. Active Meditation Stance
+Holding the Meditate key puts the fighter into an active spiritual charging stance:
+- Goku recovers $+8.0\text{ Ki/s}$.
+- Saitama recovers $+5.0\text{ Ki/s}$.
+- Creates tactical footsie resets during neutral spacing: risk taking a hit while charging, or build Ki to unlock game-ending ultimates.
+
+### 3. Doctor Strange Taoist Magic Relics
+* **Spinning Tao Spell Mandala:** A $160\times 160\text{px}$ concentric runic green mandala continuously spinning at $22^\circ/\text{s}$ behind the match clock.
+* **The Emerald Time Stone Relic:** A faceted, illuminated diamond-specular green jewel mounted directly on top of the round countdown dial.
+* **Dual Sapphire Win Sockets:** Two discrete gem sockets per fighter that light up with radiant blue crystal gems upon winning rounds.
+* **Pulsing Golden Championship Relic:** Sits as an empty golden socket during neutral rounds, but dynamically ignites into a glowing golden crystal that pulses with an active breathing sine wave ($1.0\times \rightarrow 1.15\times$) as soon as either player reaches Match Point!
+* **Round 3 Decider Music:** If fighters tie $1-1$, Round 3 triggers the dramatic final showdown track (`Final Battle.mp3`) with heightened tension!
+
+### 4. Adaptive AI with Tactical Spacing & Footsies
+* **Combo Unlearning for Fairness:** Frame-instant Gatling cancels were intentionally removed from the AI. The computer throws single, readable attacks with full recovery windows, guaranteeing players have opportunities to counter-attack.
+* **Tactical Retreat State Machine:** After launching an attack, the AI rolls a retreat check ($90\%$ on Easy, $70\%$ on Hard, $40\%$ on Extreme). On Easy mode, the bot actively walks backward for **$1.8\text{s} - 2.8\text{s}$**, opening up the stage so players can breathe, meditate, and practice combos.
+* **Anti-Corner Edge Awareness:** If backed against the arena wall ($|X| \ge 6.8\text{m}$), the AI automatically executes an athletic forward jump toward center stage to avoid corner traps.
+
+---
+
+## 🌐 Game Modes & Network Architecture
+
+### 1. Solo Arcade Mode
+Fight against the adaptive AI across **Easy**, **Hard**, and **Extreme** difficulty tiers. Features tactical spacing footsies, AI self-preservation, and dynamic round scaling.
 
 ### 2. Local 2-Player Versus
 Classic couch multiplayer on a shared screen. Both players select their fighters and battle under official tournament Best-of-3 round rules.
 
-### 3. Local Area Network (LAN) Multiplayer
-High-performance multiplayer powered by Mirror Networking:
-* **Host Match:** Create a dedicated tournament server on your local Wi-Fi or Ethernet network.
-* **Join Match:** Input the host's local IP address or use LAN Discovery to connect instantly.
-* **Synchronized Best-of-3 Lifecycle:** Networked round timers, authoritative hit confirmation, health/Ki sync, and post-match rematch negotiation.
-
----
-
-## ⚙️ Technical Architecture
-
-* **Decoupled Grimoire JSON Balancing:** Character attributes (health, attack damage, walk velocity, jump arcs, Ki costs) are fully externalized in `StreamingAssets/Characters/*.json` for real-time balancing without recompilation.
-* **Deterministic Event-Driven State Machines:** Fighters operate via decoupled hierarchical state machines communicating through strict C# delegates and events (`OnHealthChanged`, `OnEnergyChanged`, `OnThresholdsChanged`, `OnStateChanged`).
-* **Automated Standalone Packaging Pipeline:** Integrated `IPostprocessBuildWithReport` build processor automatically sanitizes asset payloads upon build completion, ensuring standalone executables run out-of-the-box with zero dependency missing errors.
+### 3. Symmetric LAN Multiplayer Architecture
+High-performance local area network play powered by low-latency TCP sockets with `NoDelay` enabled:
+* **True Symmetric Screen Perspective:**
+  - On **Host's screen**, Host is Player 1 on the Left; Client is Player 2 on the Right.
+  - On **Client's screen**, Client is Player 1 on the Left; Host is Player 2 on the Right!
+  - Both players enjoy **0 ms local input latency** controlling their hero on the left side of their own display.
+* **Full Local 60 FPS Simulation:**
+  - Neither machine freezes physics to Kinematic.
+  - Neither machine disables hitboxes.
+  - Both computers simulate full 60 FPS physics, jump curves, animations, and particle bursts locally.
+* **9-Byte Input Streaming with 3-Frame Buffering:**
+  - Transmits compact 9-byte packets (`MoveInput.x`, `MoveInput.y`, and 7-button bitmask).
+  - Horizontal movement is automatically inverted for arena symmetry (`MoveInput.x = -packet.MoveInput.x`).
+  - Button presses are latched into a 3-frame buffer consumed on read, guaranteeing zero dropped attacks or jumps.
+* **Synchronized Round Resets:**
+  - When the Host initiates `StartRound()`, a `RoundReset` packet triggers identical synchronized restarts on both screens.
 
 ---
 
 ## 🚀 Quick Start
 
-### Playing the Standalone Release
-1. Extract `Mystic_Combat_Animeverse_Incursion_Playable.zip`.
-2. Launch **`Mystic_Combat_Animeverse_Incursion.exe`**.
-3. Use the keyboard or plug in up to two gamepads to start battling immediately!
+### Running the Standalone Release
+1. Extract **`Mystic_Combat_Animeverse_Incursion_Playable.zip`**.
+2. Run **`Mystic_Combat_Animeverse_Incursion.exe`**.
+3. Use the keyboard (Single Player: `WASD` + `F, C, E, Q, X`) or connect up to two gamepads.
 
-### System Requirements
+### Minimum System Requirements
 * **OS:** Windows 10 / 11 (64-bit)
 * **Processor:** Intel Core i3 / AMD Ryzen 3 or equivalent
 * **Memory:** 2 GB RAM
@@ -151,7 +188,7 @@ High-performance multiplayer powered by Mirror Networking:
 
 <div align="center">
 
-*Mystic Combat: Animeverse Incursion is developed for high-speed martial arts gaming.*  
-**Created with Unity 6 & Universal Render Pipeline.**
+**Developed by [Nikhil Bansal](https://github.com/Nikhil17295)**  
+*Built with Unity 6 & Universal Render Pipeline 2D*
 
 </div>
