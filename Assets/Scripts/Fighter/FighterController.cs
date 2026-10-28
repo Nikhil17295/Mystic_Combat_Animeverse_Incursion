@@ -10,7 +10,7 @@ namespace MysticCombat.Fighter
     /// meditation, attacks, and Red Zone exhaustion speed penalty.
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
-    [RequireComponent(typeof(BoxCollider2D))]
+    [RequireComponent(typeof(Collider2D))]
     [RequireComponent(typeof(SpriteRenderer))]
     public class FighterController : MonoBehaviour
     {
@@ -75,7 +75,7 @@ namespace MysticCombat.Fighter
 
         private Rigidbody2D rb;
         private SpriteRenderer spriteRenderer;
-        private BoxCollider2D bodyCollider;
+        private Collider2D bodyCollider;
         private EnergySystem energySystem;
         private float attackTimer;
         private float attackStartupTimer;
@@ -83,6 +83,7 @@ namespace MysticCombat.Fighter
         private BoxCollider2D hurtboxCollider;
         private float flurryHitTimer;
         private int flurryHitsRemaining;
+        private bool hasHitTargetThisSwing;
 
         #endregion
 
@@ -100,6 +101,7 @@ namespace MysticCombat.Fighter
 
         public float AttackStartupTimer => attackStartupTimer;
         public float AttackActiveTimer => attackActiveTimer;
+        public bool HasHitTargetThisSwing => hasHitTargetThisSwing;
 
         #endregion
 
@@ -109,7 +111,7 @@ namespace MysticCombat.Fighter
         {
             rb = GetComponent<Rigidbody2D>();
             spriteRenderer = GetComponent<SpriteRenderer>();
-            bodyCollider = GetComponent<BoxCollider2D>();
+            bodyCollider = GetComponent<Collider2D>();
             energySystem = GetComponent<EnergySystem>();
 
             if (fighterAudio == null)
@@ -177,6 +179,7 @@ namespace MysticCombat.Fighter
         {
             CheckGround();
             HandleSuperSaiyanTimer();
+            HandleRedZoneVisuals();
             HandleStateTransitions();
             HandleKiGeneration();
         }
@@ -184,6 +187,7 @@ namespace MysticCombat.Fighter
         private void FixedUpdate()
         {
             ApplyMovement();
+            ApplyKineticPhysics();
         }
 
         private void LateUpdate()
@@ -278,10 +282,20 @@ namespace MysticCombat.Fighter
         }
 
         /// <summary>
+        /// Called by HitboxController when an attack successfully connects with the enemy.
+        /// Enables chain-canceling during recovery frames.
+        /// </summary>
+        public void OnAttackHitConfirmed()
+        {
+            hasHitTargetThisSwing = true;
+        }
+
+        /// <summary>
         /// Applies movement and Ki tuning values (from character JSON data).
         /// </summary>
         /// <summary>
         /// Puts the fighter into HitStun / Hurt reaction state or Knockout if defeated.
+        /// Accounts for Red Zone exhaustion (+0.12s longer hitstun vulnerability).
         /// </summary>
         public void ApplyHit(int damage, float stunDuration = 0.35f)
         {
@@ -293,6 +307,12 @@ namespace MysticCombat.Fighter
                 fighterAudio?.PlayVoiceHurt();
                 TransitionTo(FighterState.Knockout);
                 return;
+            }
+
+            // Red Zone Exhaustion Vulnerability: Stun duration extended by +0.12s
+            if (energySystem != null && energySystem.IsInRedZone)
+            {
+                stunDuration += 0.12f;
             }
 
             attackTimer = stunDuration;
@@ -374,6 +394,47 @@ namespace MysticCombat.Fighter
                     break;
 
                 case FighterState.LightAttack:
+                    attackTimer -= Time.deltaTime;
+
+                    if (attackStartupTimer > 0f)
+                    {
+                        attackStartupTimer -= Time.deltaTime;
+                        if (attackStartupTimer <= 0f && attackHitbox != null)
+                        {
+                            attackHitbox.Activate();
+                        }
+                    }
+                    else if (attackActiveTimer > 0f)
+                    {
+                        attackActiveTimer -= Time.deltaTime;
+                        if (attackActiveTimer <= 0f && attackHitbox != null)
+                        {
+                            attackHitbox.Deactivate();
+                        }
+                    }
+
+                    // Chain-Canceling: If Light Attack lands on opponent, can chain-cancel into Heavy or Skill!
+                    if (hasHitTargetThisSwing && !isExhausted)
+                    {
+                        if (inputHandler.HeavyAttackPressed)
+                        {
+                            ExecuteHeavyAttack();
+                            break;
+                        }
+                        else if (inputHandler.SkillPressed)
+                        {
+                            ExecuteSkillAttack();
+                            break;
+                        }
+                    }
+
+                    if (attackTimer <= 0f)
+                    {
+                        if (attackHitbox != null) attackHitbox.Deactivate();
+                        TransitionTo(isExhausted ? FighterState.Exhausted : FighterState.Idle);
+                    }
+                    break;
+
                 case FighterState.HeavyAttack:
                 case FighterState.Ultimate:
                     attackTimer -= Time.deltaTime;
@@ -494,119 +555,27 @@ namespace MysticCombat.Fighter
             // Attacks (allowed only when NOT exhausted)
             if (!isExhausted && IsGrounded)
             {
-                // Ultimate Attack (Q / O)
                 if (inputHandler.UltimatePressed)
                 {
-                    float ultCost = 80f;
-                    if (energySystem == null || energySystem.CanAfford(ultCost))
-                    {
-                        if (energySystem != null) energySystem.SpendKi(ultCost);
-                        bool isGoku = gameObject.name.ToLower().Contains("goku");
-                        if (!isGoku)
-                        {
-                            // Saitama Serious Punch: Synced to voice audio (3.80s total)
-                            attackTimer = 3.80f;
-                            attackStartupTimer = 2.40f; // Chilling calm delivery: "Death... Serious Series..."
-                            attackActiveTimer = 1.40f;  // Devastating punch on "SERIOUS PUNCH!" 
-                            if (attackHitbox != null)
-                            {
-                                attackHitbox.ConfigureAttack(100, 12f, 20f, new Vector2(1.25f, 0.95f), new Vector2(1.4f, 1.0f), 3.0f);
-                            }
-                            Combat.VFXManager.Instance?.TriggerCameraShake(0.35f, 0.30f);
-                            Combat.VFXManager.Instance?.TriggerImpactFlash(0.04f);
-                        }
-                        else
-                        {
-                            // Goku Kamehameha: Synced to voice audio (3.36s total)
-                            attackTimer = 3.36f;
-                            attackStartupTimer = 2.15f; // Charging ki in cupped hands: "KA... ME... HA... ME..."
-                            attackActiveTimer = 1.21f;  // Blasting beam on "HA-A-A-A!"
-                            if (attackHitbox != null)
-                            {
-                                attackHitbox.ConfigureAttack(45, 8.5f, 15f, new Vector2(4.6f, 0.95f), new Vector2(8.5f, 1.6f), 2.2f);
-                            }
-                        }
-                        TransitionTo(FighterState.Ultimate);
-                        return;
-                    }
-                }
-
-                // Skill Attack / Super Saiyan (E / U)
-                if (inputHandler.SkillPressed)
-                {
-                    bool isGoku = gameObject.name.ToLower().Contains("goku");
-                    float skillCost = isGoku ? 35f : 20f;
-                    if (energySystem == null || energySystem.CanAfford(skillCost))
-                    {
-                        if (energySystem != null) energySystem.SpendKi(skillCost);
-
-                        if (isGoku)
-                        {
-                            // Pure Super Saiyan transformation / power-up! Zero damage dealt.
-                            if (!isSuperSaiyan)
-                            {
-                                ActivateSuperSaiyan(15f);
-                            }
-                            else
-                            {
-                                superSaiyanTimer = 15f;
-                                fighterAudio?.StartKiMeditationAura();
-                            }
-
-                            if (attackHitbox != null) attackHitbox.Deactivate();
-                            attackTimer = 0.0f;
-                            attackStartupTimer = 0.0f;
-                            attackActiveTimer = 0.0f;
-                            flurryHitsRemaining = 0;
-                            TransitionTo(FighterState.Idle);
-                            return;
-                        }
-
-                        // Saitama Skill (Consecutive Normal Punches - Exactly 10 hits @ 2 damage, no hitstop, minimal shake)
-                        attackTimer = 2.70f;
-                        attackStartupTimer = 0.15f;
-                        attackActiveTimer = 2.30f;
-                        flurryHitsRemaining = 10;
-                        flurryHitTimer = 0.23f;
-                        if (attackHitbox != null)
-                        {
-                            Vector2 offset = new Vector2(1.05f, 0.9f);
-                            Vector2 size = new Vector2(1.4f, 0.9f);
-                            int damage = 2; // 2 damage per punch x 10 hits = 20 damage
-                            float knockbackX = 0.35f; // Micro-knockback to prevent flying away
-                            float knockbackY = 0.0f;
-                            attackHitbox.ConfigureAttack(damage, knockbackX, 1f, offset, size, knockbackY, hitStop: false, shakeMult: 0.20f);
-                        }
-                        TransitionTo(FighterState.Skill);
-                        return;
-                    }
-                }
-
-                // Heavy Attack (C / N)
-                if (inputHandler.HeavyAttackPressed)
-                {
-                    attackTimer = 0.88f;
-                    attackStartupTimer = 0.18f;
-                    attackActiveTimer = 0.35f;
-                    if (attackHitbox != null)
-                    {
-                        attackHitbox.ConfigureAttack(16, 5.0f, 10f, new Vector2(0.95f, 0.85f), new Vector2(1.1f, 0.75f), 2.0f);
-                    }
-                    TransitionTo(FighterState.HeavyAttack);
+                    ExecuteUltimateAttack();
                     return;
                 }
 
-                // Light Attack (F / H)
+                if (inputHandler.SkillPressed)
+                {
+                    ExecuteSkillAttack();
+                    return;
+                }
+
+                if (inputHandler.HeavyAttackPressed)
+                {
+                    ExecuteHeavyAttack();
+                    return;
+                }
+
                 if (inputHandler.LightAttackPressed)
                 {
-                    attackTimer = 0.44f;
-                    attackStartupTimer = 0.08f;
-                    attackActiveTimer = 0.24f;
-                    if (attackHitbox != null)
-                    {
-                        attackHitbox.ConfigureAttack(10, 2.2f, 6f, new Vector2(0.8f, 0.85f), new Vector2(0.85f, 0.65f), 0.8f);
-                    }
-                    TransitionTo(FighterState.LightAttack);
+                    ExecuteLightAttack();
                     return;
                 }
             }
@@ -646,6 +615,7 @@ namespace MysticCombat.Fighter
 
             FighterState oldState = CurrentState;
             CurrentState = newState;
+            hasHitTargetThisSwing = false;
 
             // Attack Interruption & Cleanup: Deactivate hitboxes if taking a hit or leaving attack states
             if (attackHitbox != null && (newState == FighterState.HitStun || newState == FighterState.KnockBack || newState == FighterState.Knockout || (IsAttackState(oldState) && !IsAttackState(newState))))
@@ -653,17 +623,18 @@ namespace MysticCombat.Fighter
                 attackHitbox.Deactivate();
             }
 
-            // Dynamic Hurtbox Height: Ducking lowers vulnerable body area!
+            // Dynamic Hurtbox Height: Ducking lowers vulnerable body area under high & heavy attacks!
+            // (Physical body collider is NEVER resized at runtime to prevent Box2D depenetration impulses and infinite jumping)
             if (hurtboxCollider != null)
             {
                 if (newState == FighterState.Crouching)
                 {
-                    hurtboxCollider.size = new Vector2(0.70f, 0.78f);
-                    hurtboxCollider.offset = new Vector2(0f, 0.40f);
+                    hurtboxCollider.size = new Vector2(0.75f, 0.65f);
+                    hurtboxCollider.offset = new Vector2(0f, 0.35f);
                 }
                 else if (oldState == FighterState.Crouching)
                 {
-                    hurtboxCollider.size = new Vector2(0.85f, 1.8f);
+                    hurtboxCollider.size = new Vector2(0.85f, 1.80f);
                     hurtboxCollider.offset = new Vector2(0f, 0.95f);
                 }
             }
@@ -835,6 +806,21 @@ namespace MysticCombat.Fighter
                 case FighterState.Jumping:
                 case FighterState.Falling:
                     float horizontalVelocity = inputHandler.MoveInput.x * currentSpeed;
+
+                    // Proximity Buffer & Push Prevention:
+                    // When GROUNDED, moving towards the opponent, and already within the sparring gap (1.15m), lock forward movement!
+                    // (Airborne jumpers are never clamped so they can freely jump over each other!)
+                    if (IsGrounded && opponent != null)
+                    {
+                        float dx = opponent.position.x - transform.position.x;
+                        float moveX = inputHandler.MoveInput.x;
+                        bool movingTowardsOpponent = (dx > 0f && moveX > 0f) || (dx < 0f && moveX < 0f);
+                        if (movingTowardsOpponent && Mathf.Abs(dx) <= 1.15f)
+                        {
+                            horizontalVelocity = 0f;
+                        }
+                    }
+
                     rb.linearVelocity = new Vector2(horizontalVelocity, rb.linearVelocity.y);
                     break;
 
@@ -851,8 +837,208 @@ namespace MysticCombat.Fighter
                     // Anime forward step into punch flurry! (Saitama steady flurry advance tuned to 0.60f)
                     float surgeDir = spriteRenderer != null && spriteRenderer.flipX ? -1f : 1f;
                     float surgeSpeed = gameObject.name.ToLower().Contains("goku") ? 0.0f : 0.60f;
+
+                    // Halt flurry forward surge if already touching opponent
+                    if (opponent != null)
+                    {
+                        float fdx = opponent.position.x - transform.position.x;
+                        bool surgingTowards = (fdx > 0f && surgeDir > 0f) || (fdx < 0f && surgeDir < 0f);
+                        if (surgingTowards && Mathf.Abs(fdx) <= 1.15f)
+                        {
+                            surgeSpeed = 0f;
+                        }
+                    }
+
                     rb.linearVelocity = new Vector2(surgeDir * surgeSpeed, rb.linearVelocity.y);
                     break;
+            }
+        }
+
+        #endregion
+
+        #region Attack Execution Helpers
+
+        private void ExecuteLightAttack()
+        {
+            bool isGoku = gameObject.name.ToLower().Contains("goku");
+            int damage = isGoku ? (isSuperSaiyan ? 5 : 3) : 4;
+            float knockbackX = isGoku ? 2.0f : 2.2f;
+
+            attackTimer = 0.38f;
+            attackStartupTimer = 0.08f;
+            attackActiveTimer = 0.20f;
+            if (attackHitbox != null)
+            {
+                attackHitbox.ConfigureAttack(damage, knockbackX, 6f, new Vector2(0.80f, 1.05f), new Vector2(0.75f, 0.45f), 0.5f);
+            }
+            TransitionTo(FighterState.LightAttack);
+        }
+
+        private void ExecuteHeavyAttack()
+        {
+            bool isGoku = gameObject.name.ToLower().Contains("goku");
+            int damage = isGoku ? (isSuperSaiyan ? 10 : 7) : 9;
+            float knockbackX = isGoku ? 5.0f : 5.5f;
+
+            attackTimer = 0.75f;
+            attackStartupTimer = 0.18f;
+            attackActiveTimer = 0.32f;
+            if (attackHitbox != null)
+            {
+                // Heavy Attack is calibrated ~10% larger than Light Attack for close-range commitment (whiffs above ducking hurtbox at Y=0.675m with 0.135m clearance)
+                attackHitbox.ConfigureAttack(damage, knockbackX, 10f, new Vector2(0.84f, 1.05f), new Vector2(0.82f, 0.48f), 1.8f);
+            }
+            TransitionTo(FighterState.HeavyAttack);
+        }
+
+        private void ExecuteSkillAttack()
+        {
+            bool isGoku = gameObject.name.ToLower().Contains("goku");
+            float skillCost = isGoku ? 35f : 20f;
+            if (energySystem != null && !energySystem.CanAfford(skillCost)) return;
+
+            if (energySystem != null) energySystem.SpendKi(skillCost);
+
+            if (isGoku)
+            {
+                // Pure Super Saiyan transformation / power-up! Zero damage dealt.
+                if (!isSuperSaiyan)
+                {
+                    ActivateSuperSaiyan(15f);
+                }
+                else
+                {
+                    superSaiyanTimer = 15f;
+                    fighterAudio?.StartKiMeditationAura();
+                }
+
+                if (attackHitbox != null) attackHitbox.Deactivate();
+                attackTimer = 0.0f;
+                attackStartupTimer = 0.0f;
+                attackActiveTimer = 0.0f;
+                flurryHitsRemaining = 0;
+                TransitionTo(FighterState.Idle);
+                return;
+            }
+
+            // Saitama Skill (Consecutive Normal Punches - 15 hits @ 2 damage = 30 total damage)
+            attackTimer = 2.70f;
+            attackStartupTimer = 0.15f;
+            attackActiveTimer = 2.30f;
+            flurryHitsRemaining = 15;
+            flurryHitTimer = 0.15f;
+            if (attackHitbox != null)
+            {
+                Vector2 offset = new Vector2(1.05f, 0.90f);
+                Vector2 size = new Vector2(1.4f, 0.90f);
+                int damage = 2; // 2 damage per punch x 15 hits = 30 damage total
+                float knockbackX = 0.30f; // Micro-knockback to prevent flying away
+                float knockbackY = 0.0f;
+                attackHitbox.ConfigureAttack(damage, knockbackX, 1f, offset, size, knockbackY, hitStop: false, shakeMult: 0.20f);
+            }
+            TransitionTo(FighterState.Skill);
+        }
+
+        private void ExecuteUltimateAttack()
+        {
+            float ultCost = 80f;
+            if (energySystem != null && !energySystem.CanAfford(ultCost)) return;
+
+            if (energySystem != null) energySystem.SpendKi(ultCost);
+            bool isGoku = gameObject.name.ToLower().Contains("goku");
+            if (!isGoku)
+            {
+                // Saitama Serious Punch: Synced to voice audio (3.80s total)
+                attackTimer = 3.80f;
+                attackStartupTimer = 2.40f; // Chilling calm delivery: "Death... Serious Series..."
+                attackActiveTimer = 1.40f;  // Devastating punch on "SERIOUS PUNCH!" (90 heavy decisive damage)
+                if (attackHitbox != null)
+                {
+                    attackHitbox.ConfigureAttack(90, 12f, 20f, new Vector2(1.25f, 0.95f), new Vector2(1.4f, 1.0f), 3.0f);
+                }
+                Combat.VFXManager.Instance?.TriggerCameraShake(0.35f, 0.30f);
+                Combat.VFXManager.Instance?.TriggerImpactFlash(0.04f);
+            }
+            else
+            {
+                // Goku Kamehameha: Synced to voice audio (3.36s total, 45 beam damage)
+                attackTimer = 3.36f;
+                attackStartupTimer = 2.15f; // Charging ki in cupped hands: "KA... ME... HA... ME..."
+                attackActiveTimer = 1.21f;  // Blasting beam on "HA-A-A-A!"
+                if (attackHitbox != null)
+                {
+                    attackHitbox.ConfigureAttack(45, 8.5f, 15f, new Vector2(4.6f, 0.95f), new Vector2(8.5f, 1.6f), 2.2f);
+                }
+            }
+            TransitionTo(FighterState.Ultimate);
+        }
+
+        #endregion
+
+        #region Kinetic Physics & Visuals
+
+        private void HandleRedZoneVisuals()
+        {
+            if (spriteRenderer == null) return;
+
+            if (energySystem != null && energySystem.IsInRedZone)
+            {
+                // Visual exhaustion pulse: throb between white and danger amber-red
+                float pulse = Mathf.PingPong(Time.time * 5f, 1f);
+                spriteRenderer.color = Color.Lerp(Color.white, new Color(1f, 0.40f, 0.40f, 1f), pulse);
+            }
+            else if (spriteRenderer.color != Color.white)
+            {
+                spriteRenderer.color = Color.white;
+            }
+        }
+
+        private void ApplyKineticPhysics()
+        {
+            if (rb == null) return;
+
+            // 1. Grounded knockback friction / deceleration: prevents endless sliding on hits
+            if ((CurrentState == FighterState.HitStun || CurrentState == FighterState.KnockBack) && IsGrounded)
+            {
+                float decayedVx = Mathf.MoveTowards(rb.linearVelocity.x, 0f, 14f * Time.fixedDeltaTime);
+                rb.linearVelocity = new Vector2(decayedVx, rb.linearVelocity.y);
+            }
+
+            // 2. Snappy fall gravity: 1.35x heavier gravity during downward fall arc for authentic fighting game weight
+            if (!IsGrounded && rb.linearVelocity.y < 0f)
+            {
+                rb.gravityScale = gravityScale * 1.35f;
+            }
+            else
+            {
+                rb.gravityScale = gravityScale;
+            }
+
+            // 3. Anti-Stacking Slip Vector: Prevents balancing or resting on the opponent's head
+            if (!IsGrounded && opponent != null)
+            {
+                float dx = transform.position.x - opponent.position.x;
+                float dy = transform.position.y - opponent.position.y;
+                // Only if directly centered over opponent's dome and descending
+                if (dy > 0.40f && dy < 1.05f && Mathf.Abs(dx) < 0.45f && rb.linearVelocity.y <= 0f)
+                {
+                    float slipDir = Mathf.Abs(rb.linearVelocity.x) > 0.1f ? Mathf.Sign(rb.linearVelocity.x) : (dx >= 0f ? 1f : -1f);
+                    rb.linearVelocity = new Vector2(slipDir * 2.5f, rb.linearVelocity.y);
+                }
+            }
+        }
+
+        private void OnCollisionEnter2D(Collision2D collision)
+        {
+            if (collision.gameObject.name.ToLower().Contains("wall"))
+            {
+                // High-velocity impact against boundary wall triggers impact crunch dust & micro shake
+                if (rb != null && (Mathf.Abs(rb.linearVelocity.x) > 3.0f || Mathf.Abs(collision.relativeVelocity.x) > 3.0f))
+                {
+                    Vector2 contactPt = collision.contacts.Length > 0 ? collision.contacts[0].point : (Vector2)transform.position;
+                    Combat.VFXManager.Instance?.PlayDustPuff(contactPt);
+                    Combat.VFXManager.Instance?.TriggerCameraShake(0.18f, 0.15f);
+                }
             }
         }
 

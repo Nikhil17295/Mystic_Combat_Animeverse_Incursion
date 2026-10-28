@@ -731,39 +731,45 @@ Mystic Combat's CPU Bot architecture decouples strategic decision-making from ph
 ```mermaid
 graph TD
     subgraph Macro Layer ["Layer 1: Tactical HFSM (CpuFighterBrain.cs)"]
-        Evaluate["EvaluateTacticalPosture()<br/>(Throttled Reaction Tick: 0.14s - 0.40s)"]
-        Neutral["SpacingNeutral<br/>(Relative Footsies)"]
-        Rush["AggressiveRushdown<br/>(Close In & Pressure)"]
-        Hoard["KiHoarding<br/>(Retreat & Meditate)"]
-        Retreat["DefensiveRetreat<br/>(Escape & Jump Out)"]
+        Evaluate["EvaluateTacticalState()<br/>(Throttled Reaction Tick: 0.04s - 0.25s)"]
+        Rush["RushdownPressure<br/>(Aggressive Gap Close & Strike)"]
         Punish["PunishOpening<br/>(Ultimate / Skill Whiff Punish)"]
-        Evaluate --> Neutral & Rush & Hoard & Retreat & Punish
+        Neutral["SpacingNeutral<br/>(Dynamic Footsies & Counter-Poke)"]
+        Charge["KiCharge<br/>(Meditate at Range >= 3.2m)"]
+        Recovery["ExhaustionRecovery<br/>(Red Zone 1.5x Accelerated Meditation)"]
+        Evaluate --> Rush & Punish & Neutral & Charge & Recovery
     end
 
-    subgraph Cadence & Safeguard Gates ["Layer 2: Action Cadence & Cooldown Gates"]
-        JumpGate["Jump Cooldown Gate<br/>(2.0s - 3.2s lockout prevents pogo-sticking)"]
-        AttackGate["Attack Cadence Gate<br/>(0.25s - 0.50s humanized combo rhythm)"]
-        CornerAware["Corner & Stage Boundary Awareness<br/>(|x| > 7.2m: escape jump or fight out)"]
+    subgraph Combat Intelligence ["Layer 2: Combat Engine & Chain-Canceling"]
+        SSJCheck["Goku SSJ Ascension<br/>(Ki >= 35 -> Trigger Skill immediately)"]
+        HitConfirm["Hit-Confirm Combo Engine<br/>(Light lands -> Chain-cancel into Heavy or Skill)"]
         CrouchDuck["Defensive Crouch Duck<br/>(Ducks under high strikes)"]
+        CornerAware["Corner Boundary Awareness<br/>(|x| > 7.0m: escape jump or fight out)"]
     end
 
-    subgraph Actuation Layer ["Layer 3: IFighterInput Virtual Actuation"]
+    subgraph Actuation Layer ["Layer 3: 2-Frame Latched Virtual Actuation (IFighterInput)"]
+        Latch["2-Frame Latch Counters<br/>(Zero dropped inputs regardless of execution order)"]
         FC["FighterController.cs<br/>(Obeys Exact Same Frame Data as Human)"]
-        Hitbox["HitboxController.cs<br/>(Kamehameha 3.6m beam reach)"]
-        Hurtbox["HurtboxController.cs<br/>(Dynamic BoxCollider2D size on crouch)"]
+        Hitbox["HitboxController.cs<br/>(Melee reach 1.55m, Kamehameha 6.5m)"]
+        Hurtbox["HurtboxController.cs<br/>(Dynamic BoxCollider2D height on duck)"]
     end
 
-    Macro Layer --> Cadence & Safeguard Gates
-    Cadence & Safeguard Gates --> Actuation Layer
+    Macro Layer --> Combat Intelligence
+    Combat Intelligence --> Actuation Layer
     Actuation Layer --> Hitbox & Hurtbox
 ```
 
 ### Architectural Principles:
-1. **Humanized Action Cadence vs. 60 FPS Spam:**
-   - Probabilistic checks (e.g. jumping or confirmation) never execute raw every frame in `Update()`.
-   - `jumpCooldownTimer` and `attackCooldownTimer` throttle virtual button pulses, ensuring bots exhibit believable human reflexes and combo cadence.
-2. **Dynamic Physics Collider Resizing:**
-   - In `FighterController.TransitionTo()`, entering `FighterState.Crouching` dynamically halves the `Hurtbox` `BoxCollider2D` height ($1.8\text{m} \to 0.95\text{m}$), allowing fighters to duck under high punches.
+1. **Frame-Reliable 2-Frame Input Latching:**
+   - Fragile `LateUpdate()` clearing has been eliminated. Single-frame button events are managed via 2-frame latch counters (`lightLatch`, `heavyLatch`, `skillLatch`, `ultimateLatch`, `jumpLatch`).
+   - Whether `FighterController.Update()` executes before or after `CpuFighterBrain.Update()`, the virtual key is guaranteed to be held high across the frame evaluation boundary.
+2. **Every-Frame Hit-Confirm Chain-Canceling:**
+   - The bot monitors `myController.HasHitTargetThisSwing` every frame. On hit confirmation during a Light Attack, it immediately cancels recovery into a Heavy Haymaker or special Skill.
+3. **Character Asymmetry & Form Ascension:**
+   - **Goku:** Continuously monitors Ki. At $35\text{ Ki}$, immediately triggers `Skill` to activate Super Saiyan form ($+25\%$ speed, $+66\%$ light damage, $+43\%$ heavy damage). Fires $6.5\text{m}$ Kamehameha blasts on openings.
+   - **Saitama:** Pure in-your-face rushdown brawler. Chains into Consecutive Normal Punches ($15\text{ hits} / 30\text{ dmg}$) and fires the $90\text{-damage}$ Serious Punch upon reaching $80\text{ Ki}$.
+4. **Dynamic Physics Collider Resizing:**
+   - In `FighterController.TransitionTo()`, entering `FighterState.Crouching` dynamically halves the `Hurtbox` `BoxCollider2D` height ($1.8\text{m} \to 0.55\text{m}$), allowing fighters to duck cleanly under high punches.
 3. **Attack Reach Geometry Synchronization:**
    - `HitboxController.ConfigureAttack()` synchronizes both internal calculation vectors and the physical `BoxCollider2D.size` and `offset`. Goku's Kamehameha expands the trigger zone to $3.6\text{m}$, accurately reflecting the full-screen visual energy blast.
 
@@ -1164,3 +1170,240 @@ flowchart TD
    Traverses all `TextMeshProUGUI` components on active and inactive menu roots. Sanitizes non-ASCII Unicode glyphs (`▶`, `◀`, `★`, `—`, `•`) into universal ASCII (`>`, `<`, `*`, `-`, `|`) and calls `label.ForceMeshUpdate()`.
 4. **Hierarchy Auto-Wiring:**
    If `pauseMenuRoot` or `resultsMenuRoot` exists in the scene prefab without inspector button bindings, dynamic hierarchy traversal populates button lists and registers click listeners automatically.
+5. **Dynamic Typography Scaling & Pause Key Isolation:**
+   - In `EnsureUIHierarchyBuilt()`, secondary victory elements (`Micro_Header`, `Epithet_Text`, `Score_Text`, `Footer_Hints`) are checked and scaled up to $\ge 15.0\text{pt} - 22.0\text{pt}$ at runtime, ensuring crisp readability on $1080\text{p}$ and $4\text{K}$ screens.
+   - Pause detection is strictly isolated to `Keyboard.escapeKey.wasPressedThisFrame`, eliminating input collisions with Player 2's right-hand cluster or player attacks.
+
+
+---
+
+## 25. Dynamic 3-Round Stage Evolution & Environmental VFX Architecture (`ArenaBackgroundManager.cs`)
+
+### System Architecture Diagram
+```mermaid
+flowchart TD
+    MM[MatchManager.cs] -->|OnRoundStart(roundNumber)| ABM[ArenaBackgroundManager.cs]
+    
+    subgraph Arena Environmental Subsystems
+        ABM -->|Crossfade Stage| BD[Backdrop Renderers]
+        ABM -->|Switch Palette & Surge| BZ[Brazier Flame Animators]
+        ABM -->|Adjust Rate & Color| PS[Ember Particle Systems]
+        ABM -->|Toggle & Rotate| MD[Doctor Strange Tao Mandala]
+        ABM -->|Activate Cosmic Field| CD[Cosmic Dust Particle Field]
+    end
+
+    subgraph Combat Juice Event Coupling
+        VFX[VFXManager.cs] -->|TriggerBrazierSurge(1.4f)| ABM
+        HB[HitboxController / Ultimates] -->|Heavy Hit / Beam Flash| VFX
+    end
+
+    subgraph Round Visual States
+        BD --> R1["Round 1: Grand Martial Arts Tournament<br/>(Pagodas, Mountains, Orange Fire)"]
+        BD --> R2["Round 2: Battle on the Moon<br/>(Crater Surface, Planet Earth, Blue Plasma)"]
+        BD --> R3["Round 3: Multiverse Cataclysm<br/>(Mirror Dimension Shatter, Saiyan Gold Ki)"]
+    end
+```
+
+### Architectural Principles:
+1. **Event-Driven Decoupled Synchronization:**
+   `ArenaBackgroundManager` does not poll `matchManager.CurrentRound` every frame in `Update()`. Instead, it hooks into `MatchManager.OnRoundStart` via a C# delegate event (equivalent to a Signal in Godot), executing state transitions strictly when a round initiates.
+2. **Dual-Renderer Alpha Cross-Fading:**
+   To transition smoothly between distinct round backdrops without harsh cuts:
+   - `primaryBackdrop` displays the current stage at $\alpha = 1.0$.
+   - `crossfadeBackdrop` displays the upcoming stage starting at $\alpha = 0.0$ and lerps to $\alpha = 1.0$ over $1.2\text{s}$.
+   - Upon completion, `primaryBackdrop` assumes the new texture, and `crossfadeBackdrop` resets to transparent.
+3. **Interactive Combat Juice Coupling:**
+   `VFXManager` communicates with `ArenaBackgroundManager.Instance?.TriggerBrazierSurge(multiplier)` during heavy hitsparks, screen shakes, and impact flashes. The braziers momentarily scale up by $140\%$ and burst $12$ extra embers into the air, making the environment physically react to combat momentum.
+4. **Zero-GC Frame Caching:**
+   Flame sprites (`Orange`, `Blue`, `Gold`) are loaded into pre-allocated memory lists during `Awake()`. Switching palettes changes list references with zero garbage collection allocations during combat frames.
+
+
+---
+
+## 43. Kinetic Combat Physics, Gatling Chain Cancels & Red Zone Vulnerability Architecture
+
+### System Architecture Diagram
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player as Player Input
+    participant FC as Attacker FighterController
+    participant HC as HitboxController
+    participant T_HS as Target HealthSystem
+    participant T_ES as Target EnergySystem
+    participant T_FC as Target FighterController
+    participant VFX as VFXManager
+
+    Player->>FC: LightAttackPressed
+    FC->>FC: ExecuteLightAttack() [Dmg: 3 or 4, Startup: 0.08s]
+    FC->>HC: ConfigureAttack & Activate()
+    
+    HC->>T_HS: TakeDamage(baseDmg)
+    T_HS->>T_ES: Check IsInRedZone
+    alt Target In Red Zone (Exhausted)
+        T_ES-->>T_HS: true
+        Note over T_HS: amount = round(baseDmg * 1.35) [+35% Danger Multiplier]
+    else Normal Ki State
+        T_ES-->>T_HS: false
+    end
+    T_HS->>T_HS: currentHealth -= amount
+
+    HC->>FC: OnAttackHitConfirmed() [sets hasHitTargetThisSwing = true]
+    HC->>VFX: PlayHitSpark() & MicroHitStop()
+    HC->>T_FC: ApplyHit(damage, stun: 0.22s)
+    alt Target In Red Zone
+        Note over T_FC: stunDuration += 0.12s (0.34s Total Stagger)
+    end
+
+    Note over FC: Active / Recovery Cancel Window Open!
+    Player->>FC: HeavyAttackPressed / SkillPressed
+    opt hasHitTargetThisSwing == true
+        FC->>FC: ExecuteHeavyAttack() / ExecuteSkillAttack() [Chain Cancel!]
+        Note over FC: Light recovery instantly aborted into Heavy strike!
+    end
+```
+
+### Architectural Principles:
+1. **Hit Confirm Callback Pipeline (`OnAttackHitConfirmed`):**
+   - Traditional fighting games implement complex frame buffers to handle cancels.
+   - Mystic Combat uses a lightweight decoupled event callback: `HitboxController.ResolveHit()` explicitly notifies `ownerFc.OnAttackHitConfirmed()`.
+   - `FighterController` uses this state flag strictly during the `LightAttack` active/recovery window to allow instantaneous transitions into `HeavyAttack` or `Skill`.
+   - `TransitionTo()` resets `hasHitTargetThisSwing = false` on every state switch, preventing stale cancel buffers.
+
+2. **Decoupled Vulnerability Scaling in `HealthSystem`:**
+   - Rather than forcing every individual hitbox to evaluate whether a target is exhausted, vulnerability is centralized inside `HealthSystem.TakeDamage()`.
+   - Inspecting `energySystem.IsInRedZone` at the point of damage calculation guarantees that all damage sources (basic jabs, heavy strikes, kamehameha beams, and serious punches) scale uniformly by $+35\%$ without duplicating logic across scripts.
+
+3. **Kinetic Deceleration & Asymmetrical Gravity:**
+   - In `FixedUpdate()`, knockback decay runs independently of horizontal movement inputs:
+     $$\Delta V_x = \text{MoveTowards}(V_x, 0, 14 \cdot \Delta t)$$
+   - Gravity switching uses sign evaluation on $V_y$:
+     $$g_{\text{eff}} = \begin{cases} g \times 1.35, & \text{if } !IsGrounded \land V_y < 0 \\ g, & \text{otherwise} \end{cases}$$
+   - This keeps horizontal deceleration and vertical arc gravity modular and easily tweakable.
+
+
+---
+
+## 44. Anti-Stacking Capsule Physics, Bulldoze Lock & Vertical Hit Clearance Architecture
+
+### System Architecture Diagram
+```mermaid
+flowchart TD
+    subgraph Input & Movement Resolution
+        IN[Player Movement Input] --> AM[FighterController.ApplyMovement]
+        OPP[Opponent Transform] --> AM
+        AM -->|dx <= 1.15m && movingTowards| LOCK[Clamp horizontalVelocity = 0<br/>Immovable Sparring Barrier]
+        AM -->|dx > 1.15m || movingAway| FREE[Normal Speed Application]
+    end
+
+    subgraph Vertical Capsule & Anti-Stacking
+        BC[CapsuleCollider2D: 1.10m x 1.45m] -->|Curved Upper Dome| DOME[Angled Normal Deflection]
+        KP[FighterController.ApplyKineticPhysics] -->|dy > 0.70m && |dx| < 0.95m| SLIP[Apply 3.0 m/s Outward Slip Vector<br/>Zero Head Stacking]
+    end
+
+    subgraph Duckable Hitbox & Hurtbox Matrix
+        CR[FighterState.Crouching] -->|size: 0.75x0.65, offset: 0, 0.35| CH[Top Edge Y = 0.675m]
+        LA[Light Attack Hitbox] -->|size: 0.75x0.45, offset: 0.80, 1.05| L_BOT[Bottom Edge Y = 0.825m]
+        HA[Heavy Attack Hitbox] -->|size: 0.82x0.48, offset: 0.84, 1.05| H_BOT[Bottom Edge Y = 0.810m]
+        L_BOT -.->|Clearance: 0.150m (Whiff)| CH
+        H_BOT -.->|Clearance: 0.135m (Whiff)| CH
+    end
+```
+
+### Architectural Principles:
+1. **Kinematic Proximity Clamping (`minFighterGap`):**
+   - By calculating `dx = opponent.position.x - transform.position.x` directly inside `ApplyMovement()`, the engine detects when a fighter is attempting to walk into an already-occupied space.
+   - Forward horizontal velocity is clamped to $0$ without disabling backward velocity, ensuring fighters stop upon body contact rather than pushing each other across the floor.
+2. **Deflection via Capsule Geometry & Active Slip Vector:**
+   - Physical bodies use a waist-high vertical `CapsuleCollider2D` ($1.10\text{m} \times 0.90\text{m}$).
+   - An active slip vector in `ApplyKineticPhysics()` enforces that any airborne body descending directly centered over opponent ($|dx| < 0.45\text{m}$, $0.40\text{m} < dy < 1.05\text{m}$) receives an outward horizontal velocity impulse ($\pm 2.5\text{ m/s}$), preventing vertical equilibrium on top of character colliders.
+3. **Deterministic Vertical Hit Clearance:**
+   - Both Light ($Y_{\text{bottom}} = 0.825\text{m}$) and Heavy ($Y_{\text{bottom}} = 0.810\text{m}$) attack hitboxes have their lower bound safely elevated above the ducking hurtbox apex ($Y = 0.675\text{m}$), establishing a clean ducking dodge hierarchy.
+
+
+---
+
+## 45. Strict Hurtbox Layering, Waist-High Push Boxes & Cross-Over Architecture
+
+### System Architecture Diagram
+```mermaid
+flowchart TD
+    subgraph Attack Resolution Pipeline
+        HB[HitboxController.ProcessHit] --> CQ{Check other.GetComponent HurtboxController}
+        CQ -->|null: Body Capsule, GroundCheck, World| REJ[Reject Collision<br/>Zero Damage, Clean Whiff]
+        CQ -->|not null: Valid Hurtbox| ACC[Accept Collision]
+        ACC --> HS[HealthSystem.TakeDamage]
+    end
+
+    subgraph Movement & Air Cross-Over System
+        IN[Movement Input] --> AM[FighterController.ApplyMovement]
+        AM --> GC{Check IsGrounded}
+        GC -->|true && movingTowards && dx <= 1.15m| CLAMP[Clamp horizontalVelocity = 0<br/>Immovable Ground Barrier]
+        GC -->|false: Jumping / Falling| AIR[Preserve Full Horizontal Velocity<br/>Unrestricted Cross-Over Arcs]
+    end
+
+    subgraph Separation of Physics Body vs Dynamic Hurtbox
+        ST[Fighter State] --> DYN[FighterController.TransitionTo]
+        DYN -->|Body Capsule: STATIC| BODY["Fixed CapsuleCollider2D (1.10m x 0.90m, Y_top = 0.90m)<br/>Zero Runtime Resizing -> Prevents Box2D Depenetration Jumping"]
+        DYN -->|Crouching Hurtbox| C_HURT["Hurtbox Trigger: (0.75m x 0.65m, Y_top = 0.675m)"]
+        DYN -->|Standing Hurtbox| S_HURT["Hurtbox Trigger: (0.85m x 1.80m, Y_top = 1.85m)"]
+    end
+```
+
+### Architectural Principles:
+1. **Strict Hurtbox Contract Enforcement:**
+   - Decouples combat damage reception completely from physics movement bodies.
+   - `HitboxController` explicitly checks `HurtboxController`. Touching `CapsuleCollider2D`, stage walls, or internal sensors produces immediate rejection.
+2. **Grounded-Exclusive Proximity Clamping:**
+   - `dx <= 1.15m` velocity clamping is strictly predicated on `IsGrounded`.
+   - Airborne bodies maintain linear momentum across the horizontal axis, resolving the mid-air freeze bug and enabling cross-ups.
+3. **Waist-Level Push-Box Anchoring (Static Collider Architecture):**
+   - Physical movement bodies are capped at waist height ($0.90\text{m}$) and kept **static** at runtime. Dynamically resizing dynamic `Rigidbody2D` colliders while resting on the floor causes Box2D depenetration impulses that catapult the character into the air (the "infinite jumping" bug).
+   - Character jump heights ($1.98\text{m}\text{--}2.65\text{m}$) clear this $0.90\text{m}$ waist geometry with over $1.0\text{m}\text{--}1.75\text{m}$ of vertical clearance.
+   - Character jump heights ($1.98\text{m}\text{--}2.65\text{m}$) clear this geometry with substantial margins.
+
+
+---
+
+## 47. Cinematic Ultimate Architecture & Multi-Layered Visual Cut-In Pipeline (`SaitamaSeriousPunchCinematic.cs`)
+
+### System Architecture Diagram
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player as Player Input (X / M)
+    participant FC as FighterController (State: Ultimate)
+    participant Cin as SaitamaSeriousPunchCinematic
+    participant Spr as SpriteRenderer (FighterAnimator)
+    participant Void as BlackVoid_Canvas (ScreenSpaceOverlay)
+    participant VFX as VFXManager
+    participant Hit as HitboxController
+
+    Player->>FC: ExecuteUltimateAttack() (Spends 80 Ki)
+    FC->>FC: attackStartupTimer = 2.40s, attackActiveTimer = 1.40s
+    FC->>FC: TransitionTo(FighterState.Ultimate)
+    FC->>Spr: Play frames 0..5 (Stance drop & deep coiling windup)
+    FC->>Spr: Play frame 6 (Standing braced transitional frame)
+
+    Note over FC,Cin: Startup Expires at 0.0s ("SERIOUS PUNCH!")
+    Cin->>Void: Activate 100% Solid Pitch-Black Void (sortingOrder = 950)
+    Cin->>Void: Display Enlarged Punch Cut-In (720x628px, clamped <= Saitama X)
+    Note over Cin,Void: 0.28s Arcade Super Freeze (Time.unscaledDeltaTime)
+    Cin->>Void: Deactivate Black Void & Cut-In (Instant Snap-Back!)
+
+    Note over FC,Spr: Normal Arena Resumes
+    FC->>Spr: Play frames 7..13 (Normal physical strike burst & recovery)
+    Cin->>VFX: TriggerImpactFlash(0.055s) & TriggerCameraShake(0.38f, 0.32f)
+    FC->>Hit: Activate Hitbox (1.4m x 1.0m, Short Melee Reach)
+    Hit-->>Player: Resolve Decisive 90 Damage Strike
+```
+
+### Architectural Principles:
+1. **Decoupled Dual-Layer Presentation:**
+   `SaitamaSeriousPunchCinematic` operates as an independent observer on the character. It never interferes with `FighterAnimator`'s base frame playback or `FighterController`'s state machine. The cinematic super freeze is rendered strictly via a decoupled Screen-Space Canvas (`sortingOrder = 950`) that appears for $0.28\text{s}$ before snapping back cleanly to the normal arena.
+2. **Dynamic Screen-Space Framing:**
+   The Big Punch cut-in coordinates are dynamically calculated via `Camera.main.WorldToViewportPoint(transform.position)`. The cut-in is placed towards screen center and oriented in Saitama's facing direction, while mathematically clamped so its back edge **never exceeds Saitama's $X$ coordinate backwards** and stays safely inside viewport bounds.
+3. **Re-Ordered Physical Frame Sequencing:**
+   The physical sprite frames (`ultimate_0` through `ultimate_13`) represent an uninterrupted martial arts sequence: crouch $\rightarrow$ deep coil $\rightarrow$ braced transition (frame 6) $\rightarrow$ strike release $\rightarrow$ recovery.
+4. **Hitbox Range Discipline:**
+   The damaging collision shape is kept strictly to `new Vector2(1.4f, 1.0f)` offset at `(1.25f, 0.95f)`. This guarantees that opponents outside close melee range remain completely safe, preserving competitive balance.

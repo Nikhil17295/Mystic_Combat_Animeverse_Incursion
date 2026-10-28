@@ -214,10 +214,17 @@ namespace MysticCombat.Combat
         {
             if (!isActive || other == null) return;
 
-            HealthSystem targetHealth = other.GetComponentInParent<HealthSystem>();
+            // Strict fighting game discipline: attacks MUST only hit Hurtboxes!
+            // Never hit physical body movement colliders, world boundaries, or ground checks!
+            HurtboxController hurtbox = other.GetComponent<HurtboxController>();
+            if (hurtbox == null) return;
+
+            HealthSystem targetHealth = hurtbox.Owner != null 
+                ? hurtbox.Owner.GetComponent<HealthSystem>() 
+                : other.GetComponentInParent<HealthSystem>();
             if (targetHealth == null) return;
 
-            Transform target = targetHealth.transform;
+            Transform target = hurtbox.Owner != null ? hurtbox.Owner : targetHealth.transform;
 
             // Never hit self
             if (owner != null && (target == owner || target == owner.root)) return;
@@ -255,10 +262,27 @@ namespace MysticCombat.Combat
                 if (ownerSr != null && ownerSr.flipX) facingDir = -1f;
                 else if (target.position.x < owner.position.x) facingDir = -1f;
 
-                targetRb.linearVelocity = new Vector2(facingDir * knockback, knockbackY);
+                float finalKnockback = knockback;
+                // Character Asymmetry: Saitama's dense mass confers 20% passive knockback resistance
+                if (target.name.ToLower().Contains("saitama"))
+                {
+                    finalKnockback *= 0.80f;
+                }
+
+                targetRb.linearVelocity = new Vector2(facingDir * finalKnockback, knockbackY);
             }
 
-            // 5. Play Visceral Hit Impact Audio Feedback
+            // 5. Notify Attacker of Hit Confirm (Enables Chain Cancels)
+            if (owner != null)
+            {
+                Fighter.FighterController ownerFc = owner.GetComponent<Fighter.FighterController>();
+                if (ownerFc != null)
+                {
+                    ownerFc.OnAttackHitConfirmed();
+                }
+            }
+
+            // 6. Play Visceral Hit Impact Audio Feedback
             FighterAudio targetAudio = target.GetComponent<FighterAudio>();
             if (targetAudio == null && target.parent != null)
             {
@@ -271,11 +295,11 @@ namespace MysticCombat.Combat
                 {
                     targetAudio.PlayUltimateHit();
                 }
-                else if (damage >= 20)
+                else if (damage >= 15 || (damage == 2 && kiGainOnHit <= 2f))
                 {
                     targetAudio.PlaySkillHit();
                 }
-                else if (damage >= 15)
+                else if (damage >= 7)
                 {
                     targetAudio.PlayHeavyHit();
                 }
@@ -285,22 +309,22 @@ namespace MysticCombat.Combat
                 }
             }
 
-            // 6. Trigger Visual Combat Juice (Hit Sparks, Shockwaves, Camera Shake & Hitstop)
+            // 7. Trigger Visual Combat Juice (Hit Sparks, Shockwaves, Camera Shake & Hitstop)
             Vector2 hitCenter = Vector2.Lerp(GetHitboxWorldCenter(), (Vector2)target.position + new Vector2(0f, 0.9f), 0.5f);
             if (VFXManager.Instance != null)
             {
-                VFXManager.Instance.PlayHitSpark(hitCenter, isHeavy: damage >= 15, triggerHitStop: enableHitStop, shakeMultiplier: shakeIntensityMultiplier);
+                VFXManager.Instance.PlayHitSpark(hitCenter, isHeavy: damage >= 7, triggerHitStop: enableHitStop, shakeMultiplier: shakeIntensityMultiplier);
                 if (damage >= 35)
                 {
                     VFXManager.Instance.TriggerImpactFlash();
                 }
             }
 
-            // 7. Apply Hitstun & Hurt Reaction
+            // 8. Apply Hitstun & Hurt Reaction
             Fighter.FighterController targetFc = target.GetComponent<Fighter.FighterController>();
             if (targetFc != null)
             {
-                float stun = damage >= 15 ? 0.42f : 0.25f;
+                float stun = damage >= 7 ? 0.38f : 0.22f;
                 targetFc.ApplyHit(damage, stun);
             }
 

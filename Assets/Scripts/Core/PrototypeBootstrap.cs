@@ -19,8 +19,8 @@ namespace MysticCombat.Core
         #region Constants
 
         private const int GROUND_LAYER = 6;
-        private const float FIGHTER_COLLIDER_WIDTH = 0.8f;
-        private const float FIGHTER_COLLIDER_HEIGHT = 1.9f;
+        private const float FIGHTER_COLLIDER_WIDTH = 1.10f;
+        private const float FIGHTER_COLLIDER_HEIGHT = 0.90f;
 
         #endregion
 
@@ -189,6 +189,10 @@ namespace MysticCombat.Core
             if (fighter1.name.ToLower().Contains("goku") && fighter1.GetComponent<Combat.KamehamehaBeamVFX>() == null) fighter1.AddComponent<Combat.KamehamehaBeamVFX>();
             if (fighter2.name.ToLower().Contains("goku") && fighter2.GetComponent<Combat.KamehamehaBeamVFX>() == null) fighter2.AddComponent<Combat.KamehamehaBeamVFX>();
 
+            // Ensure cinematic Serious Punch (Death Punch) VFX is attached to Saitama
+            if (fighter1.name.ToLower().Contains("saitama") && fighter1.GetComponent<Combat.SaitamaSeriousPunchCinematic>() == null) fighter1.AddComponent<Combat.SaitamaSeriousPunchCinematic>();
+            if (fighter2.name.ToLower().Contains("saitama") && fighter2.GetComponent<Combat.SaitamaSeriousPunchCinematic>() == null) fighter2.AddComponent<Combat.SaitamaSeriousPunchCinematic>();
+
             // Wire MatchManager if present
             MatchManager matchManager = FindAnyObjectByType<MatchManager>();
             if (matchManager == null)
@@ -345,8 +349,9 @@ namespace MysticCombat.Core
             rb.freezeRotation = true;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
-            // Body Collider
-            BoxCollider2D col = fighter.AddComponent<BoxCollider2D>();
+            // Body Collider (Vertical Capsule with rounded dome to prevent stacking, wider for sparring gap)
+            CapsuleCollider2D col = fighter.AddComponent<CapsuleCollider2D>();
+            col.direction = CapsuleDirection2D.Vertical;
             col.size = new Vector2(FIGHTER_COLLIDER_WIDTH, FIGHTER_COLLIDER_HEIGHT);
             col.offset = new Vector2(0f, FIGHTER_COLLIDER_HEIGHT / 2f);
 
@@ -403,13 +408,24 @@ namespace MysticCombat.Core
 
         private void EnsureArena()
         {
-            if (GameObject.Find("Arena") != null) return;
-
-            ArenaSetup existingArena = FindAnyObjectByType<ArenaSetup>();
-            if (existingArena == null)
+            GameObject arenaObj = GameObject.Find("Arena");
+            if (arenaObj == null)
             {
-                GameObject arenaObj = new GameObject("Arena");
-                arenaObj.AddComponent<ArenaSetup>();
+                ArenaSetup existingArena = FindAnyObjectByType<ArenaSetup>();
+                if (existingArena == null)
+                {
+                    arenaObj = new GameObject("Arena");
+                    arenaObj.AddComponent<ArenaSetup>();
+                }
+                else
+                {
+                    arenaObj = existingArena.gameObject;
+                }
+            }
+
+            if (arenaObj != null && arenaObj.GetComponent<Combat.ArenaBackgroundManager>() == null)
+            {
+                arenaObj.AddComponent<Combat.ArenaBackgroundManager>();
             }
         }
 

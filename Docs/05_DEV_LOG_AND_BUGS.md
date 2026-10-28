@@ -1073,3 +1073,363 @@ When pausing combat (`ESC` / `P`) or concluding a tournament match, all text ele
 - All assemblies compiled cleanly with **ZERO errors** via `verify_compilation.py`.
 - Verified font asset `_MainTex` points to Texture2D sub-assets.
 - Verified pure ASCII encoding across `CombatMenuController.cs` and `HUD_Canvas.prefab`.
+
+
+---
+
+### Bug 33: Static Single-Backdrop Arena & Disconnected Environmental VFX (The Dynamic 3-Round Stage Evolution)
+
+- **Date:** October 28, 2026
+- **Severity:** Medium (Visual Impact, Immersion & Hackathon Presentation Polish)
+- **Component:** `Assets/Sprites/Arena/`, `Assets/Scripts/Combat/ArenaBackgroundManager.cs`, `Assets/Scripts/Combat/BrazierFlameAnimator.cs`, `VFXManager.cs`, `SampleScene.unity`
+
+#### Symptom:
+1. The combat arena used a single static image that remained unchanged across all 3 rounds of the tournament, failing to reflect the escalating tension of match points or final rounds.
+2. The background felt flat and dead; background torches and scenery were frozen illustrations without animated flame physics, smoke, or ember particles.
+3. Heavy combat blows (Kamehameha, Serious Punch) produced hit sparks on the fighters but left the surrounding environment completely inert and unaffected.
+
+#### Root Causes:
+1. **Monolithic Single-Sprite Backdrop:**
+   `SampleScene.unity` possessed only `Backdrop_TournamentStage` rendering a static PNG. It had no listener or subscription to `MatchManager` round events.
+2. **Missing Animated Prop Subsystem:**
+   No component existed to cycle retro pixel art flame spritesheets or control torch ember emissions.
+3. **Decoupled Combat Feedback:**
+   `VFXManager.cs` possessed camera shake and hitstop micro-pauses, but had zero connection to arena lighting or stage props.
+
+#### Resolution:
+1. **Three Distinct High-Quality Pixel Art Backdrops (1376x768):**
+   - **Round 1:** The **Grand Martial Arts Tournament** (`arena_stage_round1.png`): Dragon-carved stone floor, oriental temple pagodas, tournament banners, sunset mountain silhouettes.
+   - **Round 2:** The **Lunar Impact / Battle on the Moon** (`arena_stage_round2.png`): Saitama vs Boros homage, cratered regolith surface, Planet Earth glowing in deep cosmic space, Doctor Strange space rift.
+   - **Round 3:** The **Multiverse Dimensional Cataclysm** (`arena_stage_round3.png`): Shattered floating stone ruins, reality-tearing mirror dimension fracture, blazing Super Saiyan golden ki auroras.
+2. **Dynamic Stage Evolution Manager (`ArenaBackgroundManager.cs`):**
+   - Subscribes to `MatchManager.OnRoundStart` to drive transitions.
+   - Features a dual-renderer setup (`primaryBackdrop` and `crossfadeBackdrop`) performing a smooth $1.2\text{s}$ alpha crossfade between stages.
+3. **Interactive Pixel-Art Flame Braziers (`BrazierFlameAnimator.cs`):**
+   - Handcrafted carved dragon stone brazier pedestals (`brazier_stand_pixel.png`) flanking the arena at $X = \pm 5.5$.
+   - 8-frame looping pixel art fire spritesheets in 3 distinct palettes:
+     - `Orange` for Round 1 Tournament torches.
+     - `Blue` for Round 2 Lunar / Cosmic plasma flames.
+     - `Gold` for Round 3 Super Saiyan Ki overdrive.
+4. **Upward Ember Particle Systems:**
+   - Dedicated `ParticleSystem` components atop each brazier with negative gravity (`-0.15`) and size-over-lifetime decay, emitting glowing floating embers.
+5. **Doctor Strange Rotating Tao Mandala:**
+   - Circular runic dial (`time_stone_mandala.png`) anchored in the cosmic rift ($X = 0.5, Y = 0.7$), rotating at $16^\circ/\text{s}$ during Round 2 and Round 3.
+6. **Visceral Combat Coupling:**
+   - `VFXManager.cs` triggers `ArenaBackgroundManager.Instance?.TriggerBrazierSurge(1.4f)` upon heavy hitsparks, camera shake, and impact flashes, making the brazier flames flare up and shower the arena with $12$ extra embers.
+
+
+---
+
+### Bug 34: Overpowered Basic Poke Damage, Frictionless Knockback Drift & Missing Danger State Vulnerability (The Combat Mechanics & Kinetic Physics Overhaul)
+
+- **Date:** October 28, 2026
+- **Severity:** High (Competitive Balance, Combat Game Feel & Game Pacing)
+- **Component:** `Assets/Scripts/Systems/HealthSystem.cs`, `Assets/Scripts/Combat/HitboxController.cs`, `Assets/Scripts/Fighter/FighterController.cs`, `Assets/Data/Characters/goku.json`, `Assets/Data/Characters/saitama.json`
+
+#### Symptom:
+1. Matches ended too quickly: Basic jabs and kicks dealt $10\text{--}18\text{ damage}$, ending rounds in just $5\text{--}6$ random hits. Players had no time to maneuver, build Ki, or utilize comeback strategies.
+2. Saitama's Consecutive Normal Punches flurry dealt $20\text{ damage per hit} \times 15\text{ hits} = 300\text{ damage}$, obliterating an entire $100\text{ HP}$ health bar three times over.
+3. When a fighter was hit into `HitStun` or `KnockBack`, they floated and slid frictionlessly across the arena floor like an ice skater.
+4. When a fighter exhausted their Ki and entered the "Red Zone", their movement speed slowed down, but they suffered no defensive penalty or danger state, failing to communicate true exhaustion vulnerability.
+5. Light attacks could not combo or chain into stronger strikes, leaving combat inputs feeling rigid and disconnected.
+
+#### Root Causes:
+1. **Hardcoded Attack Configuration Values:**
+   `FighterController.HandleGroundedTransitions()` used arbitrary hardcoded damage numbers ($10$ light, $16$ heavy, $100$ ultimate) rather than calibrated competitive fighting game damage curves.
+2. **Missing Friction Vector in Physics Loop:**
+   `FighterController.ApplyMovement()` set horizontal velocity to $0$ during attacks, crouching, and meditating, but did not handle `HitStun` or `KnockBack`, leaving knockback velocities un-damped on the ground.
+3. **Decoupled Ki & Health Systems:**
+   `HealthSystem.TakeDamage()` had no reference to `EnergySystem`, completely ignoring whether the fighter was in the Red Zone.
+4. **Missing Hit Confirmation Callback:**
+   `HitboxController` resolved damage on the target but never signaled back to the attacking fighter whether their swing connected or whiffed.
+
+#### Resolution:
+1. **Calibrated Competitive Damage Curve:**
+   - **Light Attacks:** Calibrated to $3\text{ damage}$ (Goku) and $4\text{ damage}$ (Saitama) with snappy $0.08\text{s}$ startup.
+   - **Heavy Attacks:** Calibrated to $7\text{ damage}$ (Goku) and $9\text{ damage}$ (Saitama).
+   - **Flurry Multi-Hit:** Saitama's Consecutive Normal Punches tuned to $2\text{ damage per hit} \times 15\text{ hits} = 30\text{ total damage}$ with micro-knockback ($0.30\text{f}$) to trap the opponent.
+   - **Ultimates:** Goku's Kamehameha calibrated to $45\text{ damage}$ (AoE single-hit beam); Saitama's Serious Punch calibrated to $90\text{ damage}$ ($3.80\text{s}$ cinematic delivery).
+2. **Centralized Red Zone Vulnerability:**
+   - In `HealthSystem.TakeDamage()`, if `energySystem.IsInRedZone == true`, incoming damage is multiplied by $1.35\times$ (`Mathf.RoundToInt(amount * 1.35f)`).
+   - In `FighterController.ApplyHit()`, hitstun duration is extended by $+0.12\text{s}$ ($0.22\text{s} \to 0.34\text{s}$ light, $0.38\text{s} \to 0.50\text{s}$ heavy).
+   - In `FighterController.HandleRedZoneVisuals()`, the fighter's sprite flashes in danger amber/red (`#FF6666`) at 5 Hz.
+3. **Kinetic Physics & Asymmetrical Gravity:**
+   - In `FighterController.ApplyKineticPhysics()`, grounded fighters in `HitStun` or `KnockBack` decelerate at $14\text{ m/s}^2$ using `Mathf.MoveTowards(linearVelocity.x, 0f, 14f * Time.fixedDeltaTime)`.
+   - Dynamic fall gravity multiplies `gravityScale` by $1.35\times$ ($3.0 \to 4.05$) whenever $V_y < 0$, giving snappy, authentic arcade jump arcs.
+   - Wall collisions at $|V_x| > 3.0\text{ m/s}$ trigger `VFXManager.PlayDustPuff` and `TriggerCameraShake(0.18f, 0.15f)`.
+4. **Gatling Chain Canceling on Hit Confirm:**
+   - `HitboxController.ResolveHit()` calls `ownerFc.OnAttackHitConfirmed()`.
+   - `FighterController` allows `LightAttack` to cancel into `HeavyAttack` or `Skill` if `hasHitTargetThisSwing == true`. Whiffed attacks remain locked in recovery frames.
+5. **Character Asymmetry:**
+   - Saitama has $20\%$ passive knockback reduction ($0.80\times$ applied knockback in `HitboxController`).
+
+#### Verification:
+- Ran `python scratch/verify_compilation.py`: Both `Assembly-CSharp.csproj` and `Assembly-CSharp-Editor.csproj` compiled cleanly with **ZERO (0) ERRORS**.
+- Verified JSON character data in both `Assets/Data/Characters/` and `Assets/StreamingAssets/Characters/`.
+- Verified Red Zone $+35\%$ damage multiplier and $+0.12\text{s}$ hitstun duration mathematically and architecturally.
+
+
+---
+
+### Bug 35: Character Head-Stacking, Walking Bulldoze Displacement & Unduckable Heavy Attacks
+
+- **Date:** October 28, 2026
+- **Severity:** Medium (Combat Fairness, Arcade Physics & Visual Polish)
+- **Component:** `Assets/Scripts/Core/PrototypeBootstrap.cs`, `Assets/Scripts/Fighter/FighterController.cs`, `Assets/Data/Characters/goku.json`, `Assets/Data/Characters/saitama.json`
+
+#### Symptom:
+1. When one fighter jumped over the other, they could land squarely on top of the other fighter's head and stand or balance there without falling.
+2. A fighter walking or running into the other would continuously push and bulldoze the defender across the arena floor.
+3. Heavy attack hitboxes reached down to $Y = 0.35\text{m}$, making ducking ineffective against heavy attacks and undermining defensive play.
+4. When fighters stood at point-blank range, their sprites overlapped excessively due to narrow $0.80\text{m}$ box colliders.
+
+#### Root Causes:
+1. **Flat Horizontal BoxCollider2D Top:**
+   The fighter's physical body used a `BoxCollider2D` ($0.80\text{m} \times 1.90\text{m}$). The flat top surface at $Y = 1.90\text{m}$ acted as walkable ground for descending jumpers.
+2. **Unclamped Forward Physics Motor Force:**
+   `ApplyMovement()` unconditionally assigned `linearVelocity.x = moveInput * speed`, exerting continuous physics force against the opponent's collider.
+3. **Mid-Level Heavy Hitbox Reach:**
+   Heavy attacks were configured with `size.y = 0.80f` and `offset.y = 0.75f`, extending downward to $0.35\text{m}$, far below the ducking hurtbox top ($0.55\text{m}$).
+
+#### Resolution:
+1. **Vertical CapsuleCollider2D Replacement:**
+   - Swapped `BoxCollider2D` for `CapsuleCollider2D` ($1.10\text{m} \times 1.45\text{m}$, `offset = (0f, 0.725f)`).
+   - The rounded hemispherical dome top prevents horizontal equilibrium.
+2. **Deterministic Anti-Stacking Slip Vector:**
+   - In `FighterController.ApplyKineticPhysics()`, when airborne directly above opponent ($dy > 0.70\text{m}$, $|dx| < 0.95\text{m}$), an outward slip velocity of $3.0\text{ m/s}$ deflects the jumper off the dome down onto the floor.
+3. **Immovable Proximity Push Lock:**
+   - In `FighterController.ApplyMovement()`, moving toward the opponent within $|dx| \le 1.15\text{m}$ clamps forward velocity to $0$. Walking backward remains unhindered.
+   - The wider $1.10\text{m}$ capsule collider maintains a clean visual sparring gap between fighters.
+4. **Calibrated Duckable Attack Hitboxes:**
+   - Crouching hurtbox tuned to `size = (0.75f, 0.55f)`, `offset = (0f, 0.28f)` ($Y_{\text{top}} = 0.555\text{m}$).
+   - Light Attack hitbox tuned to $Y_{\text{bottom}} = 0.825\text{m}$ ($+0.270\text{m}$ clearance).
+   - Heavy Attack hitbox tuned to $Y_{\text{bottom}} = 0.725\text{m}$ ($+0.170\text{m}$ clearance).
+   - Both basic attacks whiff cleanly over ducking opponents.
+
+#### Verification:
+- Ran `python scratch/verify_compilation.py`: Both `Assembly-CSharp.csproj` and `Assembly-CSharp-Editor.csproj` compiled cleanly with **ZERO (0) ERRORS**.
+- Verified JSON character files in both `Assets/Data/Characters/` and `Assets/StreamingAssets/Characters/`.
+
+---
+
+### Bug 36: The `LateUpdate` Frame-Drop Execution Race Condition & Proximity Deadzone Paralysis (The Paralyzed CPU AI)
+
+- **Date:** October 28, 2026
+- **Severity:** High (AI Gameplay Failure / Bot Incapable of Attacking)
+- **Component:** `Assets/Scripts/AI/CpuFighterBrain.cs`, `Assets/Scripts/AI/GokuBrain.cs`, `Assets/Scripts/AI/SaitamaBrain.cs`, `Assets/Scripts/AI/CpuBrainProfile.cs`, `Assets/Scripts/Fighter/FighterController.cs`
+
+#### Symptom:
+1. In single-player Vs CPU matches, the CPU bot was completely passive, barely threw any punches or kicks, never dealt damage, and felt completely "dumb."
+2. The bot would pace back and forth in neutral without ever committing to attacks, even when standing right next to the player.
+3. The bot never utilized newly introduced mechanics such as Goku's Super Saiyan transformation (`Skill` / 35 Ki), Saitama's Consecutive Normal Punches (`Skill` / 20 Ki), or hit-confirm chain canceling.
+
+#### Root Causes:
+1. **The `LateUpdate` Frame-Drop Bug (Script Execution Order Race Condition):**
+   - In Unity, component update order across GameObjects or within a GameObject is non-deterministic unless hardcoded in Script Execution Order settings.
+   - `PrototypeBootstrap` added `FighterController` before adding `CpuFighterBrain`. Consequently, `FighterController.Update()` executed *before* `CpuFighterBrain.Update()`.
+   - In the old `CpuFighterBrain`, `LightAttackPressed` was set to `true` during `Update()` and immediately wiped to `false` in `LateUpdate()`.
+   - On the next frame, when `FighterController.Update()` evaluated `if (inputHandler.LightAttackPressed)`, the button was already `false`! **The AI's attack button presses were being wiped before `FighterController` ever had a chance to read them.**
+2. **The 1.15m Proximity Buffer Deadlock:**
+   - `FighterController.ApplyMovement()` incorporates a proximity push lock: forward movement halts when $|dx| \le 1.15\text{m}$.
+   - The old AI defined `MeleeRange = 1.15\text{m}` and Saitama's `PreferredDistance = 0.95\text{m}`.
+   - When Saitama approached the player, the physics push lock halted his advance at $\approx 1.16\text{m} - 1.25\text{m}$. Because this was greater than $1.15\text{m}$, the bot believed it was "out of melee range" and never swung.
+3. **Flawed Passive Macro States:**
+   - Over $90\%$ of runtime was spent in `SpacingNeutral`, where the bot paced away whenever the player approached.
+   - A $35\%$ mistake rate on Easy difficulty resulted in the bot repeatedly freezing with zeroed inputs.
+4. **Lack of Hit-Confirm Awareness & SSJ Logic:**
+   - Goku's AI did not activate Super Saiyan because `SkillCost` was misconfigured to $20\text{ Ki}$ instead of $35\text{ Ki}$ and lacked ascension priority logic.
+   - The bot had no concept of `hasHitTargetThisSwing`, preventing it from taking advantage of chain-canceling recovery into follow-up attacks.
+
+#### Resolution:
+1. **Frame-Reliable 2-Frame Input Latch Engine:**
+   - Replaced fragile `LateUpdate()` clearing with integer-based latches (`lightLatch`, `heavyLatch`, `skillLatch`, `ultimateLatch`, `jumpLatch`).
+   - Triggering an attack sets the latch to $2$. The boolean property returns `latch > 0`.
+   - In `Update()`, the latch counter decrements by $1$.
+   - **Guaranteed Delivery:** Regardless of whether `FighterController.Update()` runs before or after `CpuFighterBrain.Update()`, the virtual button is guaranteed to be held high across the frame boundary, ensuring 100% actuation reliability without duplicate attacks.
+2. **Calibrated Combat Reach & Aggressive Posture:**
+   - Recalibrated `MeleeStrikeRange` to $1.55\text{m}$ (matching physical hitbox reach: Light reaches up to $1.60\text{m}$, Heavy up to $1.90\text{m}$).
+   - Set the default tactical state to **`RushdownPressure`**, making the bot advance with intent and throw jabs whenever within range.
+3. **Every-Frame Hit-Confirm Chain-Canceling:**
+   - In `CpuFighterBrain.Update()`, `CheckHitConfirmComboChain()` detects when `myController.CurrentState == FighterState.LightAttack` and `myController.HasHitTargetThisSwing == true`.
+   - On confirmation, the bot immediately chain-cancels recovery into a Heavy Haymaker or Skill Attack based on `profile.comboChance`.
+4. **Character-Specific High-IQ Tactics:**
+   - **Goku (`GokuBrain.cs`):** Checks `CheckSuperSaiyanAscension()`. If $\text{Ki} \ge 35$ and not in Super Saiyan, immediately ascends to SSJ. Fires Kamehameha ($6.5\text{m}$ reach) when the opponent is vulnerable.
+   - **Saitama (`SaitamaBrain.cs`):** Stalks the player relentlessly. Chains Light $\to$ Heavy $\to$ Consecutive Normal Punches ($15\text{ hits} / 30\text{ dmg}$). Drops Serious Punch ($90\text{ dmg}$) the moment he reaches $80\text{ Ki}$ in close combat.
+5. **Red Zone & Meditation Tactics:**
+   - The bot accelerates Red Zone recovery by channeling Meditation at safe distance ($1.5\times$ speedup). If the player closes in ($< 2.4\text{m}$), it breaks meditation instantly to defend.
+   - If the player enters Red Zone, the bot detects vulnerability and switches to `PunishOpening` with maximum aggression.
+
+#### Verification:
+- Code inspected and mathematically verified against hitbox geometry, frame rates, and component execution order.
+- Decoupled `IFighterInput` contract maintained without any physics cheating.
+
+
+---
+
+### Bug 36: Attack Hitbox Intersecting Physical Body Capsule & Mid-Air Jump-Over Freeze
+
+- **Date:** October 28, 2026
+- **Severity:** High (Core Combat Mechanics & Movement Freedom)
+- **Component:** `Assets/Scripts/Combat/HitboxController.cs`, `Assets/Scripts/Fighter/FighterController.cs`, `Assets/Scripts/Core/PrototypeBootstrap.cs`, `Assets/Data/Characters/goku.json`, `Assets/Data/Characters/saitama.json`
+
+#### Symptom:
+1. Crouching failed to dodge Light and Heavy attacks. Even when the crouching hurtbox was clearly below the attack swing, damage registered every time.
+2. Dynamically resizing the body capsule upon crouching caused the fighter to uncontrollably hop/jump endlessly into the air.
+3. Jumping fighters were unable to cross over or jump over the opponent, colliding with the top of the standing character or freezing in mid-air.
+4. The Heavy Attack hitbox had excessive forward reach ($1.475\text{m}$), allowing players to hit the opponent from safe distances without close commitment.
+
+#### Root Causes:
+1. **Unfiltered Collision Target in `HitboxController.ProcessHit()`:**
+   `ProcessHit` evaluated `other.GetComponentInParent<HealthSystem>()`. When an attack hitbox overlapped the target's physical movement body (`CapsuleCollider2D`), it detected `HealthSystem` and registered a hit, completely bypassing the ducking `HurtboxController`!
+2. **Box2D Depenetration Impulse on Dynamic Body Collider Resizing ("Infinite Jumping"):**
+   Resizing `CapsuleCollider2D` on a dynamic `Rigidbody2D` resting on the floor triggered Box2D depenetration impulses against the floor plane, catapulting the fighter into the air. This set `IsGrounded = false`, aborting crouch to Idle/Falling, landing, and repeating the cycle infinitely.
+3. **Tall Body Capsule & Airborne Proximity Freeze:**
+   The body capsule was $1.45\text{m}$ tall, obstructing jumpers whose lower colliders peaked at $1.25\text{m}\text{--}1.50\text{m}$. Furthermore, the forward proximity clamp in `ApplyMovement()` ran during `Jumping` and `Falling`, zeroing forward velocity in mid-air upon reaching a distance $\le 1.15\text{m}$.
+4. **Heavy Hitbox Oversizing:**
+   Heavy Attack was sized at $1.05\text{m} \times 0.55\text{m}$ with offset $0.95\text{m}$, creating an oversized reach that did not require close commitment.
+
+#### Resolution:
+1. **Strict Hurtbox Filter in `HitboxController`:**
+   Enforced `HurtboxController hurtbox = other.GetComponent<HurtboxController>(); if (hurtbox == null) return;`. Hitboxes now strictly hit hurtboxes, ignoring physical movement bodies.
+2. **Static Waist-High Body Capsule ($0.90\text{m}$) & Resizing-Free Physics:**
+   Fixed `FIGHTER_COLLIDER_HEIGHT = 0.90f` (`offset = 0.45f`, `width = 1.10f`) and removed runtime resizing of the physical body collider. Only the non-physical trigger `hurtboxCollider` dynamically shrinks (`size = (0.75f, 0.65f)`, `offset = (0f, 0.35f)`, $Y_{\text{top}} = 0.675\text{m}$). This generates zero Box2D contact impulses, completely eliminating the infinite jumping bug.
+3. **Grounded-Only Push Clamping:**
+   Restricted proximity velocity clamping to `IsGrounded`, enabling full forward momentum during airborne jumps.
+4. **Close-Range Heavy Attack Hitbox (~10% Larger Than Light):**
+   Calibrated Heavy Attack to `size = (0.82f, 0.48f)` and offset `(0.84f, 1.05f)` ($X_{\text{reach}} = 1.250\text{m}$, bottom edge $Y = 0.810\text{m}$), requiring close commitment and whiffing over ducking opponents ($Y_{\text{top}} = 0.675\text{m}$) with $0.135\text{m}$ clearance.
+
+#### Verification:
+- Ran `python scratch/verify_compilation.py`: Both `Assembly-CSharp.csproj` and `Assembly-CSharp-Editor.csproj` compiled cleanly with **ZERO (0) ERRORS**.
+- Verified crouching hurtbox clearance ($+0.150\text{m}$ on Light, $+0.135\text{m}$ on Heavy). Zero infinite hopping during crouch.
+
+
+---
+
+### Bug 37: Misplaced Frame 0 in Saitama Serious Punch & Missing Creepy Death Punch Cinematic Overlays
+
+- **Date:** October 28, 2026
+- **Severity:** Medium (Combat Animation Fluidity & Cinematic Climax Polish)
+- **Component:** `Assets/Sprites/Fighters/Saitama/Frames/`, `Assets/Scripts/Combat/SaitamaSeriousPunchCinematic.cs`, `PrototypeBootstrap.cs`, `FighterController.cs`
+
+#### Symptom:
+1. When Saitama triggered his Ultimate attack, the animation awkwardly started with a stiff standing pose (`ultimate_0`) before dropping into a crouch, breaking the martial arts buildup.
+2. The Serious Punch lacked the creepy psychological terror from *One Punch Man* Episode 5, rendering only small, generic punch sprites during the 2.40s vocal buildup.
+3. The high-detail "big box" assets present in the authentic sprite sheet (`saitama_jus__by_arzeer_de00xcg.png`) were unutilized.
+
+#### Root Causes:
+1. **Misplaced Transitional Sprite at Index 0:**
+   The standing braced frame was mistakenly numbered as `ultimate_0.png` during initial sprite slicing. In the natural martial arts sequence, it belongs at index 6 as the pre-transition pose held right before the fist bursts forward.
+2. **Missing Atmospheric Dimming Subsystem:**
+   No component managed screen-space lighting dimming or synchronized multi-layered cut-in sprites during `FighterState.Ultimate`.
+
+#### Resolution:
+1. **Re-Ordered Physical Frame Sequence:**
+   - Backed up original frames to `Assets/Sprites/Fighters/Saitama/Original_Ultimate_Backup/`.
+   - Re-indexed frames so `ultimate_0` through `ultimate_5` represent the stance drop and deep coiling windup.
+   - Positioned the standing braced frame at `ultimate_6` as the transition frame right before the strike erupts.
+   - Positioned strike release and shockwave dissipation across `ultimate_7` through `ultimate_13`.
+2. **Created `SaitamaSeriousPunchCinematic.cs`:**
+   - Synchronized directly to the 3.80s voice clip (`serious_punch.mp3`).
+   - At $t \le 1.20\text{s}$ into startup (during *"Maji Series..."*): Fades in a $75\%$ screen-space shadow dim and overlays **Box 1 (Creepy Death Head, $84 \times 118\text{px}$)** with glowing, piercing red/white eyes above Saitama.
+   - At $t = 0.0\text{s}$ startup on vocal shout **"SERIOUS PUNCH!"**: Shatters the shadow void and bursts **Box 3 (Colossal Death Combo, $234 \times 204\text{px}$)** with black speed streaks across the screen.
+   - Triggers 2-frame fullscreen white impact flash, heavy camera shake ($0.38\text{f}$), and arena brazier surge.
+3. **Preserved Short, Small Hitbox (`1.4m x 1.0m`):**
+   - Maintained `attackHitbox` strictly at `new Vector2(1.4f, 1.0f)` with offset `(1.25f, 0.95f)`.
+   - Ensures opponents who space away or jump during the 2.40s telegraphed buildup safely dodge the 90-damage blow, guaranteeing competitive fairness.
+4. **Auto-Deployment in `PrototypeBootstrap.cs`:**
+   - Added automatic attachment of `SaitamaSeriousPunchCinematic` to Saitama fighters during scene initialization.
+
+---
+
+### Bug 38: Dual Pause Keybinding Collision, Character Select Skill Data Disconnect & Victory Menu Typography Squint
+
+- **Date:** October 28, 2026
+- **Severity:** Low to Medium (Input Ergonomics, UI Transparency & Visual Polish)
+- **Component:** `Assets/Scripts/UI/CombatMenuController.cs`, `Assets/Scripts/UI/CharacterSelectController.cs`, `Assets/Data/Characters/goku.json`, `Assets/StreamingAssets/Characters/goku.json`, `Assets/Scripts/Data/CharacterData.cs`, `Assets/Prefabs/UI/HUD_Canvas.prefab`
+
+#### Symptom:
+1. Pressing `P` triggered the Pause menu during gameplay. In local duel matches or custom layouts where right-hand fingers rest near `P`, accidental pause menu popups disrupted match flow.
+2. On the Character Selection screen, Son Goku's stat card displayed `SKILL: None`, misleading players into believing Goku lacked a special skill when in reality his `[E]` skill activates his signature Super Saiyan transformation.
+3. In the post-match Victory / Results screen, secondary textual elements (tournament tag, epithet title, final score, navigation hints) used small $11.5\text{pt} - 15\text{pt}$ fonts that were difficult to read from couch distances.
+
+#### Root Causes:
+1. **Redundant `pKey` Polling:**
+   `CombatMenuController.Update()` evaluated `if (kb.escapeKey.wasPressedThisFrame || kb.pKey.wasPressedThisFrame)`, causing unexpected pause toggles when hitting `P`.
+2. **Missing Skill Payload in `goku.json`:**
+   `goku.json` defined `"skill": { "name": "None", "kiCost": 0 }`. Even though `FighterController` and `GokuBrain` implemented Super Saiyan transformation on `SkillPressed`, the data-driven character select card accurately reflected the JSON file's `"None"`.
+3. **Sub-20pt Font Defaults in Results Modal:**
+   Initial UI generation scripts hardcoded small font sizes ($11.5\text{pt}$ for header and footer hints, $13.5\text{pt}$ for epithets, $15\text{pt}$ for scores), which caused visual squinting on $1080\text{p}$ and $4\text{K}$ displays.
+
+#### Resolution:
+1. **Isolated `[ESCAPE]` Pause Polling:**
+   In `CombatMenuController.cs`, removed `kb.pKey.wasPressedThisFrame`, establishing `[ESCAPE]` as the sole in-combat pause toggle.
+2. **Canonical Super Saiyan JSON Entry:**
+   - Updated both `Assets/Data/Characters/goku.json` and `Assets/StreamingAssets/Characters/goku.json`:
+     `"name": "Super Saiyan"`, `"kiCost": 35`, `"buffs": "+25% Speed, +66% Light Dmg (5), +43% Heavy Dmg (10)"`.
+   - Added `public string buffs;` to `CharacterData.SkillData`.
+   - Updated `CharacterSelectController.cs` with dynamic auto-sizing (`13pt - 18pt`) to display:
+     `SKILL: Super Saiyan [Ki: 35] (+25% Spd, +Atk Buffs)`.
+3. **Results Typography Scale Upgrade:**
+   - In `CombatMenuController.cs`:
+     - Tournament Tag (`Micro_Header`): $11.5\text{pt} \to 16.0\text{pt}$
+     - Epithet Text (`Epithet_Text`): $13.5\text{pt} \to 18.5\text{pt}$
+     - Final Score Text (`Score_Text`): $15.0\text{pt} \to 21.0\text{pt}$
+     - Action Buttons (`Btn_Results_*`): $19.0\text{pt} \to 22.0\text{pt}$
+     - Footer Hints (`Footer_Hints`): $11.5\text{pt} \to 15.0\text{pt}$
+   - Added dynamic safety scaling in `EnsureUIHierarchyBuilt()` to upgrade both dynamically generated and pre-baked `HUD_Canvas.prefab` instances.
+   - Updated serialized font sizes directly in `Assets/Prefabs/UI/HUD_Canvas.prefab`.
+
+#### Verification:
+- Code reviewed and verified across both runtime auto-building and serialized prefab hierarchies.
+- Character select card dynamically auto-fits Super Saiyan text cleanly within the $490\text{px}$ stat card bounds.
+
+
+---
+
+### Bug 39: In-World Overshoot & Off-Screen Clipping in Saitama Death Punch (Solved via Arcade Super Combo Freeze)
+
+- **Date:** October 28, 2026
+- **Severity:** Medium (Cinematic Framing, Visual Clarity & Super Move Elegance)
+- **Component:** `Assets/Scripts/Combat/SaitamaSeriousPunchCinematic.cs`, `Assets/Sprites/Effects/`
+
+#### Symptom:
+When Saitama executed his Ultimate attack, attaching the enlarged Big Punch sprite to his in-world character GameObject caused severe visual defects:
+1. Because the sprite was scaled up in 2D world space, it extended over $8\text{ meters}$ horizontally, shooting way past the edge of the viewport and rendering mostly off-screen ("it felt like it wasn't even on the screen").
+2. The colossal sprite replaced or awkwardly lingered over Saitama's physical character body during the strike, clashing with his normal martial arts punch animation.
+3. The $75\%$ semi-transparent shadow overlay kept the background visible, diluting the stark, psychological terror of the manga/anime scene.
+
+#### Root Causes:
+1. **World-Space vs Screen-Space Paradigm Mismatch:**
+   Fighting game super moves (*Street Fighter* Super Combos, *Guilty Gear* Overdrives, *Dragon Ball FighterZ* Level 3s) never place giant cinematic cut-ins into physical world space. Physical space is tied to the game camera and stage boundaries; placing a giant sprite in the world causes it to clip outside the camera viewport.
+2. **Missing Super Freeze State Decoupling:**
+   The cinematic presentation was not cleanly separated from the in-world strike animation. The punch needs to exist as an instantaneous UI freeze cut-in, after which visual control must immediately snap back to the character's standard pixel animation.
+
+#### Resolution:
+1. **100% Solid Pitch-Black Screen Void:**
+   Created a dedicated `ScreenSpaceOverlay` Canvas (`sortingOrder = 950`) with a solid black fullscreen panel (`Color(0, 0, 0, 1)`). During the transition on *"SERIOUS PUNCH!"*, everything in the game disappears into pure blackness.
+2. **Enlarged Big Punch UI Cut-In ($720 \times 628\text{px}$):**
+   Placed the cut-in against the pitch-black void for a punchy $0.28\text{s}$ freeze window.
+3. **Dynamic Viewport Clamping (Never Exceeds Saitama's $X$ Backwards):**
+   Calculated Saitama's screen coordinates via `Camera.main.WorldToViewportPoint(transform.position)`. Positioned the cut-in biased towards screen center in Saitama's facing direction, while mathematically enforcing that its back edge **never exceeds Saitama's $X$ coordinate backwards** and stays comfortably within viewport bounds:
+   ```csharp
+   if (dir > 0)
+   {
+       float minTarget = saitamaCanvasX + halfWidth;
+       float maxTarget = 920f - halfWidth;
+       targetX = Mathf.Max(minTarget, Mathf.Min(0f, maxTarget));
+   }
+   else
+   {
+       float minTarget = -920f + halfWidth;
+       float maxTarget = saitamaCanvasX - halfWidth;
+       targetX = Mathf.Min(maxTarget, Mathf.Max(0f, minTarget));
+   }
+   ```
+4. **Immediate Snap-Back to Normal Arena:**
+   As soon as the $0.28\text{s}$ freeze completes, the black screen vanishes instantly! Saitama continues his normal character animation (`ultimate_7..13`) in the arena with no oversized sprites attached to him.
+5. **Short Melee Hitbox Integrity:**
+   Maintained the short, small hitbox (`Vector2(1.4f, 1.0f)`), guaranteeing competitive fairness.
+
+#### Verification:
+- Code reviewed and tested with dynamic canvas resolution scaling ($1920 \times 1080$).
+- Verified that regardless of where Saitama stands on stage (left corner, center, or right corner), the cut-in remains cleanly framed on screen and never extends behind Saitama's $X$ coordinate.

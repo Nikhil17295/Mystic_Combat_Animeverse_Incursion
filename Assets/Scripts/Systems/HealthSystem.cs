@@ -14,6 +14,7 @@ namespace MysticCombat.Systems
         [SerializeField] private int maxHealth = 100;
 
         private int currentHealth;
+        private EnergySystem energySystem;
 
         #endregion
 
@@ -60,6 +61,7 @@ namespace MysticCombat.Systems
         private void Awake()
         {
             currentHealth = maxHealth;
+            energySystem = GetComponent<EnergySystem>();
         }
 
         #endregion
@@ -81,12 +83,26 @@ namespace MysticCombat.Systems
         /// <summary>
         /// Reduces current health by the given amount. Clamps to 0.
         /// Fires OnHealthChanged and OnDeath as appropriate.
+        /// Accounts for Red Zone exhaustion (+35% extra damage vulnerability).
         /// </summary>
         /// <param name="amount">Damage to apply (positive value).</param>
         public void TakeDamage(int amount)
         {
             if (!IsAlive) return;
             if (amount <= 0) return;
+
+            if (energySystem == null)
+            {
+                energySystem = GetComponent<EnergySystem>();
+            }
+
+            // Red Zone Exhaustion Vulnerability: 35% increased damage taken!
+            if (energySystem != null && energySystem.IsInRedZone)
+            {
+                int baseAmount = amount;
+                amount = Mathf.RoundToInt(amount * 1.35f);
+                Debug.Log($"<color=#ef4444>[HealthSystem] {gameObject.name} in RED ZONE! Vulnerability (+35%): {baseAmount} -> {amount} damage.</color>");
+            }
 
             currentHealth = Mathf.Max(0, currentHealth - amount);
             OnHealthChanged?.Invoke(currentHealth, maxHealth);

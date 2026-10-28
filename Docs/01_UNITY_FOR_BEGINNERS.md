@@ -728,6 +728,17 @@ When `Time.timeScale = 0f`:
 2. **Audio Stops or Stutters:**
    - Calling `AudioListener.pause = true` pauses all audio globally.
    - If your pause menu needs to play retro button clicks or navigation bleeps, set `audioSource.ignoreListenerPause = true;` on the menu's `AudioSource`.
+3. **Dual Pause Keybindings (`P` vs `[ESCAPE]`):**
+   - In 2-player local duels or arcade layouts, binding `P` to Pause causes frequent collisions when Player 2's right hand rests near `P` (e.g., `I/J/K/L/U/O` cluster) or during fast-paced button mashing.
+   - *Best Practice:* Keep Pause strictly isolated to `[ESCAPE]`, eliminating accidental match interruptions.
+
+### Data-Driven Character Select Cards & Typography Scaling
+1. **Keeping Metadata in Sync with Combat Systems:**
+   - When introducing complex fighter mechanics (like Goku's Super Saiyan transformation), ensure the underlying JSON file (`Assets/Data/Characters/goku.json`) reflects the canonical name, Ki cost (35), and active buffs (`+25% Speed, +66% Light Dmg, +43% Heavy Dmg`).
+   - If the JSON says `"name": "None"`, the character selection UI accurately renders "None", causing player confusion.
+2. **Arcade Typography & Couch Distance Legibility:**
+   - Text elements below $15\text{pt}$ become unreadable on arcade monitors and couch TVs.
+   - Set TextMeshProUGUI headers, titles, and score counters to $\ge 18\text{pt} - 22\text{pt}$, and enable `enableAutoSizing = true` (`fontSizeMin = 13`, `fontSizeMax = 18`) so multi-buff descriptions scale down gracefully rather than truncating.
 
 ### Sliding UI Animations in Pure C# (No Plugins Needed)
 To slide a menu from off-screen ($Y = 950\text{px}$) into the center ($Y = 0\text{px}$):
@@ -784,19 +795,28 @@ The `FighterController` does not even know if it is being played by a human or a
 
 ### What is a Hierarchical Finite State Machine (HFSM)?
 A flat state machine only has one layer (`Idle`, `Walk`, `Punch`). In fighting games, this feels robotic.
-A **Hierarchical FSM** splits thinking into two layers:
+A **Hierarchical FSM** splits thinking into three layers:
 1. **Layer 1: Macro Strategy (High-Level Posture):**
-   - *"Am I winning or losing? Should I rush down, keep my distance, or back off to charge Ki?"*
-2. **Layer 2: Micro Actions (Concrete Button Pressing):**
-   - *"I decided to rush down; now I press [D] to walk forward, and when within 1.0m, I tap [Light Attack]."*
+   - *"Am I winning or losing? Should I rush down, keep my distance, charge Ki, or punish the opponent's whiff?"*
+2. **Layer 2: Micro Execution (Concrete Virtual Button Latching):**
+   - *"I decided to rush down; now I press [D] to walk forward, and when within 1.55m, I pulse [Light Attack]."*
+3. **Layer 3: Hit-Confirm Combo Engine (Chain-Canceling):**
+   - *"My Light Jab connected with the opponent (`hasHitTargetThisSwing == true`)! I immediately chain-cancel into a Heavy Haymaker or Consecutive Normal Punches before they recover!"*
+
+### The Deadly `LateUpdate()` Trap vs. 2-Frame Input Latching
+In amateur Unity projects, developers often set a button pulse in `Update()` and immediately set it to `false` in `LateUpdate()`, assuming it acts like `wasPressedThisFrame`.
+**Why this breaks:**
+- Component `Update()` execution order is non-deterministic. If `FighterController.Update()` executes **before** `CpuFighterBrain.Update()`, the bot sets the button in `Update()`, wipes it in `LateUpdate()`, and next frame `FighterController` checks a button that is already `false`! The AI's attacks are completely erased.
+- **The Solution (2-Frame Latch Counter):** The AI sets an integer latch: `lightLatch = 2`. The property returns `lightLatch > 0`. Each frame, `lightLatch--`. This guarantees the virtual button stays held across the frame boundary, ensuring 100% actuation reliability regardless of execution order.
 
 ### Humanizing the Bot (No Frame-0 Cheats)
 If a computer reacts in $0\text{ms}$, players feel cheated. We introduce:
-1. **Reaction Delay Tick ($\Delta t \approx 0.14\text{s} - 0.40\text{s}$):** The AI only evaluates strategic decisions every few hundred milliseconds, matching human reflex windows.
-2. **Hesitation / Mistake Rate:** A percentage chance on Easy difficulty where the bot pauses in neutral or drops a combo confirm.
+1. **Reaction Delay Tick ($\Delta t \approx 0.05\text{s} - 0.25\text{s}$):** The AI only evaluates strategic decisions on a throttled timer, matching human arcade reflex windows.
+2. **Hesitation / Mistake Rate:** A percentage chance on Easy difficulty where the bot misjudges spacing or delays a combo confirm.
+3. **Hit-Confirm Roll:** On Easy, the bot confirms combos $55\%$ of the time, while on Extreme tournament mode it confirms $98\%$ of landed pokes.
 
 > **Godot Comparison:**
-> In **Godot**, you achieve this by giving your `CharacterBody2D` a generic child node or Resource for `input_provider`. In 2P mode, it points to a script reading `Input.get_vector()`. In Single-Player mode, you swap that node for an `AIController.gd` node that emits virtual vectors and action flags into `_physics_process()`.
+> In **Godot**, this is identical to avoiding clearing input flags in `_process()` while the character's movement code evaluates in `_physics_process()`. In Godot, you give your `CharacterBody2D` an input adapter. In Single-Player mode, an `AIController.gd` node emits virtual action states into the physics loop. If you cleared an action flag in `_process()` before `_physics_process()` ran, the character would drop every jump and attack!
 
 ---
 
@@ -1226,3 +1246,283 @@ Many retro arcade fonts (like `Arcade Classic` or `Retro Gaming`) only contain u
 
 > **Godot Comparison:**
 > In **Godot Engine**, font handling is managed through `FontFile` and `FontVariation` resources. Godot automatically binds MSDF (Multi-channel Signed Distance Field) textures under the hood inside `CanvasItem` without exposing disconnected sub-asset materials. In Godot, you configure fallback fonts using `FontFile.fallbacks = [fallback_font]`. If a glyph is missing, Godot automatically walks down the array to find the character in the fallback font.
+
+
+---
+
+## 38. How 2D Arena Backgrounds, Animated Pixel Braziers, and Layered VFX Work in Unity
+
+In a 2D arcade fighting game, the stage background is far more than a flat poster; it is a layered visual world that provides depth, motion, atmosphere, and dramatic feedback to the players.
+
+### The 2D Sorting Order Layer Hierarchy
+In 2D game engines like Unity, objects are drawn from back to front according to their **Sorting Order** (`orderInLayer`):
+
+```
+Back (-10) ─────────────────────────────────────────────────────────────► Front (+1000)
+
+┌───────────────────────┬───────────────────────┬───────────────────┬──────────────────┐
+│  -10: Stage Backdrop  │   -8 to -7: Braziers  │    0: Fighters    │  100+: Combat HUD│
+│  (Pagodas, Space Rift)│  (Stone, Pixel Fire)  │   (Goku, Saitama) │  (Health, Timer) │
+└───────────────────────┴───────────────────────┴───────────────────┴──────────────────┘
+```
+
+1. **Backdrop (`orderInLayer = -10`):** The distant horizon (pagodas, mountains, Earth in space, cosmic nebulae). Always drawn first so characters and effects appear on top.
+2. **Rotating Tao Mandala (`orderInLayer = -9`):** Doctor Strange's eldritch magic circle floating inside the dimensional sky rift.
+3. **Interactive Braziers (`orderInLayer = -8` for stone stand, `-7` for fire and embers):** Placed at the edge of the arena ($X = \pm 5.5$). They sit behind the fighters so characters are never blocked by torches.
+4. **Fighters (`orderInLayer = 0`):** The center of gameplay focus.
+5. **Combat VFX & Sparks (`orderInLayer = +5`):** Hit sparks, shockwaves, and Kamehameha beams draw on top of fighters.
+6. **Canvas HUD (`sortingOrder = 100` to `999`):** Health bars, portraits, and timer always render over the entire game world.
+
+### How Animated Pixel Fire Works Without Heavy Animator Controllers
+Instead of setting up complex Unity Animator State Machines for simple props:
+1. An array of 8 frame sprites (`fire_0.png` through `fire_7.png`) is loaded into a list.
+2. An update loop timer advances at 10 FPS:
+   $$\text{currentFrame} = (\text{currentFrame} + 1) \pmod{\text{totalFrames}}$$
+3. `spriteRenderer.sprite = activeFrames[currentFrame]` updates the sprite on the GPU quad.
+4. **Impact Flare Surge:** When a fighter lands a heavy hit, `TriggerSurge(1.4f)` temporarily enlarges the flame scale, smoothly decaying back to normal via `Mathf.MoveTowards`.
+
+### Upward Ember Particles (ParticleSystem)
+To give torches real physical presence:
+- **Negative Gravity:** Setting `gravityModifier = -0.15f` causes ember particles to float upward like hot air.
+- **Size Over Lifetime:** An animation curve starts at $1.0\times$ size and shrinks to $0.1\times$ at death, creating realistic burnout.
+- **Random Flutter:** Velocity over lifetime adds small horizontal sine drift ($\pm 0.25\text{m/s}$), preventing embers from traveling in rigid straight lines.
+
+> **Godot Comparison:**
+> - In **Godot**, you create a `Node2D` named `Arena`, add a `Sprite2D` for the background, an `AnimatedSprite2D` for the torches, and a `GPUParticles2D` node with a `ParticleProcessMaterial` setting `gravity = Vector3(0, -98, 0)` for upward lift.
+> - In **Unity**, you attach `SpriteRenderer`, our custom `BrazierFlameAnimator` component, and a `ParticleSystem` component to child GameObjects under the `Arena` parent.
+
+
+---
+
+## 43. Kinetic Combat Physics, Gatling Chain Canceling & Red Zone Peril (Godot vs Unity)
+
+### 1. Fighting Game Pacing: Why Low Poke Damage Makes Matches Fairer and Longer
+In early fighting game prototypes, developers often make basic attacks deal $10\text{--}18$ damage.
+- **The Problem:** In a game where fighters have $100\text{ HP}$, dealing $18$ damage per punch means a match is decided in $5\text{--}6$ stray hits! One mistake or mistimed jump leads to an instant knockout before players can build Ki, strategize, or experience comeback mechanics.
+- **The Solution (Arcade Calibration):**
+  - **Light Attack (Duckable High Poke):** Deals only $3\text{ damage}$ (Goku) or $4\text{ damage}$ (Saitama). Fast startup ($0.08\text{s}$), low reward. Used to check the opponent's guard and start pressure.
+  - **Heavy Attack (Mid Strike):** Deals $7\text{ damage}$ (Goku) or $9\text{ damage}$ (Saitama). Slower startup ($0.18\text{s}$), hits crouching opponents.
+  - **Multi-Hit Flurry (Saitama Skill):** Deals $2\text{ damage per hit} \times 15\text{ hits} = 30\text{ total damage}$.
+  - **Ultimates (High-Risk Finishers):** Goku's Kamehameha deals $45\text{ damage}$ (almost half a health bar). Saitama's Serious Punch deals $90\text{ damage}$ (a near one-hit kill with a massive $2.40\text{s}$ telegraphed charge).
+  - *Result:* Matches last significantly longer, neutral spacing matters, and landing an Ultimate feels catastrophic and decisive!
+
+### 2. Gatling Chain Canceling (Hit Confirming)
+In traditional 2D fighters (like *Guilty Gear*, *Street Fighter*, and *Dragon Ball FighterZ*), players shouldn't have to wait for an attack's entire recovery animation to finish before throwing their next strike—**if and only if the first attack successfully connected**.
+- **The Architecture:**
+  1. `FighterController` tracks `hasHitTargetThisSwing = false`.
+  2. When the Light Attack hitbox intersects the enemy hurtbox, `HitboxController.ResolveHit()` calls:
+     ```csharp
+     ownerFc.OnAttackHitConfirmed();
+     ```
+  3. Inside `FighterController.HandleStateTransitions()`, while in `FighterState.LightAttack`:
+     ```csharp
+     if (hasHitTargetThisSwing && !isExhausted)
+     {
+         if (inputHandler.HeavyAttackPressed)
+         {
+             ExecuteHeavyAttack();
+         }
+         else if (inputHandler.SkillPressed)
+         {
+             ExecuteSkillAttack();
+         }
+     }
+     ```
+  4. If the player whiffs into empty air (`hasHitTargetThisSwing == false`), they are locked in recovery frames and cannot cancel! This rewards precise hit confirming and punishes careless button mashing.
+
+### 3. Kinetic Ground Friction & Decoupled Gravity
+- **The Sliding Ice Trap:** When a character is knocked backward (`rb.linearVelocity = new Vector2(-5f, 1f)`), if there is no friction applied while grounded, the fighter glides endlessly across the floor like an ice skater.
+- **The Decelerating Knockback:** In `FixedUpdate()`, when grounded and in `HitStun` or `KnockBack`:
+  ```csharp
+  float decayedVx = Mathf.MoveTowards(rb.linearVelocity.x, 0f, 14f * Time.fixedDeltaTime);
+  rb.linearVelocity = new Vector2(decayedVx, rb.linearVelocity.y);
+  ```
+  Fighters flinch backward and immediately decelerate to a firm halt within $0.35\text{s}$.
+- **Snappy Fall Gravity ($1.35\times$ Multiplier):**
+  - Upward jump arc: normal gravity (`gravityScale = 3.0f`) gives an airy, floaty anime leap.
+  - Downward descent ($V_y < 0$): boosted gravity (`gravityScale * 1.35f = 4.05f`) snaps the fighter swiftly back to earth, preventing floatiness and making anti-air timing crisp.
+
+### 4. The Red Zone Vulnerability Multiplier (+35% Damage & Flashing Danger)
+When a fighter runs out of Ki, they enter the **Red Zone** (Exhausted state).
+To make players genuinely fear over-spending Ki:
+1. **Damage Vulnerability (+35%):** In `HealthSystem.TakeDamage(amount)`:
+   ```csharp
+   if (energySystem != null && energySystem.IsInRedZone)
+   {
+       amount = Mathf.RoundToInt(amount * 1.35f);
+   }
+   ```
+   A $90\text{ damage}$ Serious Punch against a Red Zone target deals $121.5 \to 122\text{ damage}$—an **instant one-hit KO**!
+2. **Extended Hitstun (+0.12s):** In `FighterController.ApplyHit()`:
+   ```csharp
+   if (energySystem != null && energySystem.IsInRedZone)
+   {
+       stunDuration += 0.12f;
+   }
+   ```
+   Exhausted fighters stagger longer, making them vulnerable to full punish combos.
+3. **Pulsing Exhaustion Visual:** The fighter's sprite pulses with an amber/red tint at 5 Hz (`Mathf.PingPong(Time.time * 5f, 1f)`), clearly signaling vulnerability to both players.
+
+### 5. Wall Impact Crunch
+When a fighter is slammed into the arena boundary walls at $|V_x| > 3.0\text{ m/s}$:
+- `OnCollisionEnter2D()` detects the boundary wall.
+- Instantly triggers a dust puff (`VFXManager.PlayDustPuff`) and micro camera shake (`TriggerCameraShake(0.18f, 0.15f)`), adding heavy tactile crunch to corner knockdowns.
+
+> **Godot Comparison:**
+> In **Godot Engine**:
+> - Grounded knockback friction is implemented in `_physics_process(delta)` using `velocity.x = move_toward(velocity.x, 0.0, 14.0 * delta)` before calling `move_and_slide()`.
+> - Snappy fall gravity is implemented by checking `if not is_on_floor() and velocity.y > 0:` and multiplying `gravity * 1.35` (note: in Godot, positive $Y$ is downwards).
+> - Chain canceling is handled in Godot by emitting an `attack_connected` signal from the `Area2D` hitbox, setting a `can_chain_cancel = true` boolean inside the state machine.
+
+
+---
+
+## 44. Rounded Capsule Colliders, Anti-Stacking Physics & Bulldoze Push Prevention (Godot vs Unity)
+
+### 1. The Head-Stacking Bug (Why Flat BoxColliders Fail on Jumpers)
+In early 2D games, developers often attach a `BoxCollider2D` to character bodies.
+- **The Rookie Mistake:** A box collider has a perfectly flat horizontal top surface ($Y = \text{height}$).
+- When Character A jumps over Character B, Character A's flat bottom lands on Character B's flat top.
+- Because both surfaces have matching horizontal normals $(0, 1)$, the physics engine treats Character B's head as a solid platform. Character A can stand, walk, or balance atop Character B's head!
+- **The Solution (Vertical CapsuleCollider2D):**
+  - A `CapsuleCollider2D` (oriented vertically) has a hemispherical dome top.
+  - Any object landing on the dome experiences an angled contact normal $(\pm n_x, n_y)$.
+  - Combined with an active anti-stacking slip velocity:
+    ```csharp
+    if (!IsGrounded && opponent != null)
+    {
+        float dx = transform.position.x - opponent.position.x;
+        float dy = transform.position.y - opponent.position.y;
+        if (dy > 0.70f && Mathf.Abs(dx) < 0.95f)
+        {
+            float slipDir = dx >= 0f ? 1f : -1f;
+            rb.linearVelocity = new Vector2(slipDir * 3.0f, rb.linearVelocity.y);
+        }
+    }
+    ```
+  - The jumper is instantly and smoothly deflected off the top down to the floor. They can never rest or stack on each other!
+
+### 2. The Bulldozer Trap (Why Running Characters Push Idle Characters)
+When a character walks or runs into another character:
+- If physics velocity is applied directly (`rb.linearVelocity.x = moveInput * speed`), the walking character acts like a motorized bulldozer, shoving the stationary defender across the stage.
+- **The Solution (Proximity Buffer & Forward-Movement Lock):**
+  - We configure a wider body collider ($1.10\text{m}$) and enforce a minimum sparring gap ($1.15\text{m}$):
+    ```csharp
+    float dx = opponent.position.x - transform.position.x;
+    bool movingTowardsOpponent = (dx > 0f && inputHandler.MoveInput.x > 0f) || (dx < 0f && inputHandler.MoveInput.x < 0f);
+
+    if (movingTowardsOpponent && Mathf.Abs(dx) <= 1.15f)
+    {
+        horizontalVelocity = 0f; // Lock forward movement!
+    }
+    ```
+  - When walking into the opponent, the fighter reaches the sparring threshold and comes to an immediate halt against an immovable barrier.
+  - Walking backward away from the opponent remains completely unobstructed.
+
+### 3. Attack Height Architecture: High Pokes vs Ducking Hurtboxes
+In high-level fighting games, crouching is an active defensive dodge rather than just an aesthetic pose:
+- **Crouching Hurtbox:** `size = (0.75f, 0.65f)`, `offset = (0f, 0.35f)`. Top edge is locked at $Y = 0.675\text{m}$.
+- **Light Attack Hitbox (High Poke):** `size = (0.75f, 0.45f)`, `offset = (0.80f, 1.05f)`. Bottom edge is $Y = 0.825\text{m}$. Clearance: $\mathbf{0.150\text{m}}$ ($15.0\text{cm}$) clean whiff!
+- **Heavy Attack Hitbox (High Heavy Strike):** `size = (0.82f, 0.48f)`, `offset = (0.84f, 1.05f)`. Bottom edge is $Y = 0.810\text{m}$. Clearance: $\mathbf{0.135\text{m}}$ ($13.5\text{cm}$) clean whiff!
+- Both basic attacks cleanly fly over the ducking opponent's head, rewarding defensive awareness. Special skills and Ultimates reach low ($Y \le 0.25\text{m}$) to punish ducking players.
+
+> **Godot Comparison:**
+> In **Godot Engine**:
+> - Character bodies use `CharacterBody2D` with a `CapsuleShape2D` child. The capsule shape naturally deflects jumpers off its curved upper hemisphere.
+> - Bulldoze prevention in Godot is achieved by checking `get_slide_collision_count()` inside `_physics_process()` or calculating `global_position.distance_to(opponent.global_position)` and zeroing forward velocity before `move_and_slide()`.
+> - Ducking is controlled by keyframing the `shape:size` of the `CollisionShape2D` inside an `AnimationPlayer` track on the "crouch" animation.
+
+
+---
+
+## 45. The Hurtbox Filtering Trap, Short Waist-High Push Boxes & Cross-Over Aerial Physics (Godot vs Unity)
+
+### 1. The Rookie Trap: Why Ducking Failed to Dodge Attacks (Hitbox Filtering Bug)
+In 2D fighting games, characters have two types of colliders:
+1. **Movement / Push Colliders (Physics Body):** `CapsuleCollider2D` on the root GameObject that collides with the ground and arena walls.
+2. **Hurtboxes (Damage Vulnerability):** `BoxCollider2D` triggers attached to a child GameObject (`Hurtbox`) that indicate where the character can be injured.
+
+- **The Fatal Flaw:** In naive implementations:
+  ```csharp
+  // OverlapBoxAll detects ALL colliders inside the attack box
+  HealthSystem targetHealth = other.GetComponentInParent<HealthSystem>();
+  ```
+  `other` can be the physical body capsule! Because `HealthSystem` is on the root GameObject, `GetComponentInParent<HealthSystem>()` succeeds even when the attack hitbox only touches the character's movement capsule!
+- **The Consequence:** Even when the player crouched and the `Hurtbox` shrank down to the floor, the attack hitbox hit the character's physical body collider and registered damage anyway! Ducking seemed broken because the physical body was acting as an invisible permanent hurtbox.
+- **The Professional Fix (Strict Hurtbox Filtering):**
+  ```csharp
+  HurtboxController hurtbox = other.GetComponent<HurtboxController>();
+  if (hurtbox == null) return; // Ignore movement capsules, ground checks, and hitboxes!
+  ```
+  Attacks now **strictly** interact with `HurtboxController`. When a character ducks, the attack hitbox passes over empty air, guaranteeing a $100\%$ reliable ducking dodge!
+
+### 2. The Box2D Depenetration Trap: Why Dynamic Collider Resizing Caused "Infinite Jumping"
+A classic pitfall in 2D physics engines occurs when trying to resize a character's physical body collider on the fly:
+- When a `Rigidbody2D` resting on the floor has its `CapsuleCollider2D.size` changed dynamically in `TransitionTo(FighterState.Crouching)`, the bottom contact edge momentarily interpenetrates the floor plane.
+- The Box2D solver detects an instantaneous overlap and applies an explosive vertical **depenetration normal impulse**.
+- This impulse catapults the character into the air, immediately triggering `IsGrounded = false`.
+- The state machine aborts `Crouching` because the character is airborne, transitioning to `Falling`/`Idle`. Upon landing, holding the crouch key triggers the cycle again—producing an uncontrollable, rapid **"infinite jumping"** loop!
+- **The Bug-Free Solution:** The physical movement capsule remains **static and fixed** at waist height ($1.10\text{m} \times 0.90\text{m}$, `offset = (0f, 0.45f)`) at all times. **Only the non-physical trigger `hurtboxCollider`** resizes dynamically (`size = (0.75f, 0.65f)`, `offset = (0f, 0.35f)`). Since triggers generate zero contact impulses in Box2D, crouching is completely stable and mathematically clean!
+
+### 3. Short Waist-High Body Colliders & Cross-Over Jumps
+- **The Stacking & Blocking Trap:** If a fighter's physical body collider reaches head height ($1.45\text{m}\text{--}1.90\text{m}$):
+  - Jumping characters collide with the top of the standing defender's head mid-flight, blocking cross-overs.
+  - Furthermore, if forward movement clamping is active while airborne, jumping towards the opponent freezes the jumper in mid-air upon reaching proximity ($1.15\text{m}$)!
+- **The Arcade Standard:**
+  - Physical body colliders reach only **waist height ($0.90\text{m}$)** (`CapsuleCollider2D`, $1.10\text{m}$ wide, $0.90\text{m}$ tall, offset $0.45\text{m}$).
+  - Jumpers (jumping at $1.98\text{m}\text{--}2.65\text{m}$) clear the opponent's waist with over $1.0\text{m}\text{--}1.75\text{m}$ of vertical clearance, sailing cleanly across for authentic cross-up jump-ins!
+  - Proximity movement clamping is explicitly restricted to **`IsGrounded`**, allowing full, unrestricted forward momentum during aerial arcs.
+
+### 4. Close-Range Heavy Attack Commitment
+- To prevent heavy attacks from acting as full-screen poke tools:
+  - Heavy Attack hitbox size is calibrated to `size = (0.82f, 0.48f)` and offset `(0.84f, 1.05f)`—making it just **$10\%$ larger than Light Attack**.
+  - Its reach extends only $7.5\text{cm}$ past the light jab ($1.250\text{m}$ vs $1.175\text{m}$), forcing players to close the distance before committing to a heavy strike.
+  - Bottom edge ($Y = 0.810\text{m}$) stays well above the ducking hurtbox apex ($Y = 0.675\text{m}$), preserving the ducking dodge with $\mathbf{0.135\text{m}}$ ($13.5\text{cm}$) clearance.
+
+> **Godot Comparison:**
+> In **Godot Engine**:
+> - Separation of Hurtbox vs Physics Body is enforced using Godot's **Collision Layers & Masks**:
+>   - Layer 1: `World_Physics` (CharacterBody2D capsule)
+>   - Layer 2: `Hitboxes` (Area2D with mask = Layer 3)
+>   - Layer 3: `Hurtboxes` (Area2D)
+>   - Because `Hitbox` only masks Layer 3, it is physically incapable of detecting Layer 1. In Unity, we enforce this in C# via `other.GetComponent<HurtboxController>()`.
+> - For cross-overs, Godot developers place a short `CapsuleShape2D` at the waist and check `if is_on_floor():` before applying any proximity push-clamps.
+
+
+---
+
+## 46. The Anatomy of a Cinematic Anime Ultimate: Buildup, Eerie Cut-Ins, and Fair Short Hitboxes
+
+In competitive arcade fighting games, an Ultimate attack that deals 90% damage (like Saitama's Serious Punch) can easily ruin gameplay balance if implemented poorly. 
+
+### 1. The Telegraphed Buildup & The Small Hitbox (Game Balance)
+Why doesn't a 90-damage Serious Punch feel cheap or overpowered?
+- **Massive Telegraphed Buildup ($2.40\text{s}$ Startup):**
+  When Saitama activates his Ultimate, he does not instantly hit. He spends $2.40\text{ seconds}$ winding up in place. His vocal line calmly announces: *"Hissatsu... Maji Series..."* This gives the opponent ample warning to jump away, dash backward, or prepare their defense.
+- **Short, Small Damaging Hitbox ($1.4\text{m} \times 1.0\text{m}$):**
+  Even though the visual effect shows a colossal fist bursting across the screen, the actual physical damaging hitbox is strictly constrained to close melee range right in front of his torso. If the opponent spaced properly, the punch harmlessly whiffs!
+
+### 2. Fixing the Misplaced Transition Frame in the Sprite Sequence
+In early sprite exports, the standing forward frame (`ultimate_0`) was erroneously placed at frame 0. 
+- In physical martial arts, a puncher does not stand still, drop into a crouch, and then strike.
+- The true physical sequence is:
+  1. **Frames 0–5:** Drops into a deep crouching stance, coiling his right fist back into shadow.
+  2. **Frame 6:** The standing braced transitional stance—holding all the kinetic energy just before the release!
+  3. **Frames 7–8:** The forward strike burst!
+  4. **Frames 9–13:** Shockwave dissipation, deceleration, and stance recovery.
+
+### 3. The Arcade Super Combo Freeze (`SaitamaSeriousPunchCinematic.cs`)
+In classic 2D fighters (*Street Fighter*, *Guilty Gear*, *Dragon Ball FighterZ*), supers don't just spawn enormous sprites attached to the character's hand—doing that would fly off-screen and clutter the camera! Instead, games employ an **Arcade Super Freeze**:
+1. **In-World Martial Arts Buildup ($0.0\text{s} - 2.4\text{s}$):**
+   Saitama drops low into his crouching stance with normal arena lighting, winding up as the Japanese vocal chants (*"Hissatsu... Maji Series..."*).
+2. **Solid Pitch-Black Screen Freeze ($t = 2.40\text{s}$ on *"SERIOUS PUNCH!"*):**
+   The entire screen instantly plunges into a 100% solid pitch-black void via a high-priority UI Canvas (`sortingOrder = 950`). Against the pure black void, the enlarged Big Punch cut-in ($720 \times 628\text{px}$) flashes for a punchy $0.28\text{s}$ window.
+   - **Smart Screen Positioning:** The cut-in is dynamically placed towards screen center and oriented in Saitama's facing direction. Crucially, its back edge is clamped so it **never exceeds Saitama's $X$ coordinate backwards**, keeping the visual impact completely framed on screen.
+3. **Instant Snap-Back to Normal Arena:**
+   After $0.28\text{s}$, the black void vanishes instantly! Visual control returns seamlessly to the arena where Saitama continues his normal character strike sprites (`ultimate_7..13`) with no oversized sprites attached to his body.
+4. **Impact Cataclysm:**
+   Fullscreen white impact flash, heavy camera shake ($0.38\text{s}$), and flame brazier surges erupt as the short melee hitbox connects at point-blank range.
+
+> **Godot Comparison:**
+> - In **Godot**, you would create a `CanvasLayer` at `layer = 10` holding a solid black `ColorRect` and a centered `TextureRect` displaying the punch, toggled for 0.28 seconds via `get_tree().create_timer(0.28)`.
+> - In **Unity**, `SaitamaSeriousPunchCinematic.cs` uses a `Canvas` set to `ScreenSpaceOverlay` (`sortingOrder = 950`) with an `Image` black void panel and a centered `RectTransform` cut-in, auto-managed without polluting the in-world physics hierarchy.

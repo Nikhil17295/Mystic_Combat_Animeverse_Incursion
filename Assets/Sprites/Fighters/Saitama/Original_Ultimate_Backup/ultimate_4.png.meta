@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: caa76dc59c8b7fa4288f214c12ffd66e
+guid: 8bb58c8eee1ae334eaccc844154bd3a1
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 1865575827330358055
-    second: preview_sheet_flurry_0
+      213: 8207558097529379030
+    second: ultimate_4_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -115,13 +115,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: preview_sheet_flurry_0
+      name: ultimate_4_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 600
-        height: 170
+        width: 160
+        height: 160
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -130,8 +130,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 72bd499a45bd3e910800000000000000
-      internalID: 1865575827330358055
+      spriteID: 6d89e9caa9a17e170800000000000000
+      internalID: 8207558097529379030
       vertices: []
       indices: 
       edges: []

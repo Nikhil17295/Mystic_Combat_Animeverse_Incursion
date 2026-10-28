@@ -74,10 +74,11 @@ namespace MysticCombat.Editor
             rb.freezeRotation = true;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
-            // BoxCollider2D (World collision)
-            BoxCollider2D col = fighter.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(0.8f, 1.9f);
-            col.offset = new Vector2(0f, 0.95f);
+            // CapsuleCollider2D (World collision - vertical dome prevents stacking)
+            CapsuleCollider2D col = fighter.AddComponent<CapsuleCollider2D>();
+            col.direction = CapsuleDirection2D.Vertical;
+            col.size = new Vector2(1.10f, 0.90f);
+            col.offset = new Vector2(0f, 0.45f);
 
             // SpriteRenderer
             SpriteRenderer sr = fighter.AddComponent<SpriteRenderer>();

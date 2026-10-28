@@ -611,9 +611,20 @@ namespace MysticCombat.UI
 
                 if (card.skillValueText != null && data.skill != null)
                 {
-                    card.skillValueText.text = (data.skill.name == "None" || data.skill.kiCost <= 0)
-                        ? "SKILL: None"
-                        : $"SKILL: {data.skill.name}  [Ki: {data.skill.kiCost:F0}]";
+                    card.skillValueText.enableAutoSizing = true;
+                    card.skillValueText.fontSizeMin = 13f;
+                    card.skillValueText.fontSizeMax = 18f;
+
+                    if (data.characterId == "goku" || data.skill.name.ToLower().Contains("saiyan"))
+                    {
+                        card.skillValueText.text = $"SKILL: Super Saiyan [Ki: {data.skill.kiCost:F0}] (+25% Spd, +Atk Buffs)";
+                    }
+                    else
+                    {
+                        card.skillValueText.text = (data.skill.name == "None" || data.skill.kiCost <= 0)
+                            ? "SKILL: None"
+                            : $"SKILL: {data.skill.name}  [Ki: {data.skill.kiCost:F0}]";
+                    }
                 }
 
                 if (card.ultimateValueText != null && data.ultimate != null)
