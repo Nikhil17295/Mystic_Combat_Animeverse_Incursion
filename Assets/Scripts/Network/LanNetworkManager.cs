@@ -18,16 +18,21 @@ namespace MysticCombat.Network
     {
         #region Singleton
 
+        private static bool isShuttingDown = false;
         private static LanNetworkManager instance;
+
+        public static bool HasInstance => instance != null && !isShuttingDown;
 
         public static LanNetworkManager Instance
         {
             get
             {
+                if (isShuttingDown) return null;
+
                 if (instance == null)
                 {
                     instance = FindAnyObjectByType<LanNetworkManager>();
-                    if (instance == null)
+                    if (instance == null && !isShuttingDown)
                     {
                         GameObject go = new GameObject("LanNetworkManager");
                         instance = go.AddComponent<LanNetworkManager>();
@@ -80,6 +85,7 @@ namespace MysticCombat.Network
         public event Action<MatchStartPacket> OnMatchStartReceived;
         public event Action<FighterInputPacket> OnRemoteInputReceived;
         public event Action<MatchSnapshotPacket> OnMatchSnapshotReceived;
+        public event Action OnRoundResetReceived;
 
         #endregion
 
@@ -97,6 +103,9 @@ namespace MysticCombat.Network
 
         private void Awake()
         {
+            isShuttingDown = false;
+            Application.runInBackground = true;
+
             if (instance != null && instance != this)
             {
                 Destroy(gameObject);
@@ -118,11 +127,17 @@ namespace MysticCombat.Network
 
         private void OnDestroy()
         {
+            if (instance == this)
+            {
+                isShuttingDown = true;
+                instance = null;
+            }
             Disconnect();
         }
 
         private void OnApplicationQuit()
         {
+            isShuttingDown = true;
             Disconnect();
         }
 
@@ -350,6 +365,11 @@ namespace MysticCombat.Network
             SendPacket(PacketType.MatchStart, (writer) => packet.Serialize(writer));
         }
 
+        public void SendRoundReset()
+        {
+            SendPacket(PacketType.RoundReset, null);
+        }
+
         #endregion
 
         #region Packet Reception Loop
@@ -425,6 +445,10 @@ namespace MysticCombat.Network
                     case PacketType.MatchStart:
                         MatchStartPacket startPacket = MatchStartPacket.Deserialize(r);
                         mainThreadActions.Enqueue(() => OnMatchStartReceived?.Invoke(startPacket));
+                        break;
+
+                    case PacketType.RoundReset:
+                        mainThreadActions.Enqueue(() => OnRoundResetReceived?.Invoke());
                         break;
 
                     case PacketType.Disconnect:

@@ -402,6 +402,8 @@ namespace MysticCombat.Combat
             var velOverLifetime = ps.velocityOverLifetime;
             velOverLifetime.enabled = true;
             velOverLifetime.x = new ParticleSystem.MinMaxCurve(-0.25f, 0.25f);
+            velOverLifetime.y = new ParticleSystem.MinMaxCurve(0f, 0f);
+            velOverLifetime.z = new ParticleSystem.MinMaxCurve(0f, 0f);
 
             var sizeOverLifetime = ps.sizeOverLifetime;
             sizeOverLifetime.enabled = true;

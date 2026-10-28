@@ -352,11 +352,15 @@ namespace MysticCombat.UI
             if (p1Energy != null && IsInActiveScene(p1Energy))
             {
                 p1Energy.OnKiChanged += OnP1KiChanged;
+                p1Energy.OnThresholdsChanged += OnP1ThresholdsChanged;
+                CalibrateKiThresholdsFromEnergySystem(0);
             }
 
             if (p2Energy != null && IsInActiveScene(p2Energy))
             {
                 p2Energy.OnKiChanged += OnP2KiChanged;
+                p2Energy.OnThresholdsChanged += OnP2ThresholdsChanged;
+                CalibrateKiThresholdsFromEnergySystem(1);
             }
 
             SubscribeMatchEvents();
@@ -370,8 +374,16 @@ namespace MysticCombat.UI
             if (p1Health != null) p1Health.OnHealthChanged -= OnP1HealthChanged;
             if (p2Health != null) p2Health.OnHealthChanged -= OnP2HealthChanged;
 
-            if (p1Energy != null) p1Energy.OnKiChanged -= OnP1KiChanged;
-            if (p2Energy != null) p2Energy.OnKiChanged -= OnP2KiChanged;
+            if (p1Energy != null)
+            {
+                p1Energy.OnKiChanged -= OnP1KiChanged;
+                p1Energy.OnThresholdsChanged -= OnP1ThresholdsChanged;
+            }
+            if (p2Energy != null)
+            {
+                p2Energy.OnKiChanged -= OnP2KiChanged;
+                p2Energy.OnThresholdsChanged -= OnP2ThresholdsChanged;
+            }
 
             if (matchManager != null)
             {
@@ -457,8 +469,11 @@ namespace MysticCombat.UI
                 ? GameManager.Instance.P2SelectedCharacterId.ToLower()
                 : "saitama";
 
-            CalibrateKiThresholds(0, p1Id);
-            CalibrateKiThresholds(1, p2Id);
+            if (p1Energy != null) CalibrateKiThresholdsFromEnergySystem(0);
+            else CalibrateKiThresholds(0, p1Id);
+
+            if (p2Energy != null) CalibrateKiThresholdsFromEnergySystem(1);
+            else CalibrateKiThresholds(1, p2Id);
 
             if (p1NameText != null)
             {
@@ -743,12 +758,47 @@ namespace MysticCombat.UI
             return rt;
         }
 
+        public void CalibrateKiThresholdsFromEnergySystem(int playerIndex)
+        {
+            EnergySystem energy = playerIndex == 0 ? p1Energy : p2Energy;
+            if (energy != null)
+            {
+                float t1 = energy.RedZoneThreshold;
+                float t2 = energy.SafeSkillThreshold;
+                float t3 = energy.SafeUltimateThreshold;
+
+                if (playerIndex == 0)
+                {
+                    p1T1 = t1;
+                    p1T2 = t2;
+                    p1T3 = t3;
+                }
+                else
+                {
+                    p2T1 = t1;
+                    p2T2 = t2;
+                    p2T3 = t3;
+                }
+
+                ApplyKiSegmentAnchors(playerIndex);
+                UpdateKiBar(playerIndex, energy.CurrentKi, energy.MaxKi);
+                Debug.Log($"<color=#38bdf8>[HUDController]</color> Deployed P{(playerIndex + 1)} Ki Thresholds Synced: M1(Red)={t1:F0}, M2(Skill)={t2:F0}, M3(Ult)={t3:F0}");
+            }
+            else
+            {
+                string charId = playerIndex == 0 ? (GameManager.Instance?.P1SelectedCharacterId ?? "goku") : (GameManager.Instance?.P2SelectedCharacterId ?? "saitama");
+                CalibrateKiThresholds(playerIndex, charId);
+            }
+        }
+
         public void CalibrateKiThresholds(int playerIndex, string charId)
         {
             string id = !string.IsNullOrEmpty(charId) ? charId.ToLower() : (playerIndex == 0 ? "goku" : "saitama");
             float t1 = 10f; // Red Zone danger threshold (10 Ki)
-            float t2 = id == "goku" ? 45f : 30f; // Goku: 10 + 35 = 45; Saitama: 10 + 20 = 30
-            float t3 = 90f; // Goku & Saitama: 10 + 80 = 90
+            // For Goku, Safe Skill marker is set to 30 Ki (SSJ buffer); for Saitama it is 40 Ki (10 RedZone + 30 SkillCost)
+            float t2 = id == "goku" ? 30f : 40f;
+            // For Goku, Safe Ultimate threshold is 80 Ki (10 RedZone + 70 UltCost); for Saitama it is 90 Ki (10 RedZone + 80 UltCost)
+            float t3 = id == "goku" ? 80f : 90f;
 
             if (playerIndex == 0)
             {
@@ -765,6 +815,9 @@ namespace MysticCombat.UI
 
             ApplyKiSegmentAnchors(playerIndex);
         }
+
+        private void OnP1ThresholdsChanged() => CalibrateKiThresholdsFromEnergySystem(0);
+        private void OnP2ThresholdsChanged() => CalibrateKiThresholdsFromEnergySystem(1);
 
         private void ApplyKiSegmentAnchors(int playerIndex)
         {

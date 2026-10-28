@@ -26,7 +26,9 @@ namespace MysticCombat.AI
             PunishOpening,
             SpacingNeutral,
             KiCharge,
-            ExhaustionRecovery
+            ExhaustionRecovery,
+            RestingNeutral,
+            TacticalRetreat
         }
 
         #endregion
@@ -79,11 +81,14 @@ namespace MysticCombat.AI
 
         private float reactionTimer;
         private float decisionTimer;
-        private float attackCooldownTimer;
-        private float jumpCooldownTimer;
+        protected float attackCooldownTimer;
+        protected float jumpCooldownTimer;
         private float crouchDefenseTimer;
         private float footsiesTimer;
         private float footsiesDir = 1f;
+        protected float restTimer;
+        protected float retreatTimer;
+        protected bool isDesperate;
 
         #endregion
 
@@ -105,19 +110,29 @@ namespace MysticCombat.AI
         protected virtual float SkillStrikeRange => 2.2f;
 
         /// <summary>
-        /// Ki required for special skill.
+        /// Ki required for special skill. Dynamically reads from live EnergySystem if available.
         /// </summary>
-        protected virtual float SkillCost => 20f;
+        protected virtual float SkillCost => myEnergy != null ? myEnergy.SkillKiCost : 30f;
 
         /// <summary>
-        /// Ki required for ultimate finisher.
+        /// Ki required for ultimate finisher. Dynamically reads from live EnergySystem if available.
         /// </summary>
-        protected virtual float UltimateCost => 80f;
+        protected virtual float UltimateCost => myEnergy != null ? myEnergy.UltimateKiCost : 80f;
 
         /// <summary>
-        /// Target Ki amount before looking for ultimate finish.
+        /// Target Ki amount before looking for ultimate finish. Dynamically reads SafeUltimateThreshold from EnergySystem.
         /// </summary>
-        protected virtual float TargetKiHoard => 80f;
+        protected virtual float TargetKiHoard => myEnergy != null ? myEnergy.SafeUltimateThreshold : UltimateCost;
+
+        /// <summary>
+        /// Safe Skill Threshold. Reaching this threshold guarantees that using skill leaves fighter safe from Red Zone.
+        /// </summary>
+        protected virtual float SafeSkillThreshold => myEnergy != null ? myEnergy.SafeSkillThreshold : (SkillCost + 10f);
+
+        /// <summary>
+        /// Safe Ultimate Threshold. Reaching this threshold guarantees that using ultimate leaves fighter safe from Red Zone.
+        /// </summary>
+        protected virtual float SafeUltimateThreshold => myEnergy != null ? myEnergy.SafeUltimateThreshold : (UltimateCost + 10f);
 
         #endregion
 
@@ -150,11 +165,16 @@ namespace MysticCombat.AI
             // Timers
             if (attackCooldownTimer > 0f) attackCooldownTimer -= Time.deltaTime;
             if (jumpCooldownTimer > 0f) jumpCooldownTimer -= Time.deltaTime;
+            if (restTimer > 0f) restTimer -= Time.deltaTime;
+            if (retreatTimer > 0f) retreatTimer -= Time.deltaTime;
             if (crouchDefenseTimer > 0f)
             {
                 crouchDefenseTimer -= Time.deltaTime;
                 if (crouchDefenseTimer <= 0f) CrouchHeld = false;
             }
+
+            // Desperation state (< 30% HP)
+            isDesperate = (myHealth != null && myHealth.HealthPercent <= profile.desperationThreshold);
 
             // Ensure opponent references are valid
             if (opponent == null || opponentController == null)
@@ -170,8 +190,7 @@ namespace MysticCombat.AI
                 return;
             }
 
-            // High-frequency hit-confirm chain canceling (Checked every frame!)
-            CheckHitConfirmComboChain();
+// Combos unlearned: single distinct strikes with natural recovery frames
 
             // Tactical decision evaluation tick
             reactionTimer -= Time.deltaTime;
@@ -286,40 +305,72 @@ namespace MysticCombat.AI
             bool isOpponentExhausted = opponentEnergy != null && opponentEnergy.IsInRedZone;
             bool isOpponentVulnerable = IsOpponentVulnerable();
 
-            // Priority 1: Self Exhausted in Red Zone
+            // Priority 1: Self Exhausted in Red Zone (Retreat and accelerate recovery)
             if (isMeExhausted)
             {
                 currentState = TacticalState.ExhaustionRecovery;
                 return;
             }
 
-            // Priority 2: Opponent is in Red Zone, in HitStun, or Whiffing -> PUNISH OPENING!
+            // Priority 2: Active Tactical Retreat (AI actively steps back, creates space for player)
+            if (retreatTimer > 0f)
+            {
+                currentState = TacticalState.TacticalRetreat;
+                return;
+            }
+
+            // Priority 3: Respect active Rest / Breathing Window (gives human player opening)
+            if (restTimer > 0f)
+            {
+                if (dist > MeleeStrikeRange * 1.05f)
+                {
+                    currentState = TacticalState.RestingNeutral;
+                    return;
+                }
+                else
+                {
+                    // Player walked right in: break rest early to respond
+                    restTimer = 0f;
+                }
+            }
+
+            // Priority 3: Opponent is in Red Zone, in HitStun, or Whiffing -> PUNISH OPENING!
             if (isOpponentExhausted || isOpponentVulnerable)
             {
                 currentState = TacticalState.PunishOpening;
                 return;
             }
 
-            // Priority 3: Safe distance + Low Ki -> Meditate to charge Ki
-            if (dist >= profile.safeMeditateDistance && myKi < TargetKiHoard && Random.value < profile.kiHoardingBias)
+            // Priority 4: Tactical Meditation (when opponent is knocked down, recovering, or far away)
+            bool opponentDown = (opponentController != null && (opponentController.CurrentState == FighterState.KnockBack || opponentController.CurrentState == FighterState.Knockout));
+            if ((opponentDown || dist >= profile.safeMeditateDistance) && myKi < TargetKiHoard && Random.value < profile.tacticalMeditationChance)
             {
                 currentState = TacticalState.KiCharge;
                 return;
             }
 
-            // Priority 4: Default combat posture is AGGRESSIVE RUSHDOWN
-            // The bot actively seeks out combat rather than backing away
-            if (dist > MeleeStrikeRange * 1.15f || myKi >= UltimateCost)
+            // Priority 5: Easy difficulty hesitation / wander
+            if (profile.difficulty == CpuDifficulty.Easy && Random.value < profile.mistakeChance)
+            {
+                restTimer = Random.Range(profile.restDurationMin * 0.7f, profile.restDurationMax);
+                currentState = TacticalState.RestingNeutral;
+                return;
+            }
+
+            // Priority 6: Close in for combat or spacing
+            bool ultReady = myKi >= UltimateCost && (myController == null || myController.UltimateCooldownTimer <= 0f);
+            bool shouldRushForUlt = ultReady && ShouldRushdownForUltimate(dist);
+            if (dist > MeleeStrikeRange * 1.15f || shouldRushForUlt)
             {
                 currentState = TacticalState.RushdownPressure;
                 return;
             }
 
-            // Priority 5: Close-range neutral footsies
+            // Priority 7: Close-range neutral footsies
             currentState = TacticalState.SpacingNeutral;
         }
 
-        private bool IsOpponentVulnerable()
+        protected bool IsOpponentVulnerable()
         {
             if (opponentController == null) return false;
             FighterState s = opponentController.CurrentState;
@@ -367,6 +418,14 @@ namespace MysticCombat.AI
                 case TacticalState.ExhaustionRecovery:
                     ExecuteExhaustionRecovery(dist, dirToOpponent);
                     break;
+
+                case TacticalState.RestingNeutral:
+                    ExecuteRestingNeutral(dist, dirToOpponent);
+                    break;
+
+                case TacticalState.TacticalRetreat:
+                    ExecuteTacticalRetreat(dist, dirToOpponent);
+                    break;
             }
         }
 
@@ -374,6 +433,12 @@ namespace MysticCombat.AI
         {
             MeditateHeld = false;
             CrouchHeld = false;
+
+            // If ready to unleash tactical ultimate at current range, fire before closing in further!
+            if (attackCooldownTimer <= 0f && TryTacticalUltimate(dist))
+            {
+                return;
+            }
 
             if (dist > MeleeStrikeRange)
             {
@@ -395,8 +460,74 @@ namespace MysticCombat.AI
                 if (attackCooldownTimer <= 0f && CanAttackGrounded())
                 {
                     PerformCloseRangeAttack();
-                    attackCooldownTimer = profile.reactionDelay * Random.Range(0.6f, 1.1f);
+                    float cdMult = isDesperate ? 0.7f : 1.0f;
+                    attackCooldownTimer = profile.reactionDelay * Random.Range(0.6f, 1.1f) * cdMult;
+
+                    // After single attack, roll to tactically retreat and create player breathing room!
+                    if (Random.value < profile.retreatChance)
+                    {
+                        float retreat = Random.Range(profile.retreatDurationMin, profile.retreatDurationMax);
+                        if (isDesperate) retreat *= 0.5f;
+                        retreatTimer = retreat;
+                        currentState = TacticalState.TacticalRetreat;
+                    }
+                    else
+                    {
+                        float rest = Random.Range(profile.restDurationMin, profile.restDurationMax);
+                        if (isDesperate) rest *= 0.5f;
+                        restTimer = rest;
+                        currentState = TacticalState.RestingNeutral;
+                    }
                 }
+            }
+        }
+
+        private void ExecuteRestingNeutral(float dist, float dirToOpponent)
+        {
+            MeditateHeld = false;
+
+            // Gentle breathing: softly step back or hold ground
+            if (dist < PreferredDistance * 1.2f)
+            {
+                MoveInput = new Vector2(-dirToOpponent * 0.35f, 0f);
+            }
+            else
+            {
+                MoveInput = Vector2.zero;
+            }
+
+            // If player walks right up into melee range, counter!
+            if (dist <= MeleeStrikeRange * 0.95f && attackCooldownTimer <= 0f && CanAttackGrounded())
+            {
+                restTimer = 0f;
+                PerformCloseRangeAttack();
+                float cdMult = isDesperate ? 0.7f : 1.0f;
+                attackCooldownTimer = profile.reactionDelay * cdMult;
+            }
+        }
+
+        private void ExecuteTacticalRetreat(float dist, float dirToOpponent)
+        {
+            MeditateHeld = false;
+            CrouchHeld = false;
+
+            // Actively and cleanly backpedal away from the opponent at full walking pace
+            MoveInput = new Vector2(-dirToOpponent * 0.85f, 0f);
+
+            // Corner escape: If backed into the wall, jump forward toward center stage
+            bool isCornered = (dirToOpponent > 0f && transform.position.x < -6.8f) || (dirToOpponent < 0f && transform.position.x > 6.8f);
+            if (isCornered && jumpCooldownTimer <= 0f)
+            {
+                MoveInput = new Vector2(dirToOpponent * 0.70f, 0f);
+                TriggerJump();
+                jumpCooldownTimer = 2.5f;
+            }
+
+            // Finish retreat once timer runs out or safe distance reached
+            if (retreatTimer <= 0f || dist >= profile.safeMeditateDistance * 1.15f)
+            {
+                retreatTimer = 0f;
+                currentState = TacticalState.SpacingNeutral;
             }
         }
 
@@ -419,11 +550,10 @@ namespace MysticCombat.AI
 
             if (attackCooldownTimer <= 0f && CanAttackGrounded())
             {
-                // Punish with Ultimate if affordable and in range
-                if (currentKi >= UltimateCost && dist <= SkillStrikeRange)
+                // Punish with Ultimate if tactical check passes
+                if (TryTacticalUltimate(dist))
                 {
-                    TriggerUltimate();
-                    attackCooldownTimer = 1.0f;
+                    attackCooldownTimer = 1.2f;
                     currentState = TacticalState.RushdownPressure;
                     return;
                 }
@@ -458,11 +588,33 @@ namespace MysticCombat.AI
         {
             MeditateHeld = false;
 
+            // If in neutral spacing and conditions are prime for tactical ultimate, fire!
+            if (attackCooldownTimer <= 0f && TryTacticalUltimate(dist))
+            {
+                return;
+            }
+
             // If player walks right up into melee range, counter-attack immediately!
             if (dist <= MeleeStrikeRange && attackCooldownTimer <= 0f && CanAttackGrounded())
             {
                 PerformCloseRangeAttack();
-                attackCooldownTimer = profile.reactionDelay * Random.Range(0.7f, 1.2f);
+                float cdMult = isDesperate ? 0.7f : 1.0f;
+                attackCooldownTimer = profile.reactionDelay * Random.Range(0.7f, 1.2f) * cdMult;
+
+                if (Random.value < profile.retreatChance)
+                {
+                    float retreat = Random.Range(profile.retreatDurationMin, profile.retreatDurationMax);
+                    if (isDesperate) retreat *= 0.5f;
+                    retreatTimer = retreat;
+                    currentState = TacticalState.TacticalRetreat;
+                }
+                else
+                {
+                    float rest = Random.Range(profile.restDurationMin, profile.restDurationMax);
+                    if (isDesperate) rest *= 0.5f;
+                    restTimer = rest;
+                    currentState = TacticalState.RestingNeutral;
+                }
                 return;
             }
 
@@ -543,41 +695,7 @@ namespace MysticCombat.AI
 
         #endregion
 
-        #region Hit-Confirm & Chain-Canceling Engine
-
-        /// <summary>
-        /// Checked every frame: If currently in LightAttack and a hit is confirmed on the opponent,
-        /// immediately chain-cancel into Heavy or Skill before the opponent recovers!
-        /// </summary>
-        private void CheckHitConfirmComboChain()
-        {
-            if (myController == null) return;
-            if (myController.CurrentState != FighterState.LightAttack) return;
-
-            bool hitConfirmed = myController.HasHitTargetThisSwing || 
-                                (opponentController != null && opponentController.CurrentState == FighterState.HitStun);
-
-            if (!hitConfirmed) return;
-
-            // Decide whether to chain-cancel based on combo profile
-            if (Random.value < profile.comboChance)
-            {
-                float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
-
-                // Chain-cancel into Skill if affordable
-                if (currentKi >= SkillCost && Random.value < 0.65f)
-                {
-                    TriggerSkill();
-                }
-                else
-                {
-                    // Chain-cancel into Heavy attack
-                    TriggerHeavyAttack();
-                }
-            }
-        }
-
-        #endregion
+// Combos unlearned: Attacks complete full animations and natural recovery frames.
 
         #region Virtual Input Trigger Helpers (Guaranteed 2-Frame Latch)
 
@@ -606,7 +724,7 @@ namespace MysticCombat.AI
             jumpLatch = 2;
         }
 
-        private bool CanAttackGrounded()
+        protected bool CanAttackGrounded()
         {
             if (myController == null || !myController.IsGrounded) return false;
             FighterState s = myController.CurrentState;
@@ -620,12 +738,46 @@ namespace MysticCombat.AI
             FighterState os = opponentController.CurrentState;
             if ((os == FighterState.HeavyAttack || os == FighterState.Ultimate) && 
                 crouchDefenseTimer <= 0f && 
-                Random.value < (0.50f * (1f - profile.mistakeChance)))
+                Random.value < profile.crouchDuckChance)
             {
                 CrouchHeld = true;
                 crouchDefenseTimer = Random.Range(0.25f, 0.45f);
                 MoveInput = Vector2.zero;
             }
+        }
+
+        #endregion
+
+        #region Tactical Ultimate Hooks (Overridden by GokuBrain & SaitamaBrain)
+
+        /// <summary>
+        /// Determines whether the AI should actively rushdown into melee range when its Ultimate is off cooldown.
+        /// Melee fighters (like Saitama) return true when dist > melee range.
+        /// Ranged beam fighters (like Goku) return false if already in beam range (2.5m - 6.5m).
+        /// </summary>
+        protected virtual bool ShouldRushdownForUltimate(float dist)
+        {
+            return dist > MeleeStrikeRange;
+        }
+
+        /// <summary>
+        /// Evaluates whether current conditions and spacing warrant triggering the character's Ultimate attack.
+        /// Overridden by character-specific brains (e.g. Goku Kamehameha vs Saitama Serious Punch).
+        /// </summary>
+        protected virtual bool TryTacticalUltimate(float dist)
+        {
+            float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
+            bool ultOffCd = myController == null || myController.UltimateCooldownTimer <= 0f;
+            if (currentKi < UltimateCost || !ultOffCd || !CanAttackGrounded()) return false;
+
+            // Default melee ultimate behavior: fire if close and random roll passes
+            if (dist <= MeleeStrikeRange * 1.1f && Random.value < 0.65f)
+            {
+                TriggerUltimate();
+                attackCooldownTimer = 1.2f;
+                return true;
+            }
+            return false;
         }
 
         #endregion
@@ -637,7 +789,7 @@ namespace MysticCombat.AI
             float currentKi = (myEnergy != null) ? myEnergy.CurrentKi : 0f;
 
             // If we have Ultimate Ki and high combo chance, strike with Ultimate!
-            if (currentKi >= UltimateCost && Random.value < profile.comboChance)
+            if (currentKi >= UltimateCost && Random.value < 0.65f)
             {
                 TriggerUltimate();
                 return;

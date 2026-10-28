@@ -24,7 +24,7 @@ namespace MysticCombat.Systems
     /// <summary>
     /// Central persistent manager for audio volume levels and game-mode-specific keybindings.
     /// Supports:
-    /// 1. Single Player Mode (Vs CPU & Future LAN): 9 keys with full keyboard freedom.
+    /// 1. Single Player Mode (Vs CPU & LAN): 9 keys with full keyboard freedom.
     /// 2. Local Duel Mode (1v1 Shared Keyboard): 18 non-overlapping keys in a combined P1/P2 table.
     /// 3. Permanent persistence across sessions via Unity PlayerPrefs.
     /// </summary>

@@ -11,7 +11,7 @@ namespace MysticCombat.Combat
     /// 1. In-World Buildup (0.0s - 2.4s): Saitama coils low in the arena with normal lighting ("Hissatsu... Maji Series...").
     /// 2. Black Screen Freeze (~2.4s on "SERIOUS PUNCH!"): The entire screen instantly snaps to 100% solid pitch black.
     ///    The enlarged Big Punch cut-in (creepy shadowed face + colossal thrusting red fist with speed lines) flashes
-    ///    against the black void for a punchy 0.28s window, oriented toward center-screen based on facing direction.
+    ///    against the black void for a calibrated 0.58s window, oriented toward center-screen based on facing direction.
     /// 3. Immediate Snap Back: The black void vanishes instantly! Visual control returns to the normal arena where
     ///    Saitama continues his normal character punch animation (ultimate_7..13) with no big sprites attached to his body.
     /// 4. Impact Cataclysm: Small short melee hitbox (1.4m x 1.0m) connects, triggering camera shake, impact flash, and brazier surge.
@@ -23,7 +23,7 @@ namespace MysticCombat.Combat
 
         [Header("Cinematic Transition Settings")]
         [Tooltip("Duration in seconds that the solid black screen freeze and big punch cut-in stay visible.")]
-        [SerializeField] private float freezeDuration = 0.28f;
+        [SerializeField] private float freezeDuration = 0.58f;
 
         [Tooltip("Pixel width of the enlarged punch cut-in on screen (native 234x204 scaled up).")]
         [SerializeField] private float cutInWidth = 720f;

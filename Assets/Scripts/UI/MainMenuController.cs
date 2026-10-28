@@ -186,6 +186,8 @@ namespace MysticCombat.UI
             }
 
             GenerateProceduralAudio();
+            EnsureLanMenuOption();
+            EnsureLanLobbyModal();
         }
 
         private void Start()
@@ -207,6 +209,9 @@ namespace MysticCombat.UI
             {
                 GameManager.Instance.SetState(GameManager.GameState.MainMenu);
             }
+
+            EnsureLanMenuOption();
+            EnsureLanLobbyModal();
 
             if (playIntroOnStart && introRoot != null && introLines.Count > 0)
             {
@@ -490,7 +495,91 @@ namespace MysticCombat.UI
             }
         }
 
-        /// <summary>
+
+        #region Dynamic LAN Option Self-Healing
+
+        private void EnsureLanMenuOption()
+        {
+            if (menuItems == null || menuItems.Count == 0) return;
+
+            for (int i = 0; i < menuItems.Count; i++)
+            {
+                if (menuItems[i].title != null && menuItems[i].title.Contains("LAN"))
+                {
+                    return; // Already present!
+                }
+            }
+
+            if (menuItems.Count >= 2 && menuItems[1].itemRect != null)
+            {
+                GameObject templateObj = menuItems[1].itemRect.gameObject;
+                GameObject lanItemObj = Instantiate(templateObj, templateObj.transform.parent, false);
+                lanItemObj.name = "Item_LAN";
+
+                RectTransform lanRt = lanItemObj.GetComponent<RectTransform>();
+                TextMeshProUGUI lanTmp = lanItemObj.GetComponent<TextMeshProUGUI>();
+                if (lanTmp != null)
+                {
+                    lanTmp.text = "    1 VS 1  LAN MULTIPLAYER";
+                }
+
+                MainMenuButton lanBtn = lanItemObj.GetComponent<MainMenuButton>();
+                if (lanBtn == null) lanBtn = lanItemObj.AddComponent<MainMenuButton>();
+                lanBtn.Initialize(2, this);
+
+                MenuItem lanItem = new MenuItem
+                {
+                    title = "1 VS 1  LAN MULTIPLAYER",
+                    itemRect = lanRt,
+                    labelText = lanTmp
+                };
+                menuItems.Insert(2, lanItem);
+
+                // Re-align vertical spacing and pointer button indices
+                float lineSpacing = 42f;
+                float startY = 60f;
+                for (int i = 0; i < menuItems.Count; i++)
+                {
+                    if (menuItems[i].itemRect != null)
+                    {
+                        menuItems[i].itemRect.anchoredPosition = new Vector2(0f, startY - i * lineSpacing);
+                        MainMenuButton btn = menuItems[i].itemRect.GetComponent<MainMenuButton>();
+                        if (btn != null)
+                        {
+                            btn.Initialize(i, this);
+                        }
+                    }
+                }
+
+                UpdateSelectionVisuals(playSfx: false);
+                Debug.Log("<color=#00e676>[MainMenuController]</color> Dynamically integrated '1 VS 1 LAN MULTIPLAYER' arcade option!");
+            }
+        }
+
+        private void EnsureLanLobbyModal()
+        {
+            if (lanLobbyModal == null)
+            {
+                lanLobbyModal = FindAnyObjectByType<LanLobbyModal>(FindObjectsInactive.Include);
+            }
+
+            if (lanLobbyModal == null)
+            {
+                Transform canvasT = transform.root;
+                Canvas canvas = FindAnyObjectByType<Canvas>();
+                if (canvas != null) canvasT = canvas.transform;
+
+                GameObject modalObj = new GameObject("Modal_LanLobby");
+                modalObj.transform.SetParent(canvasT, false);
+                lanLobbyModal = modalObj.AddComponent<LanLobbyModal>();
+                modalObj.SetActive(false);
+                Debug.Log("<color=#00e676>[MainMenuController]</color> Dynamically spawned Modal_LanLobby under Canvas!");
+            }
+        }
+
+        #endregion
+
+                /// <summary>
         /// Opens the LAN Lobby Modal to Host or Join local network battles.
         /// </summary>
         public void OpenLanLobby()

@@ -2,179 +2,156 @@
 
 <div align="center">
 
-![Unity 6](https://img.shields.io/badge/Unity%206-6000.6.7f1-black?style=for-the-badge&logo=unity)
-![Render Pipeline](https://img.shields.io/badge/Render%20Pipeline-Universal%20RP%202D-blue?style=for-the-badge)
-![Language](https://img.shields.io/badge/Language-C%23%20%2F%20.NET%20Standard%202.1-purple?style=for-the-badge&logo=c-sharp)
-![Platform](https://img.shields.io/badge/Platform-Windows%20PC-brightgreen?style=for-the-badge&logo=windows)
-![License](https://img.shields.io/badge/Architecture-Data--Driven%20Grimoire%20JSON-orange?style=for-the-badge)
+![Unity 6](https://img.shields.io/badge/Unity%206-6000.6.7f1-000000?style=for-the-badge&logo=unity&logoColor=white)
+![Render Pipeline](https://img.shields.io/badge/Pipeline-Universal%20RP%202D-1E88E5?style=for-the-badge)
+![Language](https://img.shields.io/badge/Language-C%23%20%7C%20.NET%20Standard%202.1-512BD4?style=for-the-badge&logo=csharp&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows%20PC%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![Multiplayer](https://img.shields.io/badge/Netcode-Mirror%20LAN%20Networking-E53935?style=for-the-badge)
+![Frame Target](https://img.shields.io/badge/Performance-Locked%2060%20FPS-43A047?style=for-the-badge)
 
 <br/>
 
-**A fast-paced, 16-bit arcade fighting game built from the ground up in Unity 6.**  
-*Featuring authentic pixel art, Doctor Strange mystic relics, data-driven balance, sub-pixel hitboxes, and tournament-grade best-of-3 round flow.*
+**A high-octane 16-bit arcade anime fighting game developed in Unity 6.**  
+*Featuring authentic pixel art, sub-pixel combat physics, dynamic Doctor Strange mystic relics, adaptive tactical AI, and seamless local & LAN multiplayer.*
 
-[🎮 Key Features](#-key-features) • [🕹️ Controls](#️-controls) • [👥 Character Roster](#-character-roster) • [📐 System Architecture](#-system-architecture-for-judges) • [🚀 How to Play](#-how-to-play) • [📚 Team Documentation](#-internal-team-documentation)
+[🎮 Key Features](#-key-features) • [🕹️ Controls](#️-controls) • [👥 Character Roster](#-character-roster) • [🌐 Game Modes](#-game-modes) • [⚙️ Architecture](#-technical-architecture) • [🚀 Quick Start](#-quick-start)
 
 ---
 
 </div>
 
-## 🌌 Synopsis & Lore
+## 🌌 Lore & Setting
 
-When Doctor Strange attempts a forbidden temporal incantation to seal an eldritch dimensional rift, the spell destabilizes the multiverse. Spacetime fractures across dimensions, violently pulling two of the strongest beings in the Animeverse into the **Mystic Tournament Arena**:
+When the Sorcerer Supreme attempts a forbidden temporal incantation to seal a fractured cosmic rift, spacetime destabilizes. Reality fractures across the multiverse, violently pulling two of the strongest martial forces in existence into the **Sanctum Sanctorum Mystic Arena**:
 
-* **Son Goku** (Dragon Ball) — The Saiyan raised on Earth, master of godlike Ki, relentless martial artist.
-* **Saitama** (One-Punch Man) — The hero who broke his physical limiter, possessing immeasurable kinetic devastation.
+* **Son Goku** — Master of godly Ki, turtle school martial artist, driven by an unyielding spirit to push past every limit.
+* **Saitama** — The caped hero who shattered his physical limiter, wielding incomprehensible kinetic power with nonchalant ease.
 
-Bounded by ancient Taoist runic barriers and governed by the **Emerald Time Stone**, only one warrior can claim championship victory and return to their universe!
+Bounded by ancient Taoist runic barriers and governed by the temporal authority of the **Emerald Time Stone**, only one warrior will emerge victorious.
 
 ---
 
 ## 🎮 Key Features
 
-### 🥊 1. Authentic 16-Bit Arcade Combat
-* **Multi-Frame Pixel Art Animations:** Fluid breathing Idle loops, crisp Walk cycles, physics-driven Jump/Fall transitions, Crouch guards, Light Punches, Heavy Attacks, Special Skills, and Cinematic Ultimates.
-* **Responsive State Machine:** Zero input lag, tight cancellation windows, and distinct Startup, Active, and Recovery frame data for tournament-grade reads.
-* **Sub-Pixel Hitbox Engine:** Dedicated 2D trigger colliders on a strict physics layer matrix with automatic hit-target caches to prevent duplicate hits during active swings.
+### 🥊 1. Responsive 16-Bit Arcade Combat Engine
+* **Fluid Frame-Data Driven Combat:** Zero input lag, tight cancellation windows, and distinct Startup, Active, and Recovery states for high-level footsies, spacing, and whiff punishment.
+* **Sub-Pixel Hitbox Precision:** Dedicated 2D trigger colliders on a deterministic physics layer matrix with automatic hit-target caches to eliminate duplicate hit registration during active swings.
+* **Authentic Handcrafted Visuals:** Pixel-perfect animation loops covering idle breathing, walking, crouching guards, aerial jumps/falls, impact hitstuns, custom knockdown recoveries, and victory poses.
 
-### 🔮 2. Dynamic Doctor Strange Tournament HUD
-* **Active Tao Spell Mandala:** A 160×160 concentric runic green mandala continuously spinning at $22^\circ/\text{s}$ behind the clock.
-* **The Emerald Time Stone:** User-provided authentic artifact cleaned of white compression halos, preserved with diamond specular facets, and mounted directly atop the countdown dial.
-* **3D Vertex Gradient Typography:** GPU-accelerated 4-corner gradients (Goku solar flame gold, Saitama crimson-maroon, electric emerald countdown numerals).
-* **Smooth Ghost Damage Bars:** Heavy 650×52px health bars with 2-tone arcade fills and trailing warning-red ghost bars that drain smoothly after hitstun.
-* **Tactical Dual-Gem Win Indicators:** Two discrete 56×56px gem sockets per fighter. Empty at 0 wins, igniting into radiant sapphire crystals on scored rounds.
-* **Championship Match Point Relic:** The central 68×68px golden relic starts as an empty hollow socket during neutral rounds, but dynamically ignites into the **authentic golden crystal** with an active breathing sine-wave pulse ($1.0\times \rightarrow 1.15\times$) as soon as either player reaches Match Point!
+### ⚡ 2. Tactical Ki & Exhaustion Mechanics
+* **Dynamic 3-Tier Energy System:** Ki governs special abilities and stamina.
+  - **Safe Zone:** Above your threshold buffer, specials can be performed freely.
+  - **Dynamic Threshold Markers:** Real-time HUD indicators calibrated to each fighter's exact move costs.
+  - **Red Zone Exhaustion State:** Over-expending energy drops the fighter into exhaustion ($40\%$ slowed movement, disabled jumps, zero attack power, and vulnerability to punishes).
+* **Active Meditation Stance:** Hold the Meditate key to channel raw spiritual energy ($+25\text{ Ki/s}$), creating high-risk, high-reward tactical resets during spacing neutral.
 
-### 🔄 3. Autonomous Round Lifecycle & Round 3 Decider
-* **1.8s K.O. Freeze:** Combat smoothly pauses on the final hit so players feel the impact of the knockout.
-* **Clean Arena Respawn:** Fighters automatically reset to neutral starting coordinates (`-2.2` and `+2.2`), velocities zeroed out, attack hitboxes deactivated, and health/ghost bars refilled to 100%.
-* **Automatic Best-of-3 Flow:**
-  $$\text{Round 1} \longrightarrow \text{Round 2} \longrightarrow \begin{cases} \text{Round 3 (Final Round Match Point)} & \text{if tied 1--1} \\ \text{Tournament Victory} & \text{if 2--0 sweep} \end{cases}$$
+### 🔮 3. Doctor Strange Taoist Tournament HUD
+* **Spinning Tao Spell Mandala:** Concentric runic green mandala continuously revolving at $22^\circ/\text{s}$ behind the central clock dial.
+* **The Emerald Time Stone Relic:** Faceted, illuminated relic mounted directly atop the countdown dial, tracking round duration.
+* **Championship Match Point Relic:** Central golden crest begins hollow during neutral rounds, dynamically igniting into a pulsing crystal when either fighter reaches Match Point.
+* **Arcade Ghost Health Bars:** High-visibility 2-tone health bars with smoothly trailing warning-red ghost meters that visualize recent chip and combo damage.
+* **Dual Sapphire Gem Indicators:** Socketed win indicators that illuminate upon round victories.
 
-### 📜 4. Data-Driven "Grimoire" JSON Engine
-* Character balance is 100% decoupled from code into `goku.json` and `saitama.json`.
-* Tweak move speed, jump velocity, gravity scale, Ki meditation channel rates, and attack damage in plain JSON without re-compiling C# scripts.
-
----
-
-## 🕹️ Controls
-
-Two players can battle simultaneously on a single keyboard:
-
-| Action | Player 1 (Goku - Left) | Player 2 (Saitama - Right) |
-| :--- | :---: | :---: |
-| **Move Left / Right** | <kbd>A</kbd> / <kbd>D</kbd> | <kbd>←</kbd> / <kbd>→</kbd> |
-| **Jump** | <kbd>W</kbd> | <kbd>↑</kbd> |
-| **Crouch** | <kbd>S</kbd> | <kbd>↓</kbd> |
-| **Light Attack (Punch)** | <kbd>F</kbd> | <kbd>K</kbd> |
-| **Heavy Strike** | <kbd>H</kbd> | <kbd>L</kbd> |
-| **Special Skill** | <kbd>R</kbd> *(Costs 25 Ki)* | <kbd>P</kbd> *(Costs 25 Ki)* |
-| **Ultimate Attack** | <kbd>T</kbd> *(Costs 100 Ki)* | <kbd>O</kbd> *(Costs 100 Ki)* |
-| **Meditate (Channel Ki)** | <kbd>G</kbd> *(Hold)* | <kbd>M</kbd> *(Hold)* |
-
-> **Auto-Facing System:** Fighters automatically face each other at all times. If you jump over your opponent, your fighter immediately flips horizontally to face the target.
+### 🧠 4. Adaptive AI with Tactical Spacing
+* **Turn-Taking Pacing:** CPU bots execute single, readable strikes with full recovery windows, eliminating unfair frame-instant machine loops.
+* **Intelligent Tactical Retreat:** Bots actively disengage and backpedal across the arena after exchanges to grant players breathing room to practice, position, and charge Ki.
+* **Anti-Corner Edge Awareness:** AI monitors stage boundaries and executes athletic jumps toward center stage when backed against the arena wall.
+* **3 Scaled Difficulty Presets:**
+  - **Easy:** Accessible learning profile with generous retreat windows ($1.8\text{s} - 2.8\text{s}$) and relaxed reaction times ($0.45\text{s}$).
+  - **Hard:** Competitive neutral spacing with balanced whiff punishing and tactical meditation.
+  - **Extreme:** Tournament-master difficulty featuring rapid reaction ($0.04\text{s}$), reactive jump escapes, and crouch-ducking.
 
 ---
 
 ## 👥 Character Roster
 
 ```
-                  ===================================================
-                               SON GOKU vs. SAITAMA
-                  ===================================================
+====================================================================================================
+  CHARACTER           SPECIAL SKILL                         CINEMATIC ULTIMATE
+====================================================================================================
+  Son Goku            Kaioken Ki Burst (30 Ki)              Kamehameha Wave (70 Ki)
+                      Rapid horizontal body dash with       Iconic charge-up & full-screen energy
+                      invulnerability startup frames.       beam, triggering Super Saiyan state!
+
+  Saitama             Consecutive Normal Punches (30 Ki)    Serious Punch (80 Ki)
+                      High-frequency multi-punch barrage    Cinematic dramatic camera cut-in, shockwave
+                      shredding enemy guard.                impact, and screen-blackout finishing blow.
+====================================================================================================
 ```
 
-### 🥋 Son Goku (The Saiyan Champion)
-* **Archetype:** Balanced Rushdown & Energy Sorcerer.
-* **Base Stats:** Speed `6.5`, Jump `12.5`, Ki Meditation Rate `20.0 Ki/s`.
-* **Light Attack:** Quick jab combo ($10\text{ DMG}$).
-* **Heavy Attack:** Lunging dragon palm strike ($22\text{ DMG}$).
-* **Special Skill:** *Super Saiyan Ki Flurry* — High-speed energy punches that pin the opponent in hitstun ($35\text{ DMG}$).
-* **Ultimate:** *Spirit Bomb* — Gathers ambient energy and unleashes a cataclysmic shockwave ($75\text{ DMG}$).
+### 🥋 Son Goku
+* **Playstyle:** All-rounder martial artist with superior aerial mobility, long-range beam pressure, and Super Saiyan transformation.
+* **Special Skill — Kaioken Burst:** Teleports forward in a red kinetic streak, closing gaps instantaneously.
+* **Ultimate — Super Kamehameha:** Channels energy into a full-screen destructive beam. If Goku lands the beam, he ascends into **Super Saiyan** form, gaining radiant gold particle auras and increased mobility.
 
-### 👊 Saitama (The Caped Baldy)
-* **Archetype:** Heavy Kinetic Juggernaut.
-* **Base Stats:** Speed `6.0`, Jump `12.0`, Ki Meditation Rate `15.0 Ki/s`.
-* **Light Attack:** Casual left hook ($12\text{ DMG}$).
-* **Heavy Attack:** Heavy straight punch with massive knockback impulse ($25\text{ DMG}$).
-* **Special Skill:** *Consecutive Normal Punches* — A blistering barrage of kinetic shockwaves ($40\text{ DMG}$).
-* **Ultimate:** *Serious Punch* — The atmosphere-cleaving strike that ends all resistance ($80\text{ DMG}$).
+### 🥊 Saitama
+* **Playstyle:** Heavy-impact rushdown powerhouse with unmatched single-strike devastation and heavy guard damage.
+* **Special Skill — Consecutive Normal Punches:** Unleashes a rapid flurry of jabs dealing concentrated close-range damage.
+* **Ultimate — Serious Series: Serious Punch:** Initiates a dramatic freeze-frame cinematic cut-in, executing a devastating punch that shakes the entire screen with cosmic kinetic force.
 
 ---
 
-## 📐 System Architecture (For Judges)
+## 🕹️ Controls
 
-The game is engineered with clean, modular, production-ready software patterns:
+The game supports simultaneous Dual Keyboard and XInput / DirectInput Gamepads.
 
-```mermaid
-graph TD
-    subgraph Model Layer [Data-Driven Grimoire]
-        JSON[Character JSON Data] --> CDL[CharacterDataLoader]
-        CDL --> FC[FighterController]
-    end
-
-    subgraph Controller Layer [State Machines & Physics]
-        FC --> FSM[Fighter State Machine]
-        FC --> HC[HitboxController]
-        FC --> FA[FighterAnimator]
-        MM[MatchManager] --> FC
-    end
-
-    subgraph Service Layer [Gameplay Systems]
-        HS[HealthSystem]
-        ES[EnergySystem]
-        FC --> HS
-        FC --> ES
-    end
-
-    subgraph View Layer [Decoupled HUD Canvas]
-        HS -. C# Events .-> HUD[HUDController]
-        ES -. C# Events .-> HUD
-        MM -. Round Events .-> HUD
-    end
-```
-
-### Engineering Highlights:
-1. **Decoupled Event Architecture:** The UI never polls fighter components in `Update()`. When a fighter takes damage, `HealthSystem.OnHealthChanged` fires a C# event (`Action<int, int>`), allowing the HUD to react instantly with zero frame overhead.
-2. **Dynamic Runtime Instance Resolution (`IsInActiveScene`):** Solved Unity's prefab asset-pointer pitfall where nested canvases re-wire to disk assets instead of live scene instances.
-3. **Multi-Platform Godot-Style WYSIWYG Workflow:** Created `SceneSetupTool.cs`, which bakes background, collliders, fighters, and the glowing HUD into true Unity Prefab Instances so developers can double-click and visually edit any element in isolation.
-4. **Point-Filtered Pixel Art Pipeline:** Custom asset processing ensures that high-resolution retro rips retain knife-edge silhouette sharpness without bilinear blur or compression artifacts.
+| Action | Player 1 (Keyboard) | Player 2 (Keyboard) | Gamepad (Xbox / PlayStation) |
+| :--- | :--- | :--- | :--- |
+| **Move Left / Right** | <kbd>A</kbd> / <kbd>D</kbd> | <kbd>←</kbd> / <kbd>→</kbd> | Left Analog Stick / D-Pad |
+| **Jump** | <kbd>W</kbd> | <kbd>↑</kbd> | Button South (<kbd>A</kbd> / <kbd>×</kbd>) |
+| **Crouch / Guard** | <kbd>S</kbd> | <kbd>↓</kbd> | Down on Analog Stick / D-Pad |
+| **Light Attack** | <kbd>J</kbd> | <kbd>Num 1</kbd> | Button West (<kbd>X</kbd> / <kbd>□</kbd>) |
+| **Heavy Attack** | <kbd>K</kbd> | <kbd>Num 2</kbd> | Button North (<kbd>Y</kbd> / <kbd>△</kbd>) |
+| **Special Skill** | <kbd>U</kbd> | <kbd>Num 4</kbd> | Right Shoulder (<kbd>RB</kbd> / <kbd>R1</kbd>) |
+| **Ultimate Attack** | <kbd>I</kbd> | <kbd>Num 5</kbd> | Right Trigger (<kbd>RT</kbd> / <kbd>R2</kbd>) |
+| **Meditate (Ki Charge)** | <kbd>L</kbd> | <kbd>Num 3</kbd> | Left Trigger (<kbd>LT</kbd> / <kbd>L2</kbd>) |
+| **Pause / Menu** | <kbd>Escape</kbd> | <kbd>Escape</kbd> | <kbd>Start</kbd> / <kbd>Options</kbd> |
 
 ---
 
-## 🚀 How to Play
+## 🌐 Game Modes
 
-### Prerequisites:
-* **Unity Version:** Unity 6 (`6000.6.7f1` or later).
-* **Render Pipeline:** Universal Render Pipeline (URP).
-* **OS:** Windows 10/11.
+### 1. Solo Arcade Campaign
+Challenge the CPU AI across **Easy**, **Hard**, or **Extreme** difficulties. Features adaptive spacing footsies, AI meditation management, and dynamic round scaling.
 
-### Quick Setup:
-1. Open the project folder in **Unity Hub**.
-2. Open `Assets/Scenes/SampleScene.unity`.
-3. In Unity's top menu bar, click:
-   $$\mathbf{Mystic\ Combat} \longrightarrow \mathbf{Bake\ Complete\ Project\ (All\ Scenes\ \&\ Prefabs)}$$
-4. Press the **Play button** ($\blacktriangleright$) at the top of the Unity Editor!
+### 2. Local 2-Player Versus
+Classic couch multiplayer on a shared screen. Both players select their fighters and battle under official tournament Best-of-3 round rules.
+
+### 3. Local Area Network (LAN) Multiplayer
+High-performance multiplayer powered by Mirror Networking:
+* **Host Match:** Create a dedicated tournament server on your local Wi-Fi or Ethernet network.
+* **Join Match:** Input the host's local IP address or use LAN Discovery to connect instantly.
+* **Synchronized Best-of-3 Lifecycle:** Networked round timers, authoritative hit confirmation, health/Ki sync, and post-match rematch negotiation.
 
 ---
 
-## 📚 Internal Team Documentation
+## ⚙️ Technical Architecture
 
-For team members, educators, or examiners seeking an exhaustive line-by-line technical deep dive, the repository contains a comprehensive **5-part master knowledge base** in the [`Docs/`](Docs/) directory:
+* **Decoupled Grimoire JSON Balancing:** Character attributes (health, attack damage, walk velocity, jump arcs, Ki costs) are fully externalized in `StreamingAssets/Characters/*.json` for real-time balancing without recompilation.
+* **Deterministic Event-Driven State Machines:** Fighters operate via decoupled hierarchical state machines communicating through strict C# delegates and events (`OnHealthChanged`, `OnEnergyChanged`, `OnThresholdsChanged`, `OnStateChanged`).
+* **Automated Standalone Packaging Pipeline:** Integrated `IPostprocessBuildWithReport` build processor automatically sanitizes asset payloads upon build completion, ensuring standalone executables run out-of-the-box with zero dependency missing errors.
 
-| Document | Description |
-| :--- | :--- |
-| [**01. Unity for Beginners**](Docs/01_UNITY_FOR_BEGINNERS.md) | Game development fundamentals, Unity lifecycle, 2D physics, and direct Godot-to-Unity architectural analogies. |
-| [**02. System Architecture**](Docs/02_ARCHITECTURE.md) | Component graph, State Machine design, event-driven HUD binding, and round lifecycle state diagrams. |
-| [**03. Feature Breakdown**](Docs/03_FEATURE_BREAKDOWN.md) | Complete documentation of all features, hitbox math, Doctor Strange visual relics, and combat mechanics. |
-| [**04. Viva & Interview Prep**](Docs/04_VIVA_AND_INTERVIEW_PREP.md) | **27 Hackathon Jury & Viva Defense Q&As** covering system design trade-offs, architecture choices, and a step-by-step judge demonstration guide. |
-| [**05. Dev Log & Bug Postmortems**](Docs/05_DEV_LOG_AND_BUGS.md) | Comprehensive engineering postmortems detailing bugs solved (synchronous round reset bug, prefab disk pointer pitfalls, Unity 6 TMP deprecations). |
+---
+
+## 🚀 Quick Start
+
+### Playing the Standalone Release
+1. Extract `Mystic_Combat_Animeverse_Incursion_Playable.zip`.
+2. Launch **`Mystic_Combat_Animeverse_Incursion.exe`**.
+3. Use the keyboard or plug in up to two gamepads to start battling immediately!
+
+### System Requirements
+* **OS:** Windows 10 / 11 (64-bit)
+* **Processor:** Intel Core i3 / AMD Ryzen 3 or equivalent
+* **Memory:** 2 GB RAM
+* **Graphics:** DirectX 11 / 12 compatible GPU
+* **Storage:** 200 MB available space
 
 ---
 
 <div align="center">
 
-**Built with passion for competitive fighting games and anime lore.**  
-*Crafted for the Hackathon Evaluation & Tournament Showdown.*
+*Mystic Combat: Animeverse Incursion is developed for high-speed martial arts gaming.*  
+**Created with Unity 6 & Universal Render Pipeline.**
 
 </div>

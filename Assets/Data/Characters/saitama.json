@@ -41,7 +41,7 @@
     "name": "Consecutive Normal Punches",
     "type": "instant",
     "kiCost": 30,
-    "damage": 6,
+    "damage": 4,
     "hits": 5,
     "startupFrames": 4,
     "activeFrames": 12,
@@ -49,7 +49,7 @@
   },
   "ultimate": {
     "name": "Serious Punch",
-    "kiCost": 100,
+    "kiCost": 80,
     "damage": 90,
     "hitboxSize": {
       "x": 1.2,
@@ -58,7 +58,7 @@
     "startupFrames": 20,
     "activeFrames": 3,
     "recoveryFrames": 30,
-    "drawback": "Costs 100 Ki, tiny hitbox, instant KO if lands, 0 Ki if missed"
+    "drawback": "Costs 80 Ki, tiny hitbox, devastating decisive strike"
   },
   "meditateKiPerSecond": 5.0,
   "kiGainOnDamageTaken": 1.5,

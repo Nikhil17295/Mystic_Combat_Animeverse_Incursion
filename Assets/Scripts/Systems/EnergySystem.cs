@@ -19,6 +19,19 @@ namespace MysticCombat.Systems
         [SerializeField] private float redZoneDuration = 5f;
         [SerializeField] private float recoveryKi = 20f;
 
+        [Header("Tactical Ki Economy & Action Costs")]
+        [Tooltip("Ki consumed or recommended buffer for fighter's special skill.")]
+        [SerializeField] private float skillKiCost = 20f;
+
+        [Tooltip("Ki consumed by the fighter's ultimate ability.")]
+        [SerializeField] private float ultimateKiCost = 80f;
+
+        [Tooltip("Optional custom safe skill threshold (e.g. 30 Ki for Goku SSJ buffer). If <= 0, defaults to redZoneThreshold + skillKiCost.")]
+        [SerializeField] private float safeSkillThreshold = -1f;
+
+        [Tooltip("Optional custom safe ultimate threshold. If <= 0, defaults to redZoneThreshold + ultimateKiCost.")]
+        [SerializeField] private float safeUltimateThreshold = -1f;
+
         #endregion
 
         #region State
@@ -55,6 +68,39 @@ namespace MysticCombat.Systems
         /// </summary>
         public float RedZoneTimeRemaining => redZoneTimer;
 
+        /// <summary>
+        /// The Red Zone danger threshold below which exhaustion occurs.
+        /// </summary>
+        public float RedZoneThreshold => redZoneThreshold;
+
+        /// <summary>
+        /// The Ki cost or recommended safety buffer for the fighter's Skill.
+        /// </summary>
+        public float SkillKiCost => skillKiCost;
+
+        /// <summary>
+        /// The Ki cost for the fighter's Ultimate ability.
+        /// </summary>
+        public float UltimateKiCost => ultimateKiCost;
+
+        /// <summary>
+        /// Safe Skill Threshold.
+        /// Reaching this threshold guarantees that using skill leaves fighter safe from Red Zone.
+        /// For Goku, calibrated to 30 Ki (SSJ buffer); for standard fighters: redZoneThreshold + skillKiCost.
+        /// </summary>
+        public float SafeSkillThreshold => safeSkillThreshold > 0f 
+            ? safeSkillThreshold 
+            : (redZoneThreshold + skillKiCost);
+
+        /// <summary>
+        /// Safe Ultimate Threshold = RedZoneThreshold + UltimateKiCost.
+        /// Reaching this threshold guarantees that firing Ultimate leaves fighter safe from Red Zone.
+        /// Any Ki above this threshold fills the Yellow surplus zone.
+        /// </summary>
+        public float SafeUltimateThreshold => safeUltimateThreshold > 0f 
+            ? safeUltimateThreshold 
+            : Mathf.Min(maxKi, redZoneThreshold + ultimateKiCost);
+
         #endregion
 
         #region Events
@@ -73,6 +119,11 @@ namespace MysticCombat.Systems
         /// Fired when the fighter exits Red Zone (timer expired, Ki recovered).
         /// </summary>
         public event Action OnRedZoneExit;
+
+        /// <summary>
+        /// Fired whenever tactical thresholds or energy costs are updated.
+        /// </summary>
+        public event Action OnThresholdsChanged;
 
         #endregion
 
@@ -97,16 +148,34 @@ namespace MysticCombat.Systems
         /// <param name="threshold">Ki level at or below which Red Zone activates.</param>
         /// <param name="duration">Duration of the Red Zone state in seconds.</param>
         /// <param name="recovery">Ki restored when exiting Red Zone.</param>
-        public void Initialize(float max, float threshold, float duration, float recovery)
+        /// <summary>
+        /// Configures tactical thresholds directly from deployed fighter stats.
+        /// </summary>
+        public void ConfigureThresholds(float redThreshold, float skillCost, float ultCost, float customSafeSkill = -1f, float customSafeUlt = -1f)
+        {
+            redZoneThreshold = redThreshold;
+            skillKiCost = skillCost;
+            ultimateKiCost = ultCost;
+            safeSkillThreshold = customSafeSkill;
+            safeUltimateThreshold = customSafeUlt;
+            OnThresholdsChanged?.Invoke();
+        }
+
+        public void Initialize(float max, float threshold, float duration, float recovery, float skillCost = 20f, float ultCost = 80f, float customSafeSkill = -1f, float customSafeUlt = -1f)
         {
             maxKi = max;
             redZoneThreshold = threshold;
             redZoneDuration = duration;
             recoveryKi = recovery;
+            skillKiCost = skillCost;
+            ultimateKiCost = ultCost;
+            safeSkillThreshold = customSafeSkill;
+            safeUltimateThreshold = customSafeUlt;
             currentKi = 0f;
             isInRedZone = false;
             redZoneTimer = 0f;
             OnKiChanged?.Invoke(currentKi, maxKi);
+            OnThresholdsChanged?.Invoke();
         }
 
         /// <summary>

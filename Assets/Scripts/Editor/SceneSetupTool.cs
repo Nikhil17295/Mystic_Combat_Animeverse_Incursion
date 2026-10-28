@@ -731,7 +731,7 @@ namespace MysticCombat.Editor
             p1KiRedImg.fillOrigin = (int)Image.OriginHorizontal.Left;
             p1KiRedImg.fillAmount = 1f;
 
-            GameObject p1KiGreenObj = CreateUIObject("KiFill_Green", p1SegContainer.transform, new Vector2(0.10f, 0f), new Vector2(0.45f, 1f), Vector2.zero, Vector2.zero);
+            GameObject p1KiGreenObj = CreateUIObject("KiFill_Green", p1SegContainer.transform, new Vector2(0.10f, 0f), new Vector2(0.30f, 1f), Vector2.zero, Vector2.zero);
             Image p1KiGreenImg = p1KiGreenObj.AddComponent<Image>();
             p1KiGreenImg.sprite = kiFillWhite;
             p1KiGreenImg.color = new Color(0.20f, 0.95f, 0.35f, 1f);
@@ -740,7 +740,7 @@ namespace MysticCombat.Editor
             p1KiGreenImg.fillOrigin = (int)Image.OriginHorizontal.Left;
             p1KiGreenImg.fillAmount = 1f;
 
-            GameObject p1KiBlueObj = CreateUIObject("KiFill_Blue", p1SegContainer.transform, new Vector2(0.45f, 0f), new Vector2(0.90f, 1f), Vector2.zero, Vector2.zero);
+            GameObject p1KiBlueObj = CreateUIObject("KiFill_Blue", p1SegContainer.transform, new Vector2(0.30f, 0f), new Vector2(0.90f, 1f), Vector2.zero, Vector2.zero);
             Image p1KiBlueImg = p1KiBlueObj.AddComponent<Image>();
             p1KiBlueImg.sprite = kiFillWhite;
             p1KiBlueImg.color = new Color(0.12f, 0.75f, 1.00f, 1f);
@@ -758,7 +758,7 @@ namespace MysticCombat.Editor
             p1KiYellowImg.fillOrigin = (int)Image.OriginHorizontal.Left;
             p1KiYellowImg.fillAmount = 0f;
 
-            // 3 Divider Notches: Mark 1 (0.10), Mark 2 (0.45), Mark 3 (0.90)
+            // 3 Divider Notches: Mark 1 (0.10), Mark 2 (0.30), Mark 3 (0.90)
             GameObject p1Mark1Obj = CreateUIObject("Mark_RedZone", p1SegContainer.transform, new Vector2(0.10f, 0.5f), new Vector2(0.10f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
             RectTransform p1Mark1Rt = p1Mark1Obj.GetComponent<RectTransform>();
             Image p1Mark1Img = p1Mark1Obj.AddComponent<Image>();
@@ -767,7 +767,7 @@ namespace MysticCombat.Editor
             p1Out1.effectColor = new Color(0f, 0f, 0f, 0.75f);
             p1Out1.effectDistance = new Vector2(1f, 0f);
 
-            GameObject p1Mark2Obj = CreateUIObject("Mark_SkillSafe", p1SegContainer.transform, new Vector2(0.45f, 0.5f), new Vector2(0.45f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
+            GameObject p1Mark2Obj = CreateUIObject("Mark_SkillSafe", p1SegContainer.transform, new Vector2(0.30f, 0.5f), new Vector2(0.30f, 0.5f), Vector2.zero, new Vector2(3f, 26f));
             RectTransform p1Mark2Rt = p1Mark2Obj.GetComponent<RectTransform>();
             Image p1Mark2Img = p1Mark2Obj.AddComponent<Image>();
             p1Mark2Img.color = new Color(0.92f, 0.95f, 1.00f, 0.95f);

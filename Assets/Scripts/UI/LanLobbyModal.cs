@@ -110,6 +110,38 @@ namespace MysticCombat.UI
             }
         }
 
+        public void InitializeReferences(
+            GameObject root,
+            TextMeshProUGUI headerTitle,
+            TextMeshProUGUI ipText,
+            TextMeshProUGUI statusText,
+            Button hostBtn,
+            TextMeshProUGUI hostBtnText,
+            TMP_InputField inputField,
+            Button joinBtn,
+            TextMeshProUGUI joinBtnText,
+            Button backBtn,
+            CharacterSelectController charCtrl,
+            GameObject charRoot,
+            MainMenuController menuCtrl)
+        {
+            modalRoot = root;
+            headerTitleText = headerTitle;
+            localIpText = ipText;
+            statusPromptText = statusText;
+            hostButton = hostBtn;
+            hostButtonText = hostBtnText;
+            ipInputField = inputField;
+            joinButton = joinBtn;
+            joinButtonText = joinBtnText;
+            backButton = backBtn;
+            characterSelectController = charCtrl;
+            characterSelectRoot = charRoot;
+            mainMenuController = menuCtrl;
+
+            WireListeners();
+        }
+
         #endregion
 
         #region Host & Join Handlers
@@ -212,9 +244,21 @@ namespace MysticCombat.UI
 
         private void WireListeners()
         {
-            if (hostButton != null) hostButton.onClick.AddListener(OnHostClicked);
-            if (joinButton != null) joinButton.onClick.AddListener(OnJoinClicked);
-            if (backButton != null) backButton.onClick.AddListener(Close);
+            if (hostButton != null)
+            {
+                hostButton.onClick.RemoveAllListeners();
+                hostButton.onClick.AddListener(OnHostClicked);
+            }
+            if (joinButton != null)
+            {
+                joinButton.onClick.RemoveAllListeners();
+                joinButton.onClick.AddListener(OnJoinClicked);
+            }
+            if (backButton != null)
+            {
+                backButton.onClick.RemoveAllListeners();
+                backButton.onClick.AddListener(Close);
+            }
         }
 
         private void EnsureUIBuilt()
@@ -235,7 +279,7 @@ namespace MysticCombat.UI
             bg.color = new Color(0.04f, 0.06f, 0.12f, 0.94f); // Rich dark arcade navy
 
             // Find font
-            TMP_FontAsset font = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans");
+            TMP_FontAsset font = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
             if (font == null) font = TMP_Settings.defaultFontAsset;
 
             // Title
@@ -312,6 +356,8 @@ namespace MysticCombat.UI
             if (characterSelectController == null) characterSelectController = FindAnyObjectByType<CharacterSelectController>(FindObjectsInactive.Include);
             if (characterSelectRoot == null && characterSelectController != null) characterSelectRoot = characterSelectController.gameObject;
             if (mainMenuController == null) mainMenuController = FindAnyObjectByType<MainMenuController>(FindObjectsInactive.Include);
+
+            WireListeners();
         }
 
         private Button CreateButton(string name, Vector2 pos, Vector2 size, string text, TMP_FontAsset font)

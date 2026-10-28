@@ -206,8 +206,11 @@ MonoBehaviour:
   gravityScale: 3
   meditateKiPerSecond: 15
   redZoneSpeedMultiplier: 0.35
+  skillCooldownDuration: 15
+  ultimateCooldownDuration: 15
   isSuperSaiyan: 0
   superSaiyanTimer: 0
+  baseTintColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!114 &1461611492751410668
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -261,6 +264,10 @@ MonoBehaviour:
   redZoneThreshold: 10
   redZoneDuration: 5
   recoveryKi: 20
+  skillKiCost: 20
+  ultimateKiCost: 80
+  safeSkillThreshold: -1
+  safeUltimateThreshold: -1
 --- !u!114 &4738590837413876895
 MonoBehaviour:
   m_ObjectHideFlags: 0

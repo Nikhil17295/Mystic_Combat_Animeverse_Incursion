@@ -26,18 +26,72 @@ namespace MysticCombat.Editor
     {
         private const string MAIN_MENU_SCENE_PATH = "Assets/Scenes/MainMenuScene.unity";
         private const string COMBAT_SCENE_PATH = "Assets/Scenes/SampleScene.unity";
-        private const string MAIN_MENU_BAKE_KEY = "MysticCombat_MainMenu_Bake_v16";
+        private const string MAIN_MENU_BAKE_KEY = "MysticCombat_MainMenu_Bake_v18";
+        private const string PREF_PLAY_FROM_MAIN_MENU = "MysticCombat_PlayFromMainMenu";
 
         static MainMenuSetupTool()
         {
             EditorApplication.delayCall += () =>
             {
+                // Enforce Build Settings (MainMenuScene = Index 0, SampleScene = Index 1)
+                UpdateBuildSettings();
+
+                // Enforce Play Mode Start Scene so pressing Play boots directly into MainMenu
+                ApplyPlayModeStartScene();
+
                 if (!File.Exists(MAIN_MENU_SCENE_PATH) || !EditorPrefs.GetBool(MAIN_MENU_BAKE_KEY, false))
                 {
                     EditorPrefs.SetBool(MAIN_MENU_BAKE_KEY, true);
                     BakeMainMenuScene();
                 }
             };
+        }
+
+        public static void ApplyPlayModeStartScene()
+        {
+            bool playFromMenu = EditorPrefs.GetBool(PREF_PLAY_FROM_MAIN_MENU, true);
+            if (playFromMenu)
+            {
+                SceneAsset menuScene = AssetDatabase.LoadAssetAtPath<SceneAsset>(MAIN_MENU_SCENE_PATH);
+                if (menuScene != null)
+                {
+                    EditorSceneManager.playModeStartScene = menuScene;
+                }
+            }
+            else
+            {
+                EditorSceneManager.playModeStartScene = null;
+            }
+        }
+
+        [MenuItem("Mystic Combat/Play Mode/Always Start From Main Menu", false, 100)]
+        public static void SetPlayModeStartMainMenu()
+        {
+            EditorPrefs.SetBool(PREF_PLAY_FROM_MAIN_MENU, true);
+            ApplyPlayModeStartScene();
+            Debug.Log("<color=#00e676>[Mystic Combat]</color> Play Mode will ALWAYS start from MainMenuScene.unity (Primary Scene)!");
+        }
+
+        [MenuItem("Mystic Combat/Play Mode/Always Start From Main Menu", true)]
+        public static bool ValidateSetPlayModeStartMainMenu()
+        {
+            Menu.SetChecked("Mystic Combat/Play Mode/Always Start From Main Menu", EditorPrefs.GetBool(PREF_PLAY_FROM_MAIN_MENU, true));
+            return true;
+        }
+
+        [MenuItem("Mystic Combat/Play Mode/Start From Active Scene (Debug)", false, 101)]
+        public static void SetPlayModeStartActiveScene()
+        {
+            EditorPrefs.SetBool(PREF_PLAY_FROM_MAIN_MENU, false);
+            ApplyPlayModeStartScene();
+            Debug.Log("<color=#ffeb3b>[Mystic Combat]</color> Play Mode will start from whichever scene is currently open in Hierarchy!");
+        }
+
+        [MenuItem("Mystic Combat/Play Mode/Start From Active Scene (Debug)", true)]
+        public static bool ValidateSetPlayModeStartActiveScene()
+        {
+            Menu.SetChecked("Mystic Combat/Play Mode/Start From Active Scene (Debug)", !EditorPrefs.GetBool(PREF_PLAY_FROM_MAIN_MENU, true));
+            return true;
         }
 
         [MenuItem("Mystic Combat/Bake Main Menu Scene (MainMenuScene.unity)")]
@@ -355,10 +409,16 @@ namespace MysticCombat.Editor
 
             so.FindProperty("optionsPanel").objectReferenceValue = optionsModal;
 
-            // LAN Lobby Modal Creation
-            GameObject lanModalObj = CreateUIObject("Modal_LanLobby", canvasObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1920f, 1080f));
-            LanLobbyModal lanModal = lanModalObj.AddComponent<LanLobbyModal>();
-            lanModalObj.SetActive(false);
+            // 11. LAN LOBBY MODAL CREATION (Full Arcade Hierarchy)
+            GameObject lanModalObj = CreateLanLobbyModal(
+                canvasObj.transform,
+                arcadeFontAsset,
+                retroGamingFontAsset,
+                pressStartFontAsset,
+                menuController,
+                charSelectMenu.GetComponent<CharacterSelectController>()
+            );
+            LanLobbyModal lanModal = lanModalObj.GetComponent<LanLobbyModal>();
             so.FindProperty("lanLobbyModal").objectReferenceValue = lanModal;
             so.FindProperty("combatSceneName").stringValue = "SampleScene";
             so.FindProperty("enableButtonChangeAudio").boolValue = false;
@@ -982,7 +1042,7 @@ namespace MysticCombat.Editor
             GameObject btnSpDescObj = CreateUIObject("Desc", btnSpObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -20f), new Vector2(1260f, 26f));
             TextMeshProUGUI btnSpDescTmp = btnSpDescObj.AddComponent<TextMeshProUGUI>();
             btnSpDescTmp.font = mainFont;
-            btnSpDescTmp.text = "Full keyboard control for Player 1. Used against CPU and future LAN matches.";
+            btnSpDescTmp.text = "Full keyboard control for Player 1. Used against CPU and LAN matches.";
             btnSpDescTmp.fontSize = 16;
             btnSpDescTmp.alignment = TextAlignmentOptions.Center;
             btnSpDescTmp.color = new Color(0.5f, 0.85f, 1f, 1f);
@@ -1402,23 +1462,26 @@ namespace MysticCombat.Editor
             return fallbackFont != null ? fallbackFont : existing;
         }
 
-        private static void UpdateBuildSettings()
+        public static void UpdateBuildSettings()
         {
-            List<EditorBuildSettingsScene> scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-
-            bool hasMenu = false;
-            bool hasCombat = false;
-
-            foreach (var s in scenes)
+            // Enforce MainMenuScene strictly at Index 0 (Primary Boot Scene) and SampleScene at Index 1
+            var newScenes = new List<EditorBuildSettingsScene>();
+            newScenes.Add(new EditorBuildSettingsScene(MAIN_MENU_SCENE_PATH, true));
+            if (File.Exists(COMBAT_SCENE_PATH))
             {
-                if (s.path == MAIN_MENU_SCENE_PATH) hasMenu = true;
-                if (s.path == COMBAT_SCENE_PATH) hasCombat = true;
+                newScenes.Add(new EditorBuildSettingsScene(COMBAT_SCENE_PATH, true));
             }
 
-            if (!hasMenu) scenes.Insert(0, new EditorBuildSettingsScene(MAIN_MENU_SCENE_PATH, true));
-            if (!hasCombat && File.Exists(COMBAT_SCENE_PATH)) scenes.Add(new EditorBuildSettingsScene(COMBAT_SCENE_PATH, true));
+            // Retain any other custom scenes after the core game scenes
+            foreach (var s in EditorBuildSettings.scenes)
+            {
+                if (s.path != MAIN_MENU_SCENE_PATH && s.path != COMBAT_SCENE_PATH)
+                {
+                    newScenes.Add(s);
+                }
+            }
 
-            EditorBuildSettings.scenes = scenes.ToArray();
+            EditorBuildSettings.scenes = newScenes.ToArray();
         }
 
         private static GameObject CreateUIObject(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPos, Vector2 sizeDelta)
@@ -1432,6 +1495,162 @@ namespace MysticCombat.Editor
             rt.sizeDelta = sizeDelta;
             return go;
         }
+
+        private static GameObject CreateLanLobbyModal(
+            Transform canvasTransform,
+            TMP_FontAsset titleFont,
+            TMP_FontAsset retroFont,
+            TMP_FontAsset pressStartFont,
+            MainMenuController menuController,
+            CharacterSelectController charController)
+        {
+            // 1. Fullscreen Semi-Transparent Backdrop Dim
+            GameObject root = CreateUIObject("Modal_LanLobby", canvasTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            Image rootBg = root.AddComponent<Image>();
+            rootBg.color = new Color(0.02f, 0.01f, 0.06f, 0.88f);
+
+            LanLobbyModal lanModal = root.AddComponent<LanLobbyModal>();
+
+            // 2. Center Arcade Window Panel
+            GameObject window = CreateUIObject("Lan_Window_Frame", root.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1040f, 680f));
+            Image winImg = window.AddComponent<Image>();
+            winImg.color = new Color(0.06f, 0.09f, 0.18f, 0.98f); // Cosmic dark arcade navy
+            Outline winOutline = window.AddComponent<Outline>();
+            winOutline.effectColor = new Color(0.0f, 0.95f, 1.0f, 0.85f); // Electric Cyan neon frame
+            winOutline.effectDistance = new Vector2(3f, -3f);
+
+            // 3. Header Title
+            GameObject titleObj = CreateUIObject("Title", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 255f), new Vector2(900f, 60f));
+            TextMeshProUGUI titleTmp = titleObj.AddComponent<TextMeshProUGUI>();
+            titleTmp.font = titleFont != null ? titleFont : retroFont;
+            titleTmp.text = "⚡ LAN MULTIPLAYER COMBAT ⚡";
+            titleTmp.fontSize = 40;
+            titleTmp.fontStyle = FontStyles.Bold;
+            titleTmp.alignment = TextAlignmentOptions.Center;
+            titleTmp.color = new Color(1.0f, 0.88f, 0.20f, 1f); // Solar Gold
+
+            // 4. Local IP Banner
+            GameObject ipObj = CreateUIObject("Text_LocalIp", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 195f), new Vector2(900f, 40f));
+            TextMeshProUGUI ipTmp = ipObj.AddComponent<TextMeshProUGUI>();
+            ipTmp.font = pressStartFont;
+            ipTmp.text = "YOUR LOCAL LAN IP: 127.0.0.1  |  PORT: 7777";
+            ipTmp.fontSize = 20;
+            ipTmp.fontStyle = FontStyles.Bold;
+            ipTmp.alignment = TextAlignmentOptions.Center;
+            ipTmp.color = new Color(0.0f, 0.95f, 1.0f, 1f); // Electric Cyan
+
+            // 5. Status Prompt Banner
+            GameObject statusObj = CreateUIObject("Text_Status", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 135f), new Vector2(900f, 50f));
+            TextMeshProUGUI statusTmp = statusObj.AddComponent<TextMeshProUGUI>();
+            statusTmp.font = retroFont;
+            statusTmp.text = "SELECT HOST OR JOIN TO COMMENCE LAN COMBAT";
+            statusTmp.fontSize = 22;
+            statusTmp.alignment = TextAlignmentOptions.Center;
+            statusTmp.color = new Color(0.85f, 0.95f, 1.0f, 1f);
+
+            // 6. Section 1: Host Button
+            GameObject hostBtnObj = CreateUIObject("Btn_Host", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(680f, 75f));
+            Image hostImg = hostBtnObj.AddComponent<Image>();
+            hostImg.color = new Color(0.12f, 0.20f, 0.35f, 1f);
+            Outline hostOutline = hostBtnObj.AddComponent<Outline>();
+            hostOutline.effectColor = new Color(0.0f, 0.95f, 1f, 0.9f);
+            hostOutline.effectDistance = new Vector2(2f, -2f);
+            Button hostBtn = hostBtnObj.AddComponent<Button>();
+
+            GameObject hostTxtObj = CreateUIObject("Text", hostBtnObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            TextMeshProUGUI hostTxtTmp = hostTxtObj.AddComponent<TextMeshProUGUI>();
+            hostTxtTmp.font = retroFont;
+            hostTxtTmp.text = "⚔  HOST MATCH (WAIT FOR OPPONENT)";
+            hostTxtTmp.fontSize = 24;
+            hostTxtTmp.fontStyle = FontStyles.Bold;
+            hostTxtTmp.alignment = TextAlignmentOptions.Center;
+            hostTxtTmp.color = Color.white;
+
+            // 7. Subtle Divider
+            GameObject divObj = CreateUIObject("Divider", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -30f), new Vector2(750f, 2f));
+            Image divImg = divObj.AddComponent<Image>();
+            divImg.color = new Color(0.2f, 0.3f, 0.5f, 0.6f);
+
+            // 8. Section 2: Join by IP
+            GameObject joinLabelObj = CreateUIObject("Label_JoinPrompt", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -70f), new Vector2(680f, 32f));
+            TextMeshProUGUI joinLblTmp = joinLabelObj.AddComponent<TextMeshProUGUI>();
+            joinLblTmp.font = retroFont;
+            joinLblTmp.text = "OR ENTER OPPONENT'S HOST IP ADDRESS:";
+            joinLblTmp.fontSize = 20;
+            joinLblTmp.alignment = TextAlignmentOptions.Center;
+            joinLblTmp.color = new Color(0.7f, 0.85f, 1.0f, 1f);
+
+            // Input Field Container
+            GameObject inputObj = CreateUIObject("Input_IP", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-155f, -125f), new Vector2(350f, 62f));
+            Image inputBg = inputObj.AddComponent<Image>();
+            inputBg.color = new Color(0.08f, 0.12f, 0.22f, 1f);
+            Outline inputOutline = inputObj.AddComponent<Outline>();
+            inputOutline.effectColor = new Color(0.0f, 0.8f, 0.9f, 0.8f);
+            inputOutline.effectDistance = new Vector2(1f, -1f);
+
+            GameObject inputTxtObj = CreateUIObject("Text", inputObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            TextMeshProUGUI inputTmp = inputTxtObj.AddComponent<TextMeshProUGUI>();
+            inputTmp.font = pressStartFont;
+            inputTmp.text = "127.0.0.1";
+            inputTmp.fontSize = 22;
+            inputTmp.alignment = TextAlignmentOptions.Center;
+            inputTmp.color = Color.white;
+
+            TMP_InputField inputField = inputObj.AddComponent<TMP_InputField>();
+            inputField.textComponent = inputTmp;
+            inputField.text = "127.0.0.1";
+
+            // Join Button
+            GameObject joinBtnObj = CreateUIObject("Btn_Join", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(205f, -125f), new Vector2(310f, 62f));
+            Image joinImg = joinBtnObj.AddComponent<Image>();
+            joinImg.color = new Color(0.12f, 0.25f, 0.18f, 1f); // Emerald tone
+            Outline joinOutline = joinBtnObj.AddComponent<Outline>();
+            joinOutline.effectColor = new Color(0.2f, 1.0f, 0.4f, 0.85f);
+            joinOutline.effectDistance = new Vector2(2f, -2f);
+            Button joinBtn = joinBtnObj.AddComponent<Button>();
+
+            GameObject joinTxtObj = CreateUIObject("Text", joinBtnObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            TextMeshProUGUI joinTxtTmp = joinTxtObj.AddComponent<TextMeshProUGUI>();
+            joinTxtTmp.font = retroFont;
+            joinTxtTmp.text = "⚡ CONNECT & JOIN";
+            joinTxtTmp.fontSize = 22;
+            joinTxtTmp.fontStyle = FontStyles.Bold;
+            joinTxtTmp.alignment = TextAlignmentOptions.Center;
+            joinTxtTmp.color = Color.white;
+
+            // 9. Back Button
+            GameObject backBtnObj = CreateUIObject("Btn_Back", window.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -235f), new Vector2(400f, 54f));
+            Image backImg = backBtnObj.AddComponent<Image>();
+            backImg.color = new Color(0.18f, 0.12f, 0.16f, 1f);
+            Outline backOutline = backBtnObj.AddComponent<Outline>();
+            backOutline.effectColor = new Color(1.0f, 0.4f, 0.4f, 0.8f);
+            backOutline.effectDistance = new Vector2(2f, -2f);
+            Button backBtn = backBtnObj.AddComponent<Button>();
+
+            GameObject backTxtObj = CreateUIObject("Text", backBtnObj.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            TextMeshProUGUI backTxtTmp = backTxtObj.AddComponent<TextMeshProUGUI>();
+            backTxtTmp.font = retroFont;
+            backTxtTmp.text = "◄ BACK TO MAIN MENU (ESC)";
+            backTxtTmp.fontSize = 20;
+            backTxtTmp.fontStyle = FontStyles.Bold;
+            backTxtTmp.alignment = TextAlignmentOptions.Center;
+            backTxtTmp.color = Color.white;
+
+            // Wire all references
+            GameObject charRoot = charController != null ? charController.gameObject : null;
+            lanModal.InitializeReferences(
+                root, titleTmp, ipTmp, statusTmp,
+                hostBtn, hostTxtTmp,
+                inputField,
+                joinBtn, joinTxtTmp,
+                backBtn,
+                charController, charRoot, menuController
+            );
+
+            root.SetActive(false);
+            return root;
+        }
     }
 }
+
 #endif
