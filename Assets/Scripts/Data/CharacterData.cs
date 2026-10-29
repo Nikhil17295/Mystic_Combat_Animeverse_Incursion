@@ -19,7 +19,7 @@ namespace MysticCombat.Data
 
         #region Base Stats
 
-        public int maxHealth = 100;
+        public int maxHealth = 200;
         public float moveSpeed = 5f;
         public float jumpForce = 12f;
         public float gravityScale = 3f;

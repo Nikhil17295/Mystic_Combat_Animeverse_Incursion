@@ -1,0 +1,26 @@
+
+A - Combo 1
+
+B - Combo 2
+
+C - Combo 3
+
+S - Power Charge
+
+SPECIALS:
+
+D,DF,F,a - Lion Stomp
+
+D,DB,B,a - Battle Cry
+
+D,DF,F,b - Red Violence
+
+D,DB,B,b - Wild Ricochet
+
+D,DF,F,c - Heavy Assault
+
+D,DB,B,c - Amol Selseila
+
+SUPER: 
+
+D,DF,F,D,DF,F,a+b - Amol Selseila True Form

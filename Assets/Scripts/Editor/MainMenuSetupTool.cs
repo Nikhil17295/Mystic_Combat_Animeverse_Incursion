@@ -478,21 +478,37 @@ namespace MysticCombat.Editor
             // 2. Character Cards
             Sprite gokuAvatar = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/goku_avatar_heroic.png");
             Sprite saitamaAvatar = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/saitama_avatar_heroic.png");
+            Sprite nezukoAvatar = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/nezuko_avatar_heroic.png");
+            Sprite tsunadeAvatar = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/tsunade_avatar_heroic.png");
             Sprite frameSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/portrait_frame_retro.png");
 
             List<CharacterSelectController.FighterCard> cards = new List<CharacterSelectController.FighterCard>();
 
-            // Setup Card 0 (Goku) and Card 1 (Saitama) with expanded width and high-visibility stats
+            // Setup Card 0 (Goku), Card 1 (Nezuko), Card 2 (Tsunade), and Card 3 (Saitama)
             CharacterSelectController.FighterCard cardGoku = CreateFighterCard(
-                root.transform, 0, "goku", "GOKU", "HOPE OF THE UNIVERSE",
-                new Vector2(-380f, 15f), gokuAvatar, frameSprite,
+                root.transform, 0, "goku", "GOKU", "DRAGON BALL Z  ★  SUPER SAIYAN",
+                new Vector2(-460f, 15f), gokuAvatar, frameSprite,
                 retroFont, pressStartFont, charController
             );
             cards.Add(cardGoku);
 
+            CharacterSelectController.FighterCard cardNezuko = CreateFighterCard(
+                root.transform, 1, "nezuko", "NEZUKO", "DEMON SLAYER  ★  DEMON OF KINDNESS",
+                new Vector2(0f, 15f), nezukoAvatar, frameSprite,
+                retroFont, pressStartFont, charController
+            );
+            cards.Add(cardNezuko);
+
+            CharacterSelectController.FighterCard cardTsunade = CreateFighterCard(
+                root.transform, 2, "tsunade", "TSUNADE", "NARUTO SHIPPUDEN  ★  THE LEGENDARY SANNIN",
+                new Vector2(460f, 15f), tsunadeAvatar, frameSprite,
+                retroFont, pressStartFont, charController
+            );
+            cards.Add(cardTsunade);
+
             CharacterSelectController.FighterCard cardSaitama = CreateFighterCard(
-                root.transform, 1, "saitama", "SAITAMA", "HERO FOR FUN",
-                new Vector2(380f, 15f), saitamaAvatar, frameSprite,
+                root.transform, 3, "saitama", "SAITAMA", "ONE PUNCH MAN  ★  HERO FOR FUN",
+                new Vector2(920f, 15f), saitamaAvatar, frameSprite,
                 retroFont, pressStartFont, charController
             );
             cards.Add(cardSaitama);
@@ -702,7 +718,7 @@ namespace MysticCombat.Editor
             card.epithet = epithet;
 
             // Card Root Container (Enlarged 560x660 for clear vertical rhythm)
-            GameObject cardObj = CreateUIObject($"Card_{dispName}", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), position, new Vector2(560f, 660f));
+            GameObject cardObj = CreateUIObject($"Card_{dispName}", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), position, new Vector2(440f, 660f));
             card.cardRoot = cardObj.GetComponent<RectTransform>();
 
             // Background Card Backing & Border Outline
@@ -720,7 +736,7 @@ namespace MysticCombat.Editor
 
             // Indicators Row (Top)
             // P1 Indicator
-            GameObject p1Badge = CreateUIObject("Badge_P1", cardObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-125f, 270f), new Vector2(210f, 38f));
+            GameObject p1Badge = CreateUIObject("Badge_P1", cardObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-100f, 270f), new Vector2(180f, 38f));
             Image p1BadgeBg = p1Badge.AddComponent<Image>();
             p1BadgeBg.color = new Color(0.0f, 0.35f, 0.45f, 0.95f);
             GameObject p1Txt = CreateUIObject("Text", p1Badge.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
@@ -734,7 +750,7 @@ namespace MysticCombat.Editor
             p1Badge.SetActive(false);
 
             // P2 / CPU Indicator
-            GameObject p2Badge = CreateUIObject("Badge_P2", cardObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(125f, 270f), new Vector2(210f, 38f));
+            GameObject p2Badge = CreateUIObject("Badge_P2", cardObj.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(100f, 270f), new Vector2(180f, 38f));
             Image p2BadgeBg = p2Badge.AddComponent<Image>();
             p2BadgeBg.color = new Color(0.45f, 0.20f, 0.05f, 0.95f);
             GameObject p2Txt = CreateUIObject("Text", p2Badge.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
@@ -821,7 +837,7 @@ namespace MysticCombat.Editor
             GameObject hpObj = CreateUIObject("Line_HP_Speed", statBox.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, statY), new Vector2(490f, 30f));
             TextMeshProUGUI hpTmp = hpObj.AddComponent<TextMeshProUGUI>();
             hpTmp.font = pressStartFont;
-            hpTmp.text = "HP: 100     SPD: 5.0 (FAST)";
+            hpTmp.text = "HP: 200     SPD: 5.0 (FAST)";
             hpTmp.fontSize = 18;
             hpTmp.alignment = TextAlignmentOptions.Center;
             hpTmp.color = new Color(0.25f, 1.0f, 0.45f, 1f);

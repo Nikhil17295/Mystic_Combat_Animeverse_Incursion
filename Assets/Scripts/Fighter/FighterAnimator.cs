@@ -107,7 +107,10 @@ namespace MysticCombat.Fighter
             // Auto-load idle sprite in Edit Mode so fighter is visible on the 2D scene canvas
             if (idleFrames.Count == 0)
             {
-                string charName = gameObject.name.ToLower().Contains("saitama") ? "Saitama" : "Goku";
+                string charName = "Goku";
+                if (gameObject.name.ToLower().Contains("saitama")) charName = "Saitama";
+                else if (gameObject.name.ToLower().Contains("nezuko")) charName = "Nezuko";
+                else if (gameObject.name.ToLower().Contains("tsunade")) charName = "Tsunade";
                 LoadCharacterFrames(charName);
             }
         }
@@ -180,6 +183,14 @@ namespace MysticCombat.Fighter
             {
                 pixelsPerUnit = 34.5f; // 55px body / 28 = ~1.96 world units
             }
+            else if (characterFolder.ToLower().Contains("nezuko"))
+            {
+                pixelsPerUnit = 28.0f; // compact chibi & proportional demon
+            }
+            else if (characterFolder.ToLower().Contains("tsunade"))
+            {
+                pixelsPerUnit = 33.0f; // 70px body / 33 = 2.12 world units
+            }
             else
             {
                 pixelsPerUnit = 29.5f; // 47px body / 24 = ~1.96 world units
@@ -208,8 +219,49 @@ namespace MysticCombat.Fighter
                 ultimateFrames.InsertRange(0, newUlt);
             }
 
+            if (characterFolder.ToLower().Contains("tsunade"))
+            {
+                // Tsunade's ultimate is Katsuyu (spawned by TsunadeKatsuyuCinematic).
+                // For Tsunade's own body during ultimate, keep her in her focused summoning stance!
+                ultimateFrames.Clear();
+                if (meditateFrames.Count > 0)
+                {
+                    ultimateFrames.AddRange(meditateFrames);
+                }
+                else if (idleFrames.Count > 0)
+                {
+                    ultimateFrames.AddRange(idleFrames);
+                }
+            }
+
             // Load crouch pose
             crouchSprite = LoadSingleOrFirst(framesDir, "crouch");
+
+            // Load Demon Form frames if Nezuko
+            if (characterFolder.ToLower().Contains("nezuko"))
+            {
+                string demonDir = Path.Combine(Application.dataPath, "Sprites", "Fighters", "Nezuko", "Frames_Demon");
+                if (Directory.Exists(demonDir))
+                {
+                    LoadSequence(demonDir, "idle", ssjIdleFrames);
+                    LoadSequence(demonDir, "walk", ssjWalkFrames);
+                    LoadSequence(demonDir, "punch", ssjPunchFrames);
+                    LoadSequence(demonDir, "heavy", ssjHeavyFrames);
+                    LoadSequence(demonDir, "skill", ssjSkillFrames);
+                    LoadSequence(demonDir, "ultimate", ssjUltimateFrames);
+                    LoadSequence(demonDir, "jump", ssjJumpFrames);
+                    LoadSequence(demonDir, "meditate", ssjMeditateFrames);
+                    LoadSequence(demonDir, "hurt", ssjHurtFrames);
+                    LoadSequence(demonDir, "death", ssjKnockoutFrames);
+                    if (ssjKnockoutFrames.Count == 0) LoadSequence(demonDir, "knockout", ssjKnockoutFrames);
+                    if (ssjKnockoutFrames.Count == 0) LoadSequence(demonDir, "ko", ssjKnockoutFrames);
+                    LoadSequence(demonDir, "victory", ssjVictoryFrames);
+                    ssjCrouchSprite = LoadSingleOrFirst(demonDir, "crouch");
+
+                    Debug.Log($"[FighterAnimator] Loaded Nezuko Demon Form: {ssjIdleFrames.Count} idle, {ssjWalkFrames.Count} walk, " +
+                              $"{ssjPunchFrames.Count} punch, {ssjHeavyFrames.Count} heavy, {ssjUltimateFrames.Count} ult frames.");
+                }
+            }
 
             // Load Super Saiyan frames if available (for Goku)
             if (characterFolder.ToLower().Contains("goku"))
@@ -324,6 +376,29 @@ namespace MysticCombat.Fighter
                 // Saitama standardized baseline at y = 135
                 pivot = new Vector2(0.5f, (160f - 135f) / 160f);
             }
+            else if (path.ToLower().Contains("nezuko"))
+            {
+                if (path.ToLower().Contains("frames_demon"))
+                {
+                    // Demon Form: 1.0x scale. Aligns feet with the arena ground level.
+                    pivot = new Vector2(0.5f, -0.045f);
+                }
+                else
+                {
+                    // Chibi Form: 0.6x scale and 0px bottom margin causes sprite feet to sit lower.
+                    // Negative Y pivot offset lifts her sprite so her feet rest on the exact same ground level as Goku, Saitama, and Tsunade.
+                    pivot = new Vector2(0.5f, -0.11f);
+                }
+            }
+            else if (path.ToLower().Contains("tsunade"))
+            {
+                // Tsunade: baseline aligned per image height so feet rest exactly at floor level
+                float bottomMargin = 3.5f;
+                if (tex.height == 65) bottomMargin = 1.5f;
+                else if (tex.height == 67) bottomMargin = 5.0f;
+                else if (tex.height == 50) bottomMargin = 7.0f;
+                pivot = new Vector2(0.5f, bottomMargin / tex.height);
+            }
 
             return Sprite.Create(
                 tex,
@@ -368,7 +443,8 @@ namespace MysticCombat.Fighter
                     break;
 
                 case FighterState.Crouching:
-                    Sprite cSprite = (isSSJ && ssjCrouchSprite != null) ? ssjCrouchSprite : crouchSprite;
+                    bool isTransformed = controller != null && (controller.IsSuperSaiyan || controller.IsDemonForm);
+                    Sprite cSprite = (isTransformed && ssjCrouchSprite != null) ? ssjCrouchSprite : crouchSprite;
                     if (cSprite != null) spriteRenderer.sprite = cSprite;
                     break;
 
@@ -395,12 +471,20 @@ namespace MysticCombat.Fighter
                     {
                         var skill = GetFrames(ssjSkillFrames, skillFrames);
                         var skillList = skill.Count > 0 ? skill : punchFrames;
-                        // Rapid looping punch flurry for the entire 2.70s shout
                         PlayLoop(skillList, 11f);
+                    }
+                    else if (gameObject.name.ToLower().Contains("nezuko"))
+                    {
+                        var skill = GetFrames(ssjSkillFrames, skillFrames);
+                        PlayOnce(skill, 8f);
+                    }
+                    else if (gameObject.name.ToLower().Contains("tsunade"))
+                    {
+                        var skill = GetFrames(ssjSkillFrames, skillFrames);
+                        PlayOnce(skill, 8.5f);
                     }
                     else
                     {
-                        // Goku has no separate skill attack animation; his skill is pure Super Saiyan transformation.
                         var idle = GetFrames(ssjIdleFrames, idleFrames);
                         PlayLoop(idle, idleFps);
                     }
@@ -410,7 +494,10 @@ namespace MysticCombat.Fighter
                     var ult = GetFrames(ssjUltimateFrames, ultimateFrames);
                     var ultList = ult.Count > 0 ? ult : GetFrames(ssjHeavyFrames, heavyFrames);
                     // Match animation progression to exact voice audio duration!
-                    float ultDuration = gameObject.name.ToLower().Contains("goku") ? 3.36f : 3.80f;
+                    float ultDuration = 3.80f;
+                    if (gameObject.name.ToLower().Contains("goku")) ultDuration = 3.36f;
+                    else if (gameObject.name.ToLower().Contains("nezuko")) ultDuration = 1.0f;
+                    else if (gameObject.name.ToLower().Contains("tsunade")) ultDuration = 1.10f;
                     float ultSpeed = ultList.Count > 0 ? Mathf.Max(2.5f, (float)ultList.Count / ultDuration) : ultimateFps;
                     PlayOnce(ultList, ultSpeed);
                     break;
@@ -440,8 +527,8 @@ namespace MysticCombat.Fighter
 
         private List<Sprite> GetFrames(List<Sprite> ssjList, List<Sprite> baseList)
         {
-            bool isSSJ = controller != null && controller.IsSuperSaiyan;
-            return (isSSJ && ssjList != null && ssjList.Count > 0) ? ssjList : baseList;
+            bool isTransformed = controller != null && (controller.IsSuperSaiyan || controller.IsDemonForm);
+            return (isTransformed && ssjList != null && ssjList.Count > 0) ? ssjList : baseList;
         }
 
         /// <summary>

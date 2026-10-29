@@ -162,6 +162,8 @@ namespace MysticCombat.Combat
             string fighterName = gameObject.name.ToLower();
             bool isSaitama = fighterName.Contains("saitama");
             bool isGoku = fighterName.Contains("goku");
+            bool isNezuko = fighterName.Contains("nezuko");
+            bool isTsunade = fighterName.Contains("tsunade");
 
             if (isSaitama)
             {
@@ -186,6 +188,32 @@ namespace MysticCombat.Combat
                 if (heavyHitClip == null) heavyHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_04");
                 voiceSkillMultiplier = 1.0f;
                 voiceUltimateMultiplier = 0.50f; // Calibrated down so Kamehameha voice is ~50% (30% drop per user request)
+            }
+            else if (isNezuko)
+            {
+                // Nezuko voice rule per user:
+                // "her voice lines , only use them on ultimate and attacking when she is in her demon form , not any other time"
+                if (voiceAttackGruntClip == null) voiceAttackGruntClip = Resources.Load<AudioClip>("Audio/Anime_Powers/nezuko_demon_grunt");
+                if (voiceUltimateClip == null) voiceUltimateClip = Resources.Load<AudioClip>("Audio/Anime_Powers/nezuko_blood_demon_art");
+                voiceSkillClip = null;
+                voiceHurtClip = null;
+                if (lightWhiffClip == null) lightWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_11");
+                if (heavyWhiffClip == null) heavyWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_06");
+                if (lightHitClip == null) lightHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_01");
+                if (heavyHitClip == null) heavyHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_04");
+                voiceSkillMultiplier = 1.0f;
+                voiceUltimateMultiplier = 1.8f;
+            }
+            else if (isTsunade)
+            {
+                if (voiceSkillClip == null) voiceSkillClip = Resources.Load<AudioClip>("Audio/Anime_Powers/anime_explosion");
+                if (voiceUltimateClip == null) voiceUltimateClip = Resources.Load<AudioClip>("Audio/Anime_Powers/ultimate_boom");
+                if (lightWhiffClip == null) lightWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_01");
+                if (heavyWhiffClip == null) heavyWhiffClip = Resources.Load<AudioClip>("Audio/Swishes_Whiffs/swish_06");
+                if (lightHitClip == null) lightHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_01");
+                if (heavyHitClip == null) heavyHitClip = Resources.Load<AudioClip>("Audio/Hits_Punches/arcade_hit_05");
+                voiceSkillMultiplier = 1.3f;
+                voiceUltimateMultiplier = 1.6f;
             }
 
             if (jumpClip == null) jumpClip = Resources.Load<AudioClip>("Audio/Anime_Powers/jumpland_clean");
@@ -393,6 +421,9 @@ namespace MysticCombat.Combat
 
         public void PlayVoiceAttackGrunt()
         {
+            var fc = GetComponent<MysticCombat.Fighter.FighterController>();
+            if (fc != null && fc.IsNezuko && !fc.IsDemonForm) return; // User instruction: only attack voice in demon form
+
             if (voiceAttackGruntClip != null)
             {
                 PlaySound(voiceAttackGruntClip, voiceVolume * sfxVolume);
@@ -401,6 +432,7 @@ namespace MysticCombat.Combat
 
         public void PlayVoiceHurt()
         {
+            if (gameObject.name.ToLower().Contains("nezuko")) return; // User instruction: Nezuko only speaks on ultimate and attacking in demon form
             StopVoice();
             if (voiceHurtClip != null)
             {
@@ -410,6 +442,7 @@ namespace MysticCombat.Combat
 
         public void PlayVoiceSkill()
         {
+            if (gameObject.name.ToLower().Contains("nezuko")) return; // User instruction: Nezuko only speaks on ultimate and attacking in demon form
             if (voiceSkillClip != null)
             {
                 float vol = voiceVolume * sfxVolume * voiceSkillMultiplier;

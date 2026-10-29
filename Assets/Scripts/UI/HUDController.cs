@@ -188,7 +188,8 @@ namespace MysticCombat.UI
             AnimateGhostBars();
             AnimateTimeMandala();
             AnimateMatchPointPulse();
-        }
+        AnimateDynamicKiBars();
+            }
 
         #endregion
 
@@ -477,13 +478,13 @@ namespace MysticCombat.UI
 
             if (p1NameText != null)
             {
-                p1NameText.text = p1Id == "goku" ? "GOKU" : "SAITAMA";
+                p1NameText.text = p1Id == "goku" ? "GOKU" : (p1Id == "nezuko" ? "NEZUKO" : (p1Id == "tsunade" ? "TSUNADE" : "SAITAMA"));
             }
 
             if (p2NameText != null)
             {
                 string prefix = (GameManager.Instance != null && GameManager.Instance.CurrentGameMode == GameManager.GameMode.VsCpu) ? "CPU " : "";
-                p2NameText.text = prefix + (p2Id == "goku" ? "GOKU" : "SAITAMA");
+                p2NameText.text = prefix + (p2Id == "goku" ? "GOKU" : (p2Id == "nezuko" ? "NEZUKO" : (p2Id == "tsunade" ? "TSUNADE" : "SAITAMA")));
             }
 
             UpdateAvatarCard(p1AvatarCard, p1Id, false);
@@ -494,9 +495,11 @@ namespace MysticCombat.UI
         {
             if (img == null) return;
 
-            string spritePath = charId == "goku"
-                ? System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "goku_avatar_heroic.png")
-                : System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "saitama_avatar_heroic.png");
+            string spritePath;
+            if (charId == "goku") spritePath = System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "goku_avatar_heroic.png");
+            else if (charId == "nezuko") spritePath = System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "nezuko_avatar_heroic.png");
+            else if (charId == "tsunade") spritePath = System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "tsunade_avatar_heroic.png");
+            else spritePath = System.IO.Path.Combine(Application.dataPath, "Sprites", "UI", "saitama_avatar_heroic.png");
 
             if (System.IO.File.Exists(spritePath))
             {
@@ -795,10 +798,11 @@ namespace MysticCombat.UI
         {
             string id = !string.IsNullOrEmpty(charId) ? charId.ToLower() : (playerIndex == 0 ? "goku" : "saitama");
             float t1 = 10f; // Red Zone danger threshold (10 Ki)
-            // For Goku, Safe Skill marker is set to 30 Ki (SSJ buffer); for Saitama it is 40 Ki (10 RedZone + 30 SkillCost)
-            float t2 = id == "goku" ? 30f : 40f;
-            // For Goku, Safe Ultimate threshold is 80 Ki (10 RedZone + 70 UltCost); for Saitama it is 90 Ki (10 RedZone + 80 UltCost)
-            float t3 = id == "goku" ? 80f : 90f;
+            // For Goku, Safe Skill marker is set to 30 Ki (SSJ buffer); for Saitama/Tsunade it is 40 Ki (10 RedZone + 30 SkillCost)
+            // Goku: 30 Ki (SSJ buffer); Nezuko: 30 Ki (Demon form buffer); Saitama/Tsunade: 40 Ki (10 RedZone + 30 SkillCost)
+            float t2 = (id == "saitama" || id == "tsunade") ? 40f : 30f;
+            // Goku: 80 Ki (10 RedZone + 70 Ult); Nezuko/Tsunade: 70 Ki (10 RedZone + 60 Ult); Saitama: 90 Ki (10 RedZone + 80 Ult)
+            float t3 = id == "goku" ? 80f : ((id == "nezuko" || id == "tsunade") ? 70f : 90f);
 
             if (playerIndex == 0)
             {
@@ -996,6 +1000,95 @@ namespace MysticCombat.UI
             else
             {
                 centerBigGoldGem.transform.localScale = initialGoldGemScale;
+            }
+        }
+
+        #endregion
+
+                #region Dynamic Ki Bar Animation & Visuals
+
+        private void AnimateDynamicKiBars()
+        {
+            AnimatePlayerDynamicKi(0, p1Energy, p1KiBlue, p1KiYellow, p1KiGreen, p1T1, p1T2, p1T3);
+            AnimatePlayerDynamicKi(1, p2Energy, p2KiBlue, p2KiYellow, p2KiGreen, p2T1, p2T2, p2T3);
+        }
+
+        private void AnimatePlayerDynamicKi(int pIndex, EnergySystem energy, Image blueImg, Image yellowImg, Image greenImg, float t1, float t2, float t3)
+        {
+            if (energy == null) return;
+            Fighter.FighterController fc = energy.GetComponent<Fighter.FighterController>();
+            if (fc == null) return;
+
+            if (fc.IsNezuko)
+            {
+                // Nezuko Dynamic Ki Bar:
+                if (fc.IsDemonForm)
+                {
+                    // In Demon Form: Active -2 Ki/s continuous blood energy drain!
+                    // Skill/Blue segment pulses with fiery Demonic Blossom Crimson flames
+                    float demonPulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 8f);
+                    Color demonFlame = new Color(0.98f, 0.22f, 0.55f, 1f) * demonPulse;
+                    demonFlame.a = 1f;
+                    if (blueImg != null) blueImg.color = demonFlame;
+
+                    // When Ki >= 60: Blood Demon Art: Exploding Blood is READY to fire!
+                    // The Ultimate segment flares with blazing radiant fiery gold/crimson!
+                    if (energy.CurrentKi >= 60f)
+                    {
+                        float ultFlare = 0.80f + 0.20f * Mathf.PingPong(Time.time * 6f, 1f);
+                        Color ultReadyColor = new Color(1.0f, 0.35f, 0.15f, 1f) * ultFlare;
+                        ultReadyColor.a = 1f;
+                        if (yellowImg != null) yellowImg.color = ultReadyColor;
+                    }
+                    else if (yellowImg != null)
+                    {
+                        yellowImg.color = kiSurplusColor;
+                    }
+
+                    // Warning: Ki <= 15 (near Red Zone during Demon Form)
+                    if (energy.CurrentKi <= 15f && blueImg != null)
+                    {
+                        float warningFlash = Mathf.PingPong(Time.time * 12f, 1f);
+                        blueImg.color = Color.Lerp(demonFlame, new Color(1f, 0.1f, 0.1f, 1f), warningFlash);
+                    }
+                }
+                else
+                {
+                    // In Small Chibi Form: Passively building +1 Ki/s!
+                    // The Safe Green zone has a gentle soothing breathing recharge pulse
+                    float chibiRecharge = 0.90f + 0.10f * Mathf.Sin(Time.time * 3f);
+                    Color chibiGlow = new Color(0.35f, 0.95f, 0.65f, 1f) * chibiRecharge;
+                    chibiGlow.a = 1f;
+                    if (greenImg != null) greenImg.color = chibiGlow;
+
+                    if (blueImg != null) blueImg.color = kiSkillSafeColor;
+                    if (yellowImg != null) yellowImg.color = kiSurplusColor;
+                }
+            }
+            else if (fc.IsTsunade)
+            {
+                if (fc.IsHealingStage)
+                {
+                    // Byakugou / Healing Stage active: vibrant emerald medical ninjutsu chakra pulse!
+                    float healPulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 8f);
+                    Color emeraldGlow = new Color(0.10f, 0.95f, 0.45f, 1f) * healPulse;
+                    emeraldGlow.a = 1f;
+                    if (greenImg != null) greenImg.color = emeraldGlow;
+                    if (blueImg != null) blueImg.color = emeraldGlow;
+                }
+                else
+                {
+                    if (blueImg != null && blueImg.color != kiSkillSafeColor) blueImg.color = kiSkillSafeColor;
+                    if (yellowImg != null && yellowImg.color != kiSurplusColor) yellowImg.color = kiSurplusColor;
+                    if (greenImg != null && greenImg.color != kiSafeZoneColor) greenImg.color = kiSafeZoneColor;
+                }
+            }
+            else
+            {
+                // Other characters: maintain standard palette
+                if (blueImg != null && blueImg.color != kiSkillSafeColor) blueImg.color = kiSkillSafeColor;
+                if (yellowImg != null && yellowImg.color != kiSurplusColor) yellowImg.color = kiSurplusColor;
+                if (greenImg != null && greenImg.color != kiSafeZoneColor) greenImg.color = kiSafeZoneColor;
             }
         }
 

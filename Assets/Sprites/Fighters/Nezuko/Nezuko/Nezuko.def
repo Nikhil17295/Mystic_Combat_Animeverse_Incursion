@@ -1,0 +1,29 @@
+;***************************************************************************;
+;******************* Created in Fighter Factory Ultimate *******************;
+;*******************      http://www.virtualltek.com     *******************;
+;***************************************************************************;
+
+[Info]
+name ="Nezuko"
+displayname ="Nezuko"
+versiondate =30/06/2023
+mugenversion =1.0
+author ="Entah99, Edit by Dark Night"
+pal.defaults =1
+
+[Files]
+sprite =Nezuko.sff
+anim =Nezuko.air
+sound =Nezuko.snd
+cmd =Nezuko.cmd
+cns =Nezuko.cns
+stcommon =common1.cns
+st =Nezuko.cns
+pal1=1.act
+st1=IA.cns
+st2=Especiales.cns
+st3=Supers.cns
+
+[Arcade]
+intro.storyboard = 
+ending.storyboard = 

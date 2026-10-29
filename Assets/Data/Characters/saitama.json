@@ -1,7 +1,7 @@
 {
   "characterId": "saitama",
   "displayName": "Saitama",
-  "maxHealth": 100,
+  "maxHealth": 200,
   "moveSpeed": 4.4,
   "jumpForce": 10.8,
   "gravityScale": 3.0,

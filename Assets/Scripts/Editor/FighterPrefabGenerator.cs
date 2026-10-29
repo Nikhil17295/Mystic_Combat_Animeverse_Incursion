@@ -21,18 +21,22 @@ namespace MysticCombat.Editor
         private const string GOKU_PREFAB_PATH = "Assets/Prefabs/Fighters/Goku.prefab";
         private const string SAITAMA_PREFAB_PATH = "Assets/Prefabs/Fighters/Saitama.prefab";
 
-        private const string RESOURCES_DIR = "Assets/Resources/Prefabs/Fighters";
+                private const string NEZUKO_PREFAB_PATH = "Assets/Prefabs/Fighters/Nezuko.prefab";
+        private const string TSUNADE_PREFAB_PATH = "Assets/Prefabs/Fighters/Tsunade.prefab";
+private const string RESOURCES_DIR = "Assets/Resources/Prefabs/Fighters";
         private const string GOKU_RESOURCE_PATH = "Assets/Resources/Prefabs/Fighters/Goku.prefab";
         private const string SAITAMA_RESOURCE_PATH = "Assets/Resources/Prefabs/Fighters/Saitama.prefab";
 
-        static FighterPrefabGenerator()
+                private const string NEZUKO_RESOURCE_PATH = "Assets/Resources/Prefabs/Fighters/Nezuko.prefab";
+        private const string TSUNADE_RESOURCE_PATH = "Assets/Resources/Prefabs/Fighters/Tsunade.prefab";
+static FighterPrefabGenerator()
         {
             EditorApplication.delayCall += EnsurePrefabsExist;
         }
 
         private static void EnsurePrefabsExist()
         {
-            if (!File.Exists(GOKU_PREFAB_PATH) || !File.Exists(SAITAMA_PREFAB_PATH))
+            if (!File.Exists(GOKU_PREFAB_PATH) || !File.Exists(SAITAMA_PREFAB_PATH) || !File.Exists(NEZUKO_PREFAB_PATH) || !File.Exists(TSUNADE_PREFAB_PATH))
             {
                 GeneratePrefabs();
             }
@@ -56,7 +60,11 @@ namespace MysticCombat.Editor
             BuildFighterPrefab("Goku", PlayerInputHandler.PlayerIndex.P1, GOKU_RESOURCE_PATH);
             BuildFighterPrefab("Saitama", PlayerInputHandler.PlayerIndex.P2, SAITAMA_RESOURCE_PATH);
 
-            AssetDatabase.SaveAssets();
+                        BuildFighterPrefab("Nezuko", PlayerInputHandler.PlayerIndex.P1, NEZUKO_PREFAB_PATH);
+            BuildFighterPrefab("Nezuko", PlayerInputHandler.PlayerIndex.P1, NEZUKO_RESOURCE_PATH);
+            BuildFighterPrefab("Tsunade", PlayerInputHandler.PlayerIndex.P1, TSUNADE_PREFAB_PATH);
+            BuildFighterPrefab("Tsunade", PlayerInputHandler.PlayerIndex.P1, TSUNADE_RESOURCE_PATH);
+AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("<color=#00e676>[FighterPrefabGenerator]</color> Generated Goku.prefab and Saitama.prefab in Assets/Prefabs/Fighters/ and Assets/Resources/Prefabs/Fighters/!");
         }
@@ -64,9 +72,10 @@ namespace MysticCombat.Editor
         private static void BuildFighterPrefab(string fighterName, PlayerInputHandler.PlayerIndex playerIndex, string assetPath)
         {
             GameObject fighter = new GameObject(fighterName);
-            fighter.transform.localScale = fighterName == "Goku" 
-                ? new Vector3(0.88f, 0.88f, 1f) 
-                : new Vector3(1.12f, 1.12f, 1f);
+            if (fighterName == "Goku") fighter.transform.localScale = new Vector3(0.88f, 0.88f, 1f);
+            else if (fighterName == "Saitama") fighter.transform.localScale = new Vector3(1.12f, 1.12f, 1f);
+            else if (fighterName == "Nezuko") fighter.transform.localScale = new Vector3(0.60f, 0.60f, 1f);
+            else fighter.transform.localScale = Vector3.one;
 
             // Rigidbody2D
             Rigidbody2D rb = fighter.AddComponent<Rigidbody2D>();
@@ -77,8 +86,16 @@ namespace MysticCombat.Editor
             // CapsuleCollider2D (World collision - vertical dome prevents stacking)
             CapsuleCollider2D col = fighter.AddComponent<CapsuleCollider2D>();
             col.direction = CapsuleDirection2D.Vertical;
-            col.size = new Vector2(1.10f, 0.90f);
-            col.offset = new Vector2(0f, 0.45f);
+            if (fighterName == "Nezuko")
+            {
+                col.size = new Vector2(0.75f, 0.60f);
+                col.offset = new Vector2(0f, 0.30f);
+            }
+            else
+            {
+                col.size = new Vector2(1.10f, 0.90f);
+                col.offset = new Vector2(0f, 0.45f);
+            }
 
             // SpriteRenderer
             SpriteRenderer sr = fighter.AddComponent<SpriteRenderer>();
@@ -117,8 +134,16 @@ namespace MysticCombat.Editor
             hurtboxObj.transform.localPosition = Vector3.zero;
             BoxCollider2D hurtboxCol = hurtboxObj.AddComponent<BoxCollider2D>();
             hurtboxCol.isTrigger = true;
-            hurtboxCol.size = new Vector2(0.9f, 1.8f);
-            hurtboxCol.offset = new Vector2(0f, 0.95f);
+            if (fighterName == "Nezuko")
+            {
+                hurtboxCol.size = new Vector2(0.70f, 0.60f);
+                hurtboxCol.offset = new Vector2(0f, 0.30f);
+            }
+            else
+            {
+                hurtboxCol.size = new Vector2(0.9f, 1.8f);
+                hurtboxCol.offset = new Vector2(0f, 0.95f);
+            }
             HurtboxController hurtbox = hurtboxObj.AddComponent<HurtboxController>();
             hurtbox.SetOwner(fighter.transform);
 
@@ -133,6 +158,15 @@ namespace MysticCombat.Editor
             HitboxController hitbox = hitboxObj.AddComponent<HitboxController>();
             hitbox.Setup(fighter.transform, 10, 5f, 6f);
             fc.SetHitbox(hitbox);
+
+            if (fighterName == "Nezuko")
+            {
+                fighter.AddComponent<NezukoBloodDemonArtCinematic>();
+            }
+            else if (fighterName == "Tsunade")
+            {
+                fighter.AddComponent<TsunadeKatsuyuCinematic>();
+            }
 
             // Save to asset
             PrefabUtility.SaveAsPrefabAsset(fighter, assetPath);
