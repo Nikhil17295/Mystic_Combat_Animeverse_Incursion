@@ -77,8 +77,10 @@ class SlicerHandler(SimpleHTTPRequestHandler):
                 dest_dir = os.path.join(PROJECT_ROOT, "Assets", "Sprites", dest_folder)
             elif character.lower() == "goku_ssj":
                 dest_dir = os.path.join(PROJECT_ROOT, "Assets", "Sprites", "Fighters", "Goku", "Frames_SSJ")
+            elif character.lower() == "tsunade":
+                dest_dir = os.path.join(PROJECT_ROOT, "Assets", "Sprites", "Fighters", "Tsunade", "Frames")
             else:
-                dest_dir = os.path.join(PROJECT_ROOT, "Assets", "Sprites", "Fighters", character, "Frames")
+                dest_dir = os.path.join(PROJECT_ROOT, "Assets", "Sprites", "Fighters", character.capitalize(), "Frames")
             os.makedirs(dest_dir, exist_ok=True)
 
             img = Image.open(sheet_full).convert("RGBA")

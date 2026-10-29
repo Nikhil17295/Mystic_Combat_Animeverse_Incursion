@@ -1,0 +1,74 @@
+{
+  "characterId": "nezuko",
+  "displayName": "Nezuko",
+  "maxHealth": 200,
+  "moveSpeed": 4.8,
+  "jumpForce": 11.0,
+  "gravityScale": 3.0,
+  "lightAttack": {
+    "damage": 5,
+    "knockback": 2.2,
+    "startupFrames": 3,
+    "activeFrames": 4,
+    "recoveryFrames": 6,
+    "hitboxOffset": {
+      "x": 0.8,
+      "y": 0.75
+    },
+    "hitboxSize": {
+      "x": 0.8,
+      "y": 0.5
+    },
+    "kiGainOnHit": 4
+  },
+  "heavyAttack": {
+    "damage": 10,
+    "knockback": 5.0,
+    "startupFrames": 6,
+    "activeFrames": 5,
+    "recoveryFrames": 10,
+    "hitboxOffset": {
+      "x": 0.84,
+      "y": 0.8
+    },
+    "hitboxSize": {
+      "x": 0.85,
+      "y": 0.55
+    },
+    "kiGainOnHit": 6
+  },
+  "skill": {
+    "name": "Demon Form",
+    "type": "transformation",
+    "kiCost": 0,
+    "damage": 0,
+    "speed": 0.0,
+    "lifetime": 0.0,
+    "buffs": "Toggle: Small Chibi (Visibly 60% Scale, Whiffs High Attacks, +1 Ki/s Passive, 1.5x Dmg Taken, 0 Dmg Interrupts) <-> Demon Form (100% Scale, -2 Ki/s Drain, 5 Light / 10 Heavy Dmg, Unlocks Blood Demon Art)",
+    "startupFrames": 0,
+    "recoveryFrames": 0
+  },
+  "ultimate": {
+    "name": "Blood Demon Art",
+    "kiCost": 60,
+    "damage": 30,
+    "cooldown": 10.0,
+    "hitboxSize": {
+      "x": 5.0,
+      "y": 5.0
+    },
+    "startupFrames": 20,
+    "activeFrames": 15,
+    "recoveryFrames": 20,
+    "drawback": "Sure-hit fire explosion across the arena. Deals 30 damage, burns target, and refunds 20 Ki back. 10s cooldown."
+  },
+  "meditateKiPerSecond": 7.0,
+  "kiGainOnDamageTaken": 1.5,
+  "redZone": {
+    "threshold": 10,
+    "duration": 5.0,
+    "moveSpeedMultiplier": 0.35,
+    "recoveryKi": 20,
+    "hitTimerReduction": 0.1
+  }
+}

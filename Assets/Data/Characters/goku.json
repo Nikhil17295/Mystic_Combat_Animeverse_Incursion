@@ -1,7 +1,7 @@
 {
   "characterId": "goku",
   "displayName": "Goku",
-  "maxHealth": 100,
+  "maxHealth": 200,
   "moveSpeed": 5.2,
   "jumpForce": 12.5,
   "gravityScale": 3.0,

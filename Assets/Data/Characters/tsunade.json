@@ -1,0 +1,73 @@
+{
+  "characterId": "tsunade",
+  "displayName": "Tsunade",
+  "maxHealth": 200,
+  "moveSpeed": 4.8,
+  "jumpForce": 11.5,
+  "gravityScale": 3.0,
+  "lightAttack": {
+    "damage": 5,
+    "knockback": 2.2,
+    "startupFrames": 3,
+    "activeFrames": 4,
+    "recoveryFrames": 5,
+    "hitboxOffset": {
+      "x": 0.85,
+      "y": 0.95
+    },
+    "hitboxSize": {
+      "x": 0.85,
+      "y": 0.5
+    },
+    "kiGainOnHit": 4
+  },
+  "heavyAttack": {
+    "damage": 10,
+    "knockback": 5.5,
+    "startupFrames": 6,
+    "activeFrames": 5,
+    "recoveryFrames": 10,
+    "hitboxOffset": {
+      "x": 0.9,
+      "y": 0.4
+    },
+    "hitboxSize": {
+      "x": 1.1,
+      "y": 0.7
+    },
+    "kiGainOnHit": 7
+  },
+  "skill": {
+    "name": "Earth Shaker",
+    "type": "earth_shaker",
+    "kiCost": 30,
+    "damage": 30,
+    "cooldown": 20.0,
+    "speed": 0.0,
+    "lifetime": 0.0,
+    "buffs": "Earth Shaker: 30 Damage to grounded opponent (Whiffs airborne targets), Heavy Knockback & Screen Shake. 30 Ki cost, 20s Cooldown.",
+    "startupFrames": 8,
+    "activeFrames": 8,
+    "recoveryFrames": 12
+  },
+  "ultimate": {
+    "name": "Summoning Katsuyu",
+    "kiCost": 60,
+    "damage": 30,
+    "cooldown": 20.0,
+    "hitboxSize": {
+      "x": 2.2,
+      "y": 1.8
+    },
+    "startupFrames": 15,
+    "activeFrames": 18,
+    "recoveryFrames": 20
+  },
+  "meditateKiPerSecond": 10.0,
+  "kiGainOnDamageTaken": 2.0,
+  "redZone": {
+    "threshold": 10,
+    "drainRatePerSecond": 1.5,
+    "damageMultiplier": 1.35
+  }
+}

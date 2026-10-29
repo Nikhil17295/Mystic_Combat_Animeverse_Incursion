@@ -11,9 +11,10 @@ namespace MysticCombat.Systems
         #region Fields
 
         [Header("Health Settings")]
-        [SerializeField] private int maxHealth = 100;
+        [SerializeField] private int maxHealth = 200;
 
         private int currentHealth;
+        private float fractionalHealthPool = 0f;
         private EnergySystem energySystem;
         private Fighter.FighterController fighterController;
 
@@ -116,6 +117,14 @@ namespace MysticCombat.Systems
                 Debug.Log($"<color=#ef4444>[HealthSystem] {gameObject.name} in RED ZONE! Vulnerability (+35%): {baseAmount} -> {amount} damage.</color>");
             }
 
+            // Tsunade Creation Rebirth / Byakugou Healing Stage: Takes half damage (50% reduction)!
+            if (fighterController != null && fighterController.IsHealingStage)
+            {
+                int baseAmount = amount;
+                amount = Mathf.Max(1, Mathf.RoundToInt(amount * 0.5f));
+                Debug.Log($"<color=#10b981>[CREATION REBIRTH RESISTANCE]</color> {gameObject.name} in Healing Stage! Damage halved: {baseAmount} -> {amount}.");
+            }
+
             currentHealth = Mathf.Max(0, currentHealth - amount);
             OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
@@ -140,6 +149,21 @@ namespace MysticCombat.Systems
             OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
             Debug.Log($"[HealthSystem] {gameObject.name} healed {amount}. HP: {currentHealth}/{maxHealth}");
+        }
+
+        /// <summary>
+        /// Restores health smoothly across frames (e.g. Tsunade +2 HP/s regen during Healing Stage).
+        /// </summary>
+        public void Heal(float amount)
+        {
+            if (amount <= 0f) return;
+            fractionalHealthPool += amount;
+            if (fractionalHealthPool >= 1f)
+            {
+                int whole = Mathf.FloorToInt(fractionalHealthPool);
+                fractionalHealthPool -= whole;
+                Heal(whole);
+            }
         }
 
         /// <summary>

@@ -66,6 +66,7 @@ Bounded by ancient Taoist runic barriers and governed by the temporal authority 
 ## 👥 Character Roster
 
 ```
+<<<<<<< Updated upstream
 ====================================================================================================
   CHARACTER           SPECIAL SKILL                         CINEMATIC ULTIMATE
 ====================================================================================================
@@ -77,6 +78,10 @@ Bounded by ancient Taoist runic barriers and governed by the temporal authority 
                       High-frequency multi-punch barrage    Cinematic dramatic camera cut-in, shockwave
                       shredding enemy guard.                impact, and screen-blackout finishing blow.
 ====================================================================================================
+=======
+Max Health: 200 HP  |  Move Speed: 5.2 (Fast)  |  Jump Force: 12.5  |  Gravity Scale: 3.0
+Meditation Channel Rate: +8.0 Ki/s  |  Ki Gain on Damage Taken: 1.5 Ki per hit
+>>>>>>> Stashed changes
 ```
 
 ### 🥋 Son Goku
@@ -93,7 +98,14 @@ Bounded by ancient Taoist runic barriers and governed by the temporal authority 
 
 ## 🕹️ Controls
 
+<<<<<<< Updated upstream
 The game supports simultaneous Dual Keyboard and XInput / DirectInput Gamepads.
+=======
+```
+Max Health: 200 HP  |  Move Speed: 4.4 (Heavy)  |  Jump Force: 10.8  |  Gravity Scale: 3.0
+Meditation Channel Rate: +5.0 Ki/s  |  Ki Gain on Damage Taken: 1.5 Ki per hit
+```
+>>>>>>> Stashed changes
 
 | Action | Player 1 (Keyboard) | Player 2 (Keyboard) | Gamepad (Xbox / PlayStation) |
 | :--- | :--- | :--- | :--- |

@@ -5,6 +5,17 @@ using MysticCombat.Systems;
 namespace MysticCombat.Combat
 {
     /// <summary>
+    /// Type of combat strike executed by the fighter.
+    /// Used for whiff detection (e.g. Light and Heavy attacks whiff over Nezuko small chibi hurtbox).
+    /// </summary>
+    public enum AttackType
+    {
+        Light,
+        Heavy,
+        Skill,
+        Ultimate
+    }
+    /// <summary>
     /// Controls attack hitboxes attached to fighters.
     /// Uses active Physics2D.OverlapBoxAll queries dynamically calculated in front of the fighter's
     /// facing direction. Completely immune to 2D trigger-on-trigger blindness or stationary overlap drops.
@@ -50,6 +61,8 @@ namespace MysticCombat.Combat
         private SpriteRenderer ownerSr;
         private bool enableHitStop = true;
         private float shakeIntensityMultiplier = 1.0f;
+        private AttackType currentAttackType = AttackType.Light;
+        private bool requiresGroundedTarget = false;
 
         #endregion
 
@@ -59,6 +72,7 @@ namespace MysticCombat.Combat
         public int Damage => damage;
         public float Knockback => knockback;
         public float KnockbackY => knockbackY;
+        public AttackType CurrentAttackType => currentAttackType;
 
         #endregion
 
@@ -147,7 +161,7 @@ namespace MysticCombat.Combat
             }
         }
 
-        public void ConfigureAttack(int hitDamage, float hitKnockback, float kiGain, Vector2 offset, Vector2 size, float hitKnockbackY = 1.0f, bool hitStop = true, float shakeMult = 1.0f)
+        public void ConfigureAttack(int hitDamage, float hitKnockback, float kiGain, Vector2 offset, Vector2 size, float hitKnockbackY = 1.0f, bool hitStop = true, float shakeMult = 1.0f, AttackType attackType = AttackType.Light, bool requiresGrounded = false)
         {
             damage = hitDamage;
             knockback = hitKnockback;
@@ -157,6 +171,8 @@ namespace MysticCombat.Combat
             hitboxSize = size;
             enableHitStop = hitStop;
             shakeIntensityMultiplier = shakeMult;
+            currentAttackType = attackType;
+            requiresGroundedTarget = requiresGrounded;
 
             if (hitboxCollider == null) hitboxCollider = GetComponent<BoxCollider2D>();
             if (hitboxCollider != null)
@@ -239,6 +255,7 @@ namespace MysticCombat.Combat
         private void ResolveHit(HealthSystem targetHealth, Transform target)
         {
             Fighter.FighterController targetFc = target.GetComponent<Fighter.FighterController>();
+            Fighter.FighterController ownerFc = owner != null ? owner.GetComponent<Fighter.FighterController>() : null;
             bool targetInvulnerable = targetHealth.IsInvulnerable || (targetFc != null && targetFc.IsInvulnerable);
 
             if (targetInvulnerable)
@@ -247,8 +264,38 @@ namespace MysticCombat.Combat
                 return;
             }
 
+            // Grounded-Only Check: Stomp and Ground Breaker attacks only hit grounded opponents!
+            if (requiresGroundedTarget && targetFc != null && !targetFc.IsGrounded)
+            {
+                Debug.Log($"<color=#10b981>[AIRBORNE EVASION]</color> {target.name} jumped over {owner?.name}'s grounded {currentAttackType}!");
+                return;
+            }
+
+            // Small Chibi Whiff Check: Standing Light and Heavy attacks cannot hit Small Chibi!
+            if (targetFc != null && targetFc.IsSmallChibi && (currentAttackType == AttackType.Light || currentAttackType == AttackType.Heavy))
+            {
+                Debug.Log($"<color=#38bdf8>[CHIBI EVASION]</color> {owner?.name}'s {currentAttackType} attack whiffs over small Nezuko's head!");
+                return;
+            }
+
+            // Calculate damage with character mechanics:
+            // 1. Small Chibi attacks deal 0 damage but still interrupt (apply knockback & hitstun)
+            // 2. Small Chibi takes 1.5x damage from attacks that hit her
+            int finalDamage = damage;
+            if (ownerFc != null && ownerFc.IsSmallChibi)
+            {
+                finalDamage = 0;
+            }
+            else if (targetFc != null && targetFc.IsSmallChibi)
+            {
+                finalDamage = Mathf.RoundToInt(damage * 1.5f);
+            }
+
             // 1. Deal Damage
-            targetHealth.TakeDamage(damage);
+            if (finalDamage > 0)
+            {
+                targetHealth.TakeDamage(finalDamage);
+            }
 
             // 2. Grant Ki to Attacker
             if (ownerEnergy != null)
@@ -282,13 +329,9 @@ namespace MysticCombat.Combat
             }
 
             // 5. Notify Attacker of Hit Confirm (Enables Chain Cancels)
-            if (owner != null)
+            if (ownerFc != null)
             {
-                Fighter.FighterController ownerFc = owner.GetComponent<Fighter.FighterController>();
-                if (ownerFc != null)
-                {
-                    ownerFc.OnAttackHitConfirmed();
-                }
+                ownerFc.OnAttackHitConfirmed();
             }
 
             // 6. Play Visceral Hit Impact Audio Feedback
@@ -336,7 +379,7 @@ namespace MysticCombat.Combat
                 targetFc.ApplyHit(damage, stun);
             }
 
-            Debug.Log($"<color=#00e676>[COMBAT HIT RESOLVED]</color> {owner?.name} -> {target.name} | Damage: {damage} | New HP: {targetHealth.CurrentHealth}/{targetHealth.MaxHealth} | Attacker Ki: +{kiGainOnHit}");
+            Debug.Log($"<color=#00e676>[COMBAT HIT RESOLVED]</color> {owner?.name} -> {target.name} | Damage: {finalDamage} (Base: {damage}) | New HP: {targetHealth.CurrentHealth}/{targetHealth.MaxHealth} | Attacker Ki: +{kiGainOnHit}");
         }
 
         #endregion

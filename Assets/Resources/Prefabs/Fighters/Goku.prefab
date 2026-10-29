@@ -210,6 +210,8 @@ MonoBehaviour:
   ultimateCooldownDuration: 15
   isSuperSaiyan: 0
   superSaiyanTimer: 0
+  isDemonForm: 0
+  isHealingStage: 0
   baseTintColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!114 &1461611492751410668
 MonoBehaviour:
@@ -246,7 +248,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15669ed5c0c0b6b49b8dfc78176ae9d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Systems.HealthSystem
-  maxHealth: 100
+  maxHealth: 200
 --- !u!114 &6562127518618394206
 MonoBehaviour:
   m_ObjectHideFlags: 0

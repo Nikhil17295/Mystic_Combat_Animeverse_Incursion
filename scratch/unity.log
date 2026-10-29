@@ -1,0 +1,39 @@
+VBCSCompilerPreWarmer: watching VBCSCompiler (PID 53108)
+VBCSCompilerPreWarmer: pre-warm launched (dotnet PID 34736)
+VBCSCompiler prewarm took 73.21 ms
+[Licensing::Module] Trying to connect to existing licensing client channel...
+Built from '6000.6/staging' branch; Version is '6000.6.7f1 (b22767f04f04) revision 11675495'; Using compiler version '194234433'; Build Type 'Release'
+[Licensing::IpcConnector] Connection to channel LicenseClient-nikhi refused
+OS: 'Windows 11  (10.0.26300) CoreSingleLanguage' Language: 'en' Physical Memory: 16004 MB
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
+System  architecture: x64
+Process architecture: x64
+Date: 2026-10-29T03:10:13Z
+Assertion failed on expression: 'SUCCEEDED(hr)'
+Assertion failed on expression: 'wmiOpened'
+Assertion failed on expression: 'ERROR_SUCCESS == status'
+[Licensing::Module] Successfully launched the LicensingClient (PId: 19168)
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\6000.6.7f1\Editor\Unity.exe
+-batchmode
+-quit
+-projectPath
+B:\Unity\Projects\Mystic_Combat_Animeverse_Incursion
+-executeMethod
+MysticCombat.Editor.FighterPrefabGenerator.GeneratePrefabs
+-logFile
+B:\Unity\Projects\Mystic_Combat_Animeverse_Incursion\scratch\unity.log
+Successfully changed project path to: B:\Unity\Projects\Mystic_Combat_Animeverse_Incursion
+B:/Unity/Projects/Mystic_Combat_Animeverse_Incursion
+Starting IPC server.
+Named pipe Unity-LicenseClient-nikhi already exists
+Shut down.
+Unable to retrieve BIOS serial number. Exception: System.UnauthorizedAccessException: Access is denied.
+
+   at System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(Int32 errorCode, IntPtr errorInfo)
+   at System.Management.ManagementScope.InitializeGuts(Object o)
+   at System.Management.ManagementScope.Initialize()
+   at System.Management.ManagementObjectSearcher.Initialize()
+   at System.Management.ManagementObjectSearcher.Get()
+   at Unity.Licensing.Platform.SystemInfo.WindowsSystemInformation.get_BIOSIdentifier()

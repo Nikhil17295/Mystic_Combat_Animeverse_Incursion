@@ -490,7 +490,8 @@
             <div class="char-selector">
                 <button class="char-btn active" id="btnCharGokuSSJ" onclick="selectCharacter('goku_ssj')">Goku (Super Saiyan)</button>
                 <button class="char-btn" id="btnCharGoku" onclick="selectCharacter('goku')">Goku (Base)</button>
-                <button class="char-btn" id="btnCharSaitama" onclick="selectCharacter('saitama')">Saitama</button>
+                <button class="char-btn" id="btnCharSaitama" onclick="selectCharacter('saitama')">Saitama</button>
+                <button class="char-btn" id="btnCharTsunade" onclick="selectCharacter('tsunade')">🌸 Tsunade</button>
                 <button class="char-btn" id="btnCharCustom" onclick="selectCharacter('custom')">🧪 Custom / Test</button>
             </div>
 
@@ -616,7 +617,8 @@
                             <option value="auto">Default Folder</option>
                             <option value="Fighters/Goku/Frames_SSJ">Assets/.../Goku/Frames_SSJ</option>
                             <option value="Fighters/Goku/Frames">Assets/.../Goku/Frames (In-Game)</option>
-                            <option value="Fighters/Saitama/Frames">Assets/.../Saitama/Frames</option>
+                            <option value="Fighters/Saitama/Frames">Assets/.../Saitama/Frames</option>
+                            <option value="Fighters/Tsunade/Frames">Assets/.../Tsunade/Frames</option>
                         </select>
                     </div>
                     <button class="btn btn-success" id="exportBtn" onclick="exportToGame()">
@@ -745,6 +747,30 @@
                     victory: []
                 }
             },
+            tsunade: {
+                name: "Tsunade",
+                isLocal: false,
+                sheets: [
+                    { name: "Tsunade (Clean Transparent)", path: "Fighters/Tsunade/tsunade_transparent.png", bgColor: null },
+                    { name: "Tsunade (Ninja Council 4 / Original)", path: "Fighters/Tsunade/DS _ DSi - Naruto Shippuden_ Ninja Council 4 - Playable Characters - Tsunade.png", bgColor: null },
+                    { name: "Tsunade (Sheet Alias)", path: "Fighters/Tsunade/tsunade_sheet.png", bgColor: null }
+                ],
+                activeSheetIndex: 0,
+                animations: {
+                    idle: [],
+                    walk: [],
+                    jump: [],
+                    crouch: [],
+                    punch: [],
+                    heavy: [],
+                    skill: [],
+                    ultimate: [],
+                    meditate: [],
+                    hurt: [],
+                    death: [],
+                    victory: []
+                }
+            },
             custom: {
                 name: "Candidate_Fighter",
                 isLocal: true,
@@ -767,7 +793,9 @@
             const btnGokuSSJ = document.getElementById("btnCharGokuSSJ");
             if (btnGokuSSJ) btnGokuSSJ.classList.toggle("active", char === "goku_ssj");
             document.getElementById("btnCharGoku").classList.toggle("active", char === "goku");
-            document.getElementById("btnCharSaitama").classList.toggle("active", char === "saitama");
+            document.getElementById("btnCharSaitama").classList.toggle("active", char === "saitama");
+            const btnTsunade = document.getElementById("btnCharTsunade");
+            if (btnTsunade) btnTsunade.classList.toggle("active", char === "tsunade");
 
             const charBadge = document.getElementById("activeCharacterBadge");
             if (charBadge) {
@@ -785,7 +813,12 @@
                     charBadge.textContent = "🥊 Saitama";
                     charBadge.style.color = "#ef4444";
                     charBadge.style.borderColor = "#ef4444";
-                    charBadge.style.background = "rgba(239, 68, 68, 0.15)";
+                    charBadge.style.background = "rgba(239, 68, 68, 0.15)";
+                } else if (char === "tsunade") {
+                    charBadge.textContent = "🌸 Tsunade (5th Hokage)";
+                    charBadge.style.color = "#10b981";
+                    charBadge.style.borderColor = "#10b981";
+                    charBadge.style.background = "rgba(16, 185, 129, 0.15)";
                 } else {
                     charBadge.textContent = "🧪 " + (characterData.custom.name || "Custom");
                     charBadge.style.color = "#2563eb";
@@ -1393,7 +1426,7 @@
         }
 
         // Init
-        selectCharacter("goku_ssj");
+        selectCharacter("tsunade");
         resize();
     </script>
 </body>

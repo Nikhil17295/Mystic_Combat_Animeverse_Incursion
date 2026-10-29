@@ -42,7 +42,7 @@ namespace MysticCombat.Combat
         {
             if (controller == null) return;
 
-            bool shouldBeActive = controller.IsSuperSaiyan || controller.CurrentState == FighterState.Meditating;
+            bool shouldBeActive = controller.IsSuperSaiyan || controller.IsHealingStage || controller.IsDemonForm || controller.CurrentState == FighterState.Meditating;
 
             if (shouldBeActive && !isAuraActive)
             {
@@ -115,7 +115,25 @@ namespace MysticCombat.Combat
         {
             Color primaryColor;
 
-            if (controller != null && controller.IsSuperSaiyan)
+            if (controller != null && controller.IsNezuko)
+            {
+                if (controller.IsDemonForm)
+                {
+                    // Awakened Demon Blood Fire Aura (Demonic Blossom Crimson / Magenta Flame)
+                    primaryColor = new Color(0.95f, 0.20f, 0.45f, 0.90f);
+                }
+                else
+                {
+                    // Chibi Meditate: Pastel Pink Meditation Aura
+                    primaryColor = new Color(0.98f, 0.65f, 0.85f, 0.85f);
+                }
+            }
+            else if (controller != null && controller.IsHealingStage)
+            {
+                // Radiant Emerald / Leaf Village Medical Chakra Aura!
+                primaryColor = new Color(0.10f, 0.95f, 0.45f, 0.90f);
+            }
+            else if (controller != null && controller.IsSuperSaiyan)
             {
                 // Radiant Super Saiyan Gold
                 primaryColor = new Color(1f, 0.88f, 0.22f, 0.85f);
@@ -124,6 +142,11 @@ namespace MysticCombat.Combat
             {
                 // Blazing Crimson/Scarlet
                 primaryColor = new Color(1f, 0.18f, 0.15f, 0.85f);
+            }
+            else if (gameObject.name.ToLower().Contains("tsunade") || (controller != null && controller.IsTsunade))
+            {
+                // Soothing Medical Ninjutsu Cyan-Green
+                primaryColor = new Color(0.18f, 0.92f, 0.55f, 0.85f);
             }
             else
             {
