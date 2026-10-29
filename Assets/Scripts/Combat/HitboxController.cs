@@ -1,3 +1,4 @@
+using MysticCombat.Fighter;
 using System.Collections.Generic;
 using UnityEngine;
 using MysticCombat.Systems;
@@ -319,13 +320,24 @@ namespace MysticCombat.Combat
                 else if (target.position.x < owner.position.x) facingDir = -1f;
 
                 float finalKnockback = knockback;
+                float finalKnockbackY = knockbackY;
+
+                // Super Armor: Fighters executing their Ultimate cannot be interrupted or knocked back
+                if (targetFc != null && targetFc.CurrentState == MysticCombat.Fighter.FighterState.Ultimate)
+                {
+                    finalKnockback = 0f;
+                    finalKnockbackY = 0f;
+                }
                 // Character Asymmetry: Saitama's dense mass confers 20% passive knockback resistance
-                if (target.name.ToLower().Contains("saitama"))
+                else if (target.name.ToLower().Contains("saitama"))
                 {
                     finalKnockback *= 0.80f;
                 }
 
-                targetRb.linearVelocity = new Vector2(facingDir * finalKnockback, knockbackY);
+                if (finalKnockback > 0f || finalKnockbackY > 0f)
+                {
+                    targetRb.linearVelocity = new Vector2(facingDir * finalKnockback, finalKnockbackY);
+                }
             }
 
             // 5. Notify Attacker of Hit Confirm (Enables Chain Cancels)

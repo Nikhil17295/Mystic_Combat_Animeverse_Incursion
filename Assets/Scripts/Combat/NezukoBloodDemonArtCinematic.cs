@@ -151,6 +151,11 @@ namespace MysticCombat.Combat
             obj.transform.localScale = new Vector3(2.5f, 2.5f, 1f);
 
             SpriteRenderer sr = obj.AddComponent<SpriteRenderer>();
+            SpriteRenderer ownerSr = GetComponent<SpriteRenderer>();
+            if (ownerSr != null && ownerSr.sharedMaterial != null)
+            {
+                sr.sharedMaterial = ownerSr.sharedMaterial;
+            }
             sr.sortingOrder = 25; // Render cleanly in front of fighters
 
             for (int i = 0; i < explosionFrames.Length; i++)

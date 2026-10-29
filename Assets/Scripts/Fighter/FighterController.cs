@@ -828,6 +828,9 @@ namespace MysticCombat.Fighter
 
             if (CurrentState == FighterState.Knockout) return;
 
+            // Super Armor / Uninterruptible: Fighters cannot be knocked into HitStun during Ultimate
+            if (CurrentState == FighterState.Ultimate || IsInvulnerable) return;
+
 
 
             HealthSystem health = GetComponent<HealthSystem>();
@@ -1204,7 +1207,41 @@ namespace MysticCombat.Fighter
 
                         {
 
-                            if (flurryHitsRemaining > 0)
+                            if (IsTsunade)
+
+                            {
+
+                                attackHitbox.Activate();
+
+                                // Devastating Earth Shaker Ground Impact VFX!
+
+                                if (Combat.VFXManager.Instance != null)
+
+                                {
+
+                                    float facing = transform.localScale.x > 0 ? 1f : -1f;
+
+                                    Vector3 impactPos = transform.position + new Vector3(facing * 1.05f, -0.6f, 0f);
+
+                                    Combat.VFXManager.Instance.PlayShockwave(impactPos);
+
+                                    Combat.VFXManager.Instance.PlayDustPuff(impactPos);
+
+                                    Combat.VFXManager.Instance.PlayDustPuff(impactPos + new Vector3(facing * 0.4f, 0f, 0f));
+
+                                    Combat.VFXManager.Instance.PlayDustPuff(transform.position);
+
+                                    Combat.VFXManager.Instance.TriggerCameraShake(0.65f, 0.40f);
+
+                                    Combat.VFXManager.Instance.TriggerImpactFlash(0.18f);
+
+                                }
+
+                                fighterAudio?.PlayHeavyHit();
+
+                            }
+
+                            else if (flurryHitsRemaining > 0)
 
                             {
 
@@ -2170,7 +2207,7 @@ namespace MysticCombat.Fighter
                 skillCooldownTimer = 20.0f; // 20-second cooldown per user instruction
 
                 attackTimer = 1.05f;
-                attackStartupTimer = 0.25f;
+                attackStartupTimer = 0.35f; // Windup matching ground slam animation
                 attackActiveTimer = 0.45f;
 
                 if (attackHitbox != null)
@@ -2183,7 +2220,6 @@ namespace MysticCombat.Fighter
 
                 if (VFXManager.Instance != null)
                 {
-                    VFXManager.Instance.TriggerCameraShake(0.45f, 0.30f);
                     VFXManager.Instance.PlayDustPuff(transform.position);
                 }
 

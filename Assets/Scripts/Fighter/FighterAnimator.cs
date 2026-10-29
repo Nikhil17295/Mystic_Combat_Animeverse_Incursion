@@ -376,6 +376,29 @@ namespace MysticCombat.Fighter
                 // Saitama standardized baseline at y = 135
                 pivot = new Vector2(0.5f, (160f - 135f) / 160f);
             }
+            else if (path.ToLower().Contains("nezuko"))
+            {
+                if (path.ToLower().Contains("frames_demon"))
+                {
+                    // Demon Form: 1.0x scale. Aligns feet with the arena ground level.
+                    pivot = new Vector2(0.5f, -0.045f);
+                }
+                else
+                {
+                    // Chibi Form: 0.6x scale and 0px bottom margin causes sprite feet to sit lower.
+                    // Negative Y pivot offset lifts her sprite so her feet rest on the exact same ground level as Goku, Saitama, and Tsunade.
+                    pivot = new Vector2(0.5f, -0.11f);
+                }
+            }
+            else if (path.ToLower().Contains("tsunade"))
+            {
+                // Tsunade: baseline aligned per image height so feet rest exactly at floor level
+                float bottomMargin = 3.5f;
+                if (tex.height == 65) bottomMargin = 1.5f;
+                else if (tex.height == 67) bottomMargin = 5.0f;
+                else if (tex.height == 50) bottomMargin = 7.0f;
+                pivot = new Vector2(0.5f, bottomMargin / tex.height);
+            }
 
             return Sprite.Create(
                 tex,

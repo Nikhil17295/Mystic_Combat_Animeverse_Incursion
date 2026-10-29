@@ -324,10 +324,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MysticCombat.Combat.TsunadeKatsuyuCinematic
   slugDamage: 30
-  slugSpeed: 3.1
-  slugLifetime: 6.5
+  slugSpeed: 1.6
+  slugLifetime: 8.5
   slugPpu: 33
-  slugScale: 1.85
+  slugScale: 2.4
   healingDuration: 10
   cooldownDuration: 20
 --- !u!1 &1359540555661872691

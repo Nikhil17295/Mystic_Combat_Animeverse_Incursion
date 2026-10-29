@@ -6,7 +6,7 @@
 ![Render Pipeline](https://img.shields.io/badge/Pipeline-Universal%20RP%202D-1E88E5?style=for-the-badge)
 ![Language](https://img.shields.io/badge/Language-C%23%20%7C%20.NET%20Standard%202.1-512BD4?style=for-the-badge&logo=csharp&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20PC%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
-![Multiplayer](https://img.shields.io/badge/Netcode-Mirror%20LAN%20Networking-E53935?style=for-the-badge)
+![Netcode](https://img.shields.io/badge/Netcode-Mirror%20LAN%20Networking-E53935?style=for-the-badge)
 ![Frame Target](https://img.shields.io/badge/Performance-Locked%2060%20FPS-43A047?style=for-the-badge)
 
 <br/>
@@ -14,156 +14,198 @@
 **A high-octane 16-bit arcade anime fighting game developed in Unity 6.**  
 *Featuring authentic pixel art, sub-pixel combat physics, dynamic Doctor Strange mystic relics, adaptive tactical AI, and seamless local & LAN multiplayer.*
 
-[🎮 Key Features](#-key-features) • [🕹️ Controls](#️-controls) • [👥 Character Roster](#-character-roster) • [🌐 Game Modes](#-game-modes) • [⚙️ Architecture](#-technical-architecture) • [🚀 Quick Start](#-quick-start)
+[🎮 Key Features](#-key-features) • [👥 Character Roster](#-character-roster) • [🕹️ Controls](#️-controls) • [⚡ Combat Systems](#-combat-systems) • [🌐 Game Modes](#-game-modes) • [🚀 Quick Start & Build](#-quick-start--standalone-build)
 
 ---
 
 </div>
 
-## 🌌 Lore & Setting
+## 🌌 Lore & Premise
 
-When the Sorcerer Supreme attempts a forbidden temporal incantation to seal a fractured cosmic rift, spacetime destabilizes. Reality fractures across the multiverse, violently pulling two of the strongest martial forces in existence into the **Sanctum Sanctorum Mystic Arena**:
+When the Sorcerer Supreme attempts a forbidden temporal incantation to seal a fractured cosmic rift, spacetime destabilizes. Reality shatters across the anime multiverse, pulling four legendary warriors across dimensions into the sacred **Sanctum Sanctorum Mystic Arena**:
 
-* **Son Goku** — Master of godly Ki, turtle school martial artist, driven by an unyielding spirit to push past every limit.
-* **Saitama** — The caped hero who shattered his physical limiter, wielding incomprehensible kinetic power with nonchalant ease.
+* **Son Goku** (*Dragon Ball*) — Master of godly Ki, turtle school prodigy, driven by an unyielding spirit to transcend every mortal limit.
+* **Saitama** (*One Punch Man*) — The caped hero who broke his physical limiter, wielding incomprehensible kinetic might with casual ease.
+* **Nezuko Kamado** (*Demon Slayer*) — The demon-awakened sister wielding pyrokinesis and shifting between evasive agility and demonic ferocity.
+* **Tsunade Senju** (*Naruto*) — The Fifth Hokage and Legendary Sannin, summoning the titan slug Katsuyu and mastering immortal mitotic regeneration.
 
-Bounded by ancient Taoist runic barriers and governed by the temporal authority of the **Emerald Time Stone**, only one warrior will emerge victorious.
-
----
-
-## 🎮 Key Features
-
-### 🥊 1. Responsive 16-Bit Arcade Combat Engine
-* **Fluid Frame-Data Driven Combat:** Zero input lag, tight cancellation windows, and distinct Startup, Active, and Recovery states for high-level footsies, spacing, and whiff punishment.
-* **Sub-Pixel Hitbox Precision:** Dedicated 2D trigger colliders on a deterministic physics layer matrix with automatic hit-target caches to eliminate duplicate hit registration during active swings.
-* **Authentic Handcrafted Visuals:** Pixel-perfect animation loops covering idle breathing, walking, crouching guards, aerial jumps/falls, impact hitstuns, custom knockdown recoveries, and victory poses.
-
-### ⚡ 2. Tactical Ki & Exhaustion Mechanics
-* **Dynamic 3-Tier Energy System:** Ki governs special abilities and stamina.
-  - **Safe Zone:** Above your threshold buffer, specials can be performed freely.
-  - **Dynamic Threshold Markers:** Real-time HUD indicators calibrated to each fighter's exact move costs.
-  - **Red Zone Exhaustion State:** Over-expending energy drops the fighter into exhaustion ($40\%$ slowed movement, disabled jumps, zero attack power, and vulnerability to punishes).
-* **Active Meditation Stance:** Hold the Meditate key to channel raw spiritual energy ($+25\text{ Ki/s}$), creating high-risk, high-reward tactical resets during spacing neutral.
-
-### 🔮 3. Doctor Strange Taoist Tournament HUD
-* **Spinning Tao Spell Mandala:** Concentric runic green mandala continuously revolving at $22^\circ/\text{s}$ behind the central clock dial.
-* **The Emerald Time Stone Relic:** Faceted, illuminated relic mounted directly atop the countdown dial, tracking round duration.
-* **Championship Match Point Relic:** Central golden crest begins hollow during neutral rounds, dynamically igniting into a pulsing crystal when either fighter reaches Match Point.
-* **Arcade Ghost Health Bars:** High-visibility 2-tone health bars with smoothly trailing warning-red ghost meters that visualize recent chip and combo damage.
-* **Dual Sapphire Gem Indicators:** Socketed win indicators that illuminate upon round victories.
-
-### 🧠 4. Adaptive AI with Tactical Spacing
-* **Turn-Taking Pacing:** CPU bots execute single, readable strikes with full recovery windows, eliminating unfair frame-instant machine loops.
-* **Intelligent Tactical Retreat:** Bots actively disengage and backpedal across the arena after exchanges to grant players breathing room to practice, position, and charge Ki.
-* **Anti-Corner Edge Awareness:** AI monitors stage boundaries and executes athletic jumps toward center stage when backed against the arena wall.
-* **3 Scaled Difficulty Presets:**
-  - **Easy:** Accessible learning profile with generous retreat windows ($1.8\text{s} - 2.8\text{s}$) and relaxed reaction times ($0.45\text{s}$).
-  - **Hard:** Competitive neutral spacing with balanced whiff punishing and tactical meditation.
-  - **Extreme:** Tournament-master difficulty featuring rapid reaction ($0.04\text{s}$), reactive jump escapes, and crouch-ducking.
+Bounded by ancient Taoist runic barriers and governed by the temporal authority of the **Emerald Time Stone**, only one champion will conquer the Incursion!
 
 ---
 
 ## 👥 Character Roster
 
+Every fighter is built with distinct physical statistics, hitbox geometry, custom pixel animations, unique special skills, and devastating cinematic ultimates. All fighters share a standardized **200 Max HP** balance pool.
+
 ```
-<<<<<<< Updated upstream
-====================================================================================================
-  CHARACTER           SPECIAL SKILL                         CINEMATIC ULTIMATE
-====================================================================================================
-  Son Goku            Kaioken Ki Burst (30 Ki)              Kamehameha Wave (70 Ki)
-                      Rapid horizontal body dash with       Iconic charge-up & full-screen energy
-                      invulnerability startup frames.       beam, triggering Super Saiyan state!
+========================================================================================================================
+ CHARACTER          ARCHETYPE                   SPECIAL SKILL (Ki Cost)                 CINEMATIC ULTIMATE (Ki Cost)
+========================================================================================================================
+ Son Goku           Aerial Rushdown & Blaster   Super Saiyan Form (Active Toggle)       Super Kamehameha (70 Ki)
+                                                Golden aura, faster speed & attack      Full-screen destructive beam
+                                                draining 2.5 Ki/sec.                    barrage across the arena.
 
-  Saitama             Consecutive Normal Punches (30 Ki)    Serious Punch (80 Ki)
-                      High-frequency multi-punch barrage    Cinematic dramatic camera cut-in, shockwave
-                      shredding enemy guard.                impact, and screen-blackout finishing blow.
-====================================================================================================
-=======
-Max Health: 200 HP  |  Move Speed: 5.2 (Fast)  |  Jump Force: 12.5  |  Gravity Scale: 3.0
-Meditation Channel Rate: +8.0 Ki/s  |  Ki Gain on Damage Taken: 1.5 Ki per hit
->>>>>>> Stashed changes
+ Saitama            Heavyweight Juggernaut      Consecutive Normal Punches (30 Ki)      Serious Punch (80 Ki)
+                                                Rapid 5-hit close-range flurry          Cosmic kinetic strike with
+                                                dealing 30 burst damage.                full-screen shockwave cut-in.
+
+ Nezuko Kamado      Stance Shifter & Pyromancer Awakened Demon Form (Active Toggle)     Blood Demon Art: Bakketsu (60 Ki)
+                                                Toggles between 60% Chibi dodge-form    Sure-hit blood flame eruption dealing
+                                                and 100% Awakened Demon claws.          30 burst + 6 burn dmg; refunds 20 Ki.
+
+ Tsunade Senju      Tank Healer & Earth Shaker  Devastating Ground Breaker (30 Ki)      Katsuyu Summon & Byakugou (60 Ki)
+                                                Visceral ground-crack slam dealing      Uninterruptible summon; slow rolling
+                                                30 damage to grounded foes.             tidal wave + 10s 50% damage reduction.
+========================================================================================================================
 ```
 
-### 🥋 Son Goku
-* **Playstyle:** All-rounder martial artist with superior aerial mobility, long-range beam pressure, and Super Saiyan transformation.
-* **Special Skill — Kaioken Burst:** Teleports forward in a red kinetic streak, closing gaps instantaneously.
-* **Ultimate — Super Kamehameha:** Channels energy into a full-screen destructive beam. If Goku lands the beam, he ascends into **Super Saiyan** form, gaining radiant gold particle auras and increased mobility.
+---
 
-### 🥊 Saitama
-* **Playstyle:** Heavy-impact rushdown powerhouse with unmatched single-strike devastation and heavy guard damage.
-* **Special Skill — Consecutive Normal Punches:** Unleashes a rapid flurry of jabs dealing concentrated close-range damage.
-* **Ultimate — Serious Series: Serious Punch:** Initiates a dramatic freeze-frame cinematic cut-in, executing a devastating punch that shakes the entire screen with cosmic kinetic force.
+### 🥋 Son Goku (`goku`)
+> *"I am the answer to all living things that cry out for peace!"*
+
+* **Combat Profile:** All-around martial artist with superior jump arcs, high-speed footsies, and long-range beam dominance.
+* **Base Statistics:**
+  * **Max Health:** 200 HP
+  * **Movement Speed:** 5.2 (High mobility)
+  * **Jump Force:** 12.5 | Gravity Scale: 3.0
+  * **Meditation Channel Rate:** +8.0 Ki/s
+* **Special Skill — Super Saiyan Form (Active Toggle):**
+  * Consumes 2.5 Ki per second to sustain.
+  * Emits a radiant golden energy aura with active pixel sparks.
+  * Enhances movement speed and adds bonus impact power to all physical strikes.
+* **Cinematic Ultimate — Super Kamehameha (70 Ki):**
+  * Goku braces into his signature stance, chanting as azure Ki condenses.
+  * Fires a full-screen energy beam that engulfs the battlefield, inflicting 70 heavy damage and pushing the opponent back.
+
+---
+
+### 🥊 Saitama (`saitama`)
+> *"I'm just a guy who's a hero for fun."*
+
+* **Combat Profile:** Immovable powerhouse who dominates close-quarters neutral. Possesses natural mass conferring 20% passive knockback resistance.
+* **Base Statistics:**
+  * **Max Health:** 200 HP
+  * **Movement Speed:** 4.8 | Jump Force: 12.0
+  * **Passive Trait:** **Limiter Shattered** — 20% innate knockback resistance against all enemy attacks.
+  * **Meditation Channel Rate:** +5.0 Ki/s
+* **Special Skill — Consecutive Normal Punches (30 Ki, 15s Cooldown):**
+  * Delivers a lightning-fast barrage of 5 jabs in rapid succession (6 damage per hit = 30 total damage).
+  * Shreds enemy spacing and applies heavy hitstop on connection.
+* **Cinematic Ultimate — Serious Series: Serious Punch (80 Ki):**
+  * Triggers a dramatic freeze-frame cinematic camera zoom with black-and-white color flash.
+  * Saitama steps forward and delivers a singular cosmic punch, creating a colossal shockwave across the stage dealing 80 decisive damage.
+
+---
+
+### 🌸 Nezuko Kamado (`nezuko`)
+> *"Mmm-hmm!"*
+
+* **Combat Profile:** Dual-stance dynamic brawler able to toggle between miniature evasion and awakened demonic rushdown, finished with sure-hit pyrokinesis.
+* **Base Statistics:**
+  * **Max Health:** 200 HP
+  * **Base Form Scale:** 60% Miniature Chibi (Low hurtbox)
+  * **Demon Form Scale:** 100% Full Fighter (High offensive reach)
+  * **Movement Speed:** 5.4 (Chibi) / 5.0 (Demon)
+* **Special Skill — Awakened Demon Form (Active Toggle):**
+  * **Small Chibi Form (Default):** Compressed 60% hitbox allows high attacks and tall projectiles to cleanly whiff overhead. Ideal for dodging and neutral maneuvering.
+  * **Demon Form (Awakened):** Grows to full height, developing her demonic horn and vein markings. Enhances claw reach, increases melee damage from 5 to 10 on heavy strikes, and consumes 2 Ki/s.
+* **Cinematic Ultimate — Blood Demon Art: Exploding Blood / Bakketsu (60 Ki, 10s Cooldown):**
+  * **Sure-Hit Accuracy:** Guaranteed tracking impact anywhere across the arena floor; opponent cannot simply walk under or run away.
+  * Nezuko clenches her fist, igniting her demonic blood in a massive erupting crimson-pink pyrotechnic column directly over the opponent.
+  * Inflicts **30 burst damage** upon detonation, followed by **3 lingering burn ticks** (2 damage/tick = 6 burn damage).
+  * **Ki Refund:** Immediately refunds **+20 Ki** upon successful connection!
+
+---
+
+### 🍃 Tsunade Senju (`tsunade`)
+> *"People become stronger because they have memories they can't forget!"*
+
+* **Combat Profile:** Legendary Sannin brawler combining ground-shattering chakra strikes with unmatched survivability and persistent battlefield summon control.
+* **Base Statistics:**
+  * **Max Health:** 200 HP
+  * **Movement Speed:** 4.9 | Jump Force: 12.0
+  * **Meditation Channel Rate:** +5.0 Ki/s
+* **Special Skill — Devastating Ground Breaker / Earth Shaker (30 Ki, 20s Cooldown):**
+  * Tsunade leaps into the air and hammers her chakra-infused fist directly into the floor.
+  * Triggers a violent ground shockwave, bursting dual dust fissures, intense camera shake, and impact flash.
+  * Deals **30 damage** to grounded opponents within the fissure zone.
+* **Cinematic Ultimate — Katsuyu Summon & Creation Rebirth / Byakugou (60 Ki, 20s Cooldown):**
+  * **Uninterruptible Casting (Super Armor):** Immune to hitstun and knockback during her summon invocation stance.
+  * **Katsuyu Summon (Tidal Wave):** Summons a colossal 2.4x scale slug companion that slowly and majestically crawls forward across the entire arena (speed 1.6f, lifetime 8.5s). Katsuyu hits for 30 damage with heavy hitstop, but **does not dissolve**—she rolls straight through the enemy like a tidal wave across the stage!
+  * **Byakugou Healing Stage (10 Seconds):** Instantly envelops Tsunade in a radiant emerald medical chakra aura:
+    * Regenerates **+2 HP per second**.
+    * Generates **+2 Ki per second**.
+    * Confer **50% incoming damage reduction** against all enemy strikes.
 
 ---
 
 ## 🕹️ Controls
 
-<<<<<<< Updated upstream
-The game supports simultaneous Dual Keyboard and XInput / DirectInput Gamepads.
-=======
-```
-Max Health: 200 HP  |  Move Speed: 4.4 (Heavy)  |  Jump Force: 10.8  |  Gravity Scale: 3.0
-Meditation Channel Rate: +5.0 Ki/s  |  Ki Gain on Damage Taken: 1.5 Ki per hit
-```
->>>>>>> Stashed changes
+The game supports single-keyboard local play, dual-keyboard split play, and native USB/Bluetooth gamepads (Xbox, PlayStation, 8BitDo).
 
-| Action | Player 1 (Keyboard) | Player 2 (Keyboard) | Gamepad (Xbox / PlayStation) |
+| Action | Player 1 (Keyboard) | Player 2 (Numpad / Arrow Keys) | Gamepad (Xbox / PS) |
 | :--- | :--- | :--- | :--- |
-| **Move Left / Right** | <kbd>A</kbd> / <kbd>D</kbd> | <kbd>←</kbd> / <kbd>→</kbd> | Left Analog Stick / D-Pad |
-| **Jump** | <kbd>W</kbd> | <kbd>↑</kbd> | Button South (<kbd>A</kbd> / <kbd>×</kbd>) |
-| **Crouch / Guard** | <kbd>S</kbd> | <kbd>↓</kbd> | Down on Analog Stick / D-Pad |
-| **Light Attack** | <kbd>J</kbd> | <kbd>Num 1</kbd> | Button West (<kbd>X</kbd> / <kbd>□</kbd>) |
-| **Heavy Attack** | <kbd>K</kbd> | <kbd>Num 2</kbd> | Button North (<kbd>Y</kbd> / <kbd>△</kbd>) |
-| **Special Skill** | <kbd>U</kbd> | <kbd>Num 4</kbd> | Right Shoulder (<kbd>RB</kbd> / <kbd>R1</kbd>) |
-| **Ultimate Attack** | <kbd>I</kbd> | <kbd>Num 5</kbd> | Right Trigger (<kbd>RT</kbd> / <kbd>R2</kbd>) |
-| **Meditate (Ki Charge)** | <kbd>L</kbd> | <kbd>Num 3</kbd> | Left Trigger (<kbd>LT</kbd> / <kbd>L2</kbd>) |
-| **Pause / Menu** | <kbd>Escape</kbd> | <kbd>Escape</kbd> | <kbd>Start</kbd> / <kbd>Options</kbd> |
+| **Move Left / Right** | `A` / `D` | `Left Arrow` / `Right Arrow` | `D-Pad` or `Left Stick` |
+| **Jump** | `W` | `Up Arrow` | `Button South` (`A` / `Cross`) |
+| **Crouch / Guard** | `S` | `Down Arrow` | `D-Pad Down` or `Stick Down` |
+| **Light Attack** | `J` | `Numpad 1` | `Button West` (`X` / `Square`) |
+| **Heavy Attack** | `K` | `Numpad 2` | `Button North` (`Y` / `Triangle`) |
+| **Special Skill** | `U` | `Numpad 4` | `Right Bumper` (`RB` / `R1`) |
+| **Cinematic Ultimate** | `I` | `Numpad 5` | `Right Trigger` (`RT` / `R2`) |
+| **Meditate (Charge Ki)**| `L` | `Numpad 3` | `Left Bumper` (`LB` / `L1`) |
+| **Pause / Menu** | `Escape` | `Escape` | `Start` / `Options` |
+
+---
+
+## ⚡ Combat Systems
+
+### 1. 200 Max HP & Arcade Ghost Health Bars
+All fighters enter the arena with **200 Max HP**, providing longer, deeper competitive exchanges with ample opportunity for comebacks, chain cancels, and defensive spacing. Health bars feature dynamic 2-tone rendering with a warning-red ghost bar visualizing recent burst combo damage.
+
+### 2. 3-Tier Ki Energy & Red Zone Exhaustion
+* **Ki Gauge (0 - 100 Ki):** Powers special skills, transformations, and cinematic ultimates.
+* **Safe Zone:** Above skill threshold, abilities can be cast freely.
+* **Active Meditation Stance:** Holding the Meditate key allows fighters to channel raw spiritual energy (+8 Ki/s for Goku, +5 Ki/s for others).
+* **Red Zone Exhaustion State:** Over-expending energy drops the fighter into exhaustion ($40\%$ slowed movement, disabled jumps, zero attack power, and +0.12s longer hitstun vulnerability).
+
+### 3. Visceral Combat Juice & Frame Advantage
+* **Hitstop Freeze Frames:** Dynamic micro-pauses (0.05s - 0.12s) freeze the attacker and defender on contact to deliver tangible arcade weight.
+* **Impact Sparks & Flash:** Directional particle bursts and whole-screen contrast flashes emphasize heavy attacks and counter-hits.
+* **Screen Shake:** Multi-tier camera impulse shaking calibrated to each move's kinetic power.
+* **Chain Canceling:** Landing a Light Attack opens an immediate cancellation window into Heavy Attack or Special Skill.
 
 ---
 
 ## 🌐 Game Modes
 
-### 1. Solo Arcade Campaign
-Challenge the CPU AI across **Easy**, **Hard**, or **Extreme** difficulties. Features adaptive spacing footsies, AI meditation management, and dynamic round scaling.
-
-### 2. Local 2-Player Versus
-Classic couch multiplayer on a shared screen. Both players select their fighters and battle under official tournament Best-of-3 round rules.
-
-### 3. Local Area Network (LAN) Multiplayer
-High-performance multiplayer powered by Mirror Networking:
-* **Host Match:** Create a dedicated tournament server on your local Wi-Fi or Ethernet network.
-* **Join Match:** Input the host's local IP address or use LAN Discovery to connect instantly.
-* **Synchronized Best-of-3 Lifecycle:** Networked round timers, authoritative hit confirmation, health/Ki sync, and post-match rematch negotiation.
+1. **Arcade Mode (1P vs CPU):**
+   * Battle against an adaptive CPU opponent featuring intelligent spacing, tactical meditation, whiff punishment, and boundary awareness.
+   * Scaled across 3 distinct AI difficulty presets: **Easy**, **Hard**, and **Extreme**.
+2. **Local Versus (1P vs 2P):**
+   * Classic couch versus on a shared screen supporting split keyboard or mixed keyboard + controller.
+3. **LAN Multiplayer (Mirror Netcode):**
+   * Built on Mirror networking for high-speed local area network matches.
+   * Host a lobby or connect directly via local IP address.
 
 ---
 
-## ⚙️ Technical Architecture
+## 🚀 Quick Start & Standalone Build
 
-* **Decoupled Grimoire JSON Balancing:** Character attributes (health, attack damage, walk velocity, jump arcs, Ki costs) are fully externalized in `StreamingAssets/Characters/*.json` for real-time balancing without recompilation.
-* **Deterministic Event-Driven State Machines:** Fighters operate via decoupled hierarchical state machines communicating through strict C# delegates and events (`OnHealthChanged`, `OnEnergyChanged`, `OnThresholdsChanged`, `OnStateChanged`).
-* **Automated Standalone Packaging Pipeline:** Integrated `IPostprocessBuildWithReport` build processor automatically sanitizes asset payloads upon build completion, ensuring standalone executables run out-of-the-box with zero dependency missing errors.
+### Running in Unity Editor
+1. Open **Unity Hub** and add the project folder:  
+   `Unity Version: 6000.6.7f1 (6000.6.7f1)`
+2. Ensure the active build target is set to **PC, Mac & Linux Standalone (Windows x64)**.
+3. Open `Assets/Scenes/MainMenuScene.unity` and press **Play** in the editor.
 
----
-
-## 🚀 Quick Start
-
-### Playing the Standalone Release
-1. Extract `Mystic_Combat_Animeverse_Incursion_Playable.zip`.
-2. Launch **`Mystic_Combat_Animeverse_Incursion.exe`**.
-3. Use the keyboard or plug in up to two gamepads to start battling immediately!
-
-### System Requirements
-* **OS:** Windows 10 / 11 (64-bit)
-* **Processor:** Intel Core i3 / AMD Ryzen 3 or equivalent
-* **Memory:** 2 GB RAM
-* **Graphics:** DirectX 11 / 12 compatible GPU
-* **Storage:** 200 MB available space
+### Exporting Standalone Windows Build
+The project includes an automated build pipeline tool:
+* **In Unity Editor:** Go to top menu bar $\rightarrow$ `Build` $\rightarrow$ `Build Windows Standalone (x64)`.
+* **Output Path:** The executable is compiled directly into `Build/Windows/Mystic_Combat_Animeverse_Incursion.exe`.
+* **Packaged Distribution:** Built games can be zipped into a standalone folder and run on any 64-bit Windows machine without requiring Unity or external dependencies.
 
 ---
 
 <div align="center">
-
-*Mystic Combat: Animeverse Incursion is developed for high-speed martial arts gaming.*  
-**Created with Unity 6 & Universal Render Pipeline.**
-
+  <b>🥋 Mystic Combat: Animeverse Incursion © 2026. Built with passion for competitive anime arcade fighting.</b>
 </div>
